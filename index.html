@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>光学计算工具 · 照度计算与立体角可视化</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◐</span>
+    <div>
+      <h1>光学计算工具</h1>
+      <p>照度推算 · 立体角可视化</p>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="calc">照度计算</button>
+    <button class="tab" data-tab="solid">立体角可视化</button>
+    <button class="tab" data-tab="theory">公式与推导</button>
+  </nav>
+  <span class="ver">v1.0.0</span>
+</header>
+
+<div class="wrap">
+
+  <!-- ============================================================
+       视图 1 —— 照度计算
+  ============================================================ -->
+  <div class="view active" id="view-calc">
+    <div class="layout">
+
+      <!-- 左：输入 -->
+      <div class="sticky-col">
+        <div class="card">
+          <h2><span class="num">1</span>灯具光学参数</h2>
+
+          <div class="field">
+            <label>配光模型</label>
+            <select id="model">
+              <option value="cosN">cosⁿ 余弦幂（LED 投光灯常用）</option>
+              <option value="uniform">均匀锥配光（理想简化）</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>总光通量 Φ <span class="unit">lm</span></label>
+            <input id="flux" type="number" value="9000" min="1" step="100">
+          </div>
+
+          <div class="field">
+            <label>中心光强 I₀ <span class="unit">cd</span><em>留空 = 自动推导</em></label>
+            <input id="imax" type="number" placeholder="自动推导" min="0" step="50">
+          </div>
+
+          <div class="field">
+            <label>光束角定义</label>
+            <div class="seg">
+              <label><input type="radio" name="conv" value="full" checked>半光强全角 2γ½</label>
+              <label><input type="radio" name="conv" value="half">半光强半角 γ½</label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>光束角数值 <span class="unit">°</span></label>
+            <input id="beam" type="number" value="38" min="1" max="179" step="1">
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">2</span>被照面几何</h2>
+
+          <div class="field">
+            <label>灯具到被照面的垂直距离 h <span class="unit">m</span></label>
+            <input id="height" type="number" value="3" min="0.01" step="0.1">
+          </div>
+
+          <div class="field">
+            <label>被照面形状</label>
+            <div class="seg">
+              <label><input type="radio" name="shape" value="circle" checked>圆形 半径 R</label>
+              <label><input type="radio" name="shape" value="rect">矩形 L × W</label>
+            </div>
+          </div>
+
+          <div class="field" id="field-R">
+            <label>半径 R <span class="unit">m</span><em><a href="#" id="btn-spot">按半光强光斑填充</a></em></label>
+            <input id="radius" type="number" value="1.033" min="0.001" step="0.05">
+          </div>
+
+          <div class="field hidden" id="field-rect">
+            <label>长 L × 宽 W <span class="unit">m</span></label>
+            <div class="row">
+              <input id="len" type="number" value="1.2" min="0.001" step="0.1">
+              <span class="sep">×</span>
+              <input id="wid" type="number" value="0.6" min="0.001" step="0.1">
+            </div>
+          </div>
+
+          <div style="margin-top:16px;display:flex;gap:8px">
+            <button class="btn" id="btn-reset-calc">恢复默认</button>
+            <button class="btn solid" onclick="document.querySelector('.tab[data-tab=solid]').click()">看立体角 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：结果 -->
+      <div>
+        <div id="calc-warn" class="note warn hidden" style="margin-top:0;margin-bottom:14px"></div>
+        <div id="render-warn" class="note warn hidden" style="margin-top:0;margin-bottom:14px"></div>
+
+        <div class="stats">
+          <div class="stat hero">
+            <span class="k">最大照度 E<sub>max</sub>（正下方）</span>
+            <span class="v" id="st-emax-v">—</span>
+            <span class="s">E = I₀ / h²</span>
+          </div>
+          <div class="stat avg">
+            <span class="k">平均照度 E<sub>avg</sub></span>
+            <span class="v" id="st-eavg-v">—</span>
+            <span class="s" id="st-eavg-s">—</span>
+          </div>
+          <div class="stat low">
+            <span class="k">最小照度 E<sub>min</sub>（边缘）</span>
+            <span class="v" id="st-emin-v">—</span>
+            <span class="s" id="st-emin-s">—</span>
+          </div>
+          <div class="stat uni">
+            <span class="k">均匀度 U = E<sub>min</sub>/E<sub>avg</sub></span>
+            <span class="v" id="st-uavg-v">—</span>
+            <span class="s">面域均匀度</span>
+          </div>
+          <div class="stat uni">
+            <span class="k">均匀度 U = E<sub>min</sub>/E<sub>max</sub></span>
+            <span class="v" id="st-umax-v">—</span>
+            <span class="s">极值比</span>
+          </div>
+          <div class="stat flux">
+            <span class="k">光通量利用率</span>
+            <span class="v" id="st-util-v">—</span>
+            <span class="s">落入被照面的 Φ / 总 Φ</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">3</span>推导摘要</h2>
+          <div class="summary">
+            <div class="item"><span class="k">配光模型</span><span class="v" id="sum-model">—</span></div>
+            <div class="item"><span class="k">配光指数 n</span><span class="v" id="sum-n">—</span></div>
+            <div class="item"><span class="k">中心光强 I₀ <small>cd</small></span><span class="v" id="sum-imax">—</span></div>
+            <div class="item"><span class="k">I₀ 来源</span><span class="v" id="sum-imaxsrc">—</span></div>
+            <div class="item"><span class="k">半光强半角 γ½</span><span class="v" id="sum-ghalf">—</span></div>
+            <div class="item"><span class="k">半光强锥立体角 Ω</span><span class="v" id="sum-omega">—</span></div>
+            <div class="item"><span class="k">占全球面比例</span><span class="v" id="sum-omegapct">—</span></div>
+            <div class="item"><span class="k">半光强光斑 R½</span><span class="v" id="sum-r50">—</span></div>
+            <div class="item"><span class="k">10% 光斑 R₁₀</span><span class="v" id="sum-r10">—</span></div>
+            <div class="item"><span class="k">等效总光通量 <small>lm</small></span><span class="v" id="sum-fluxcheck">—</span></div>
+          </div>
+          <div id="calc-note" class="note info"></div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">4</span>照度—半径 曲线</h2>
+          <div class="canvas-box" style="height:300px">
+            <canvas id="canvas-curve"></canvas>
+          </div>
+          <div class="legend">
+            <span><i style="background:#2563eb"></i>E(r) 严格式（含余弦）</span>
+            <span><i class="dot" style="background:#2563eb"></i>E_max</span>
+            <span><i class="dot" style="background:#7c3aed"></i>E_min</span>
+            <span><i style="background:#0d9488;opacity:.7"></i>E_avg</span>
+            <span><i style="background:#f59e0b;opacity:.7"></i>R½</span>
+            <span><i style="background:#7c3aed;opacity:.7"></i>R₁₀</span>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--text-3)" id="curve-caption"></p>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">5</span>被照面照度分布（俯视伪彩）</h2>
+          <div class="canvas-box" style="height:330px">
+            <canvas id="canvas-heat"></canvas>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--text-3)">
+            颜色按 E/E<sub>max</sub> 归一化后映射，暖色 = 照度高。虚线圆为半光强光斑边界 R½。
+          </p>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">6</span>径向剖面数据</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>r (m)</th>
+                  <th>γ (°)</th>
+                  <th>斜距 d (m)</th>
+                  <th>I (cd)</th>
+                  <th>E 严格 (lx)</th>
+                  <th>E=I/d² (lx)</th>
+                  <th>E/E_max</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-profile"></tbody>
+            </table>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--text-3)">
+            末行（高亮）为被照面最远点，即 E<sub>min</sub> 所在。倒数第二列为忽略入射余弦的
+            简化式 E = I/d²，它是严格式的 1/cos γ 倍（恒 ≥ 1，必然高估），可用于快速判断
+            "能不能省这一步"。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       视图 2 —— 立体角可视化
+  ============================================================ -->
+  <div class="view" id="view-solid">
+    <div class="solid-layout">
+
+      <div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="canvas-box canvas-3d" style="border:0;border-radius:0">
+            <canvas id="sa-canvas"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="legend" style="margin-top:0">
+            <span><i style="background:#3b82f6"></i>球冠 —— 被锥截出的球面面积 A</span>
+            <span><i style="background:#f59e0b"></i>微圆环 —— 带宽 dα 的环带 dA</span>
+            <span><i style="background:#60a5fa"></i>锥面线 —— 光源到球冠边缘的母线</span>
+            <span><i style="background:#94a3b8"></i>光轴</span>
+          </div>
+          <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
+            <b>拖动画面可自由旋转视角</b>；默认缓慢自转。把视角转到侧面，可以看到微圆环的
+            半径就是 r·sinα（纬圆半径）、带宽是 r·dα —— 这就是
+            <code style="font-family:var(--mono)">dA = 2πr²·sinα·dα</code> 里每一项的几何来源。
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <div class="card readout">
+          <h2><span class="num">Ω</span>立体的立体角</h2>
+
+          <div class="formula">
+            Ω = ∫<sub>0</sub><sup>θ</sup> 2π·sinα·dα = <b>2π(1 − cos θ)</b>
+          </div>
+
+          <div class="slider-row" style="margin-bottom:16px">
+            <span style="font-size:12.5px;color:var(--text-2);min-width:52px">半顶角 θ</span>
+            <input type="range" id="sa-theta" min="1" max="89" step="0.5" value="19">
+            <span class="slider-val" id="sa-theta-val">19°</span>
+          </div>
+
+          <div class="bigval">
+            <span class="num" id="sa-omega-v">0.3423</span>
+            <span class="u">sr</span>
+          </div>
+          <div class="bar"><i id="sa-bar" style="width:2.7%"></i></div>
+          <div class="bar-label">
+            占全球面 4π (12.5664 sr) 的 <b id="sa-pct-v">2.72%</b>
+          </div>
+
+          <div class="field">
+            <label>锥内光通量 Φ<sub>cone</sub> <span class="unit">lm</span></label>
+            <input id="sa-flux" type="number" value="9000" min="0" step="100">
+          </div>
+          <div class="summary" style="grid-template-columns:1fr 1fr">
+            <div class="item">
+              <span class="k">锥内平均光强 Φ/Ω <small>cd</small></span>
+              <span class="v" id="sa-imax-v">—</span>
+            </div>
+            <div class="item">
+              <span class="k">全锥顶角 2θ</span>
+              <span class="v" id="sa-theta-deg">38.0°</span>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:14px">
+            <label>微圆环极角 α <span class="unit">= 微元的极角 θ</span></label>
+            <div class="slider-row">
+              <input type="range" id="sa-ring" min="1" max="89" step="0.5" value="10.5">
+              <span class="slider-val" id="sa-ring-val">10.5°</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>环带带宽 dα <span class="unit">= 微元的 dθ</span></label>
+            <div class="slider-row">
+              <input type="range" id="sa-ringw" min="0.5" max="20" step="0.5" value="3">
+              <span class="slider-val" id="sa-ringw-val">3.0°</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>微元方位角 φ₀</label>
+            <div class="slider-row">
+              <input type="range" id="sa-phi" min="0" max="360" step="5" value="0">
+              <span class="slider-val" id="sa-phi-val">0°</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>微元方位跨度 dφ</label>
+            <div class="slider-row">
+              <input type="range" id="sa-dphi" min="2" max="90" step="1" value="20">
+              <span class="slider-val" id="sa-dphi-val">20°</span>
+            </div>
+          </div>
+
+          <div class="toggles" style="margin:6px 0 16px">
+            <button class="tg" id="tg-cap">球冠</button>
+            <button class="tg amber" id="tg-ring">微圆环</button>
+            <button class="tg violet" id="tg-patch">微元方块</button>
+            <button class="tg" id="tg-cone">锥面线</button>
+            <button class="tg" id="tg-sphere">球面线框</button>
+            <button class="tg" id="tg-rotate">自动旋转</button>
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="btn-sa-reset">复位视角</button>
+            <button class="btn" id="btn-sa-sync">同步光束角</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">dΩ</span>微圆环的立体角</h2>
+          <div class="summary" style="grid-template-columns:1fr 1fr;gap:8px">
+            <div class="item">
+              <span class="k">精确值 Ω(α+dα/2)−Ω(α−dα/2)</span>
+              <span class="v" id="sa-domega-exact">—</span>
+            </div>
+            <div class="item">
+              <span class="k">近似 dΩ = 2π·sinα·dα</span>
+              <span class="v" id="sa-domega-approx">—</span>
+            </div>
+            <div class="item">
+              <span class="k">近似偏差</span>
+              <span class="v" id="sa-domega-err">—</span>
+            </div>
+            <div class="item">
+              <span class="k">当前 α / dα</span>
+              <span class="v"><span id="sa-alpha-deg">19°</span> / <span id="sa-dalpha-deg">6°</span></span>
+            </div>
+          </div>
+          <div class="deriv" style="margin-top:12px">
+            半径为 r 的球面上，极角 α 处的纬圆半径是 <code>r·sinα</code>、周长是
+            <code>2πr·sinα</code>；环带宽度是 <code>r·dα</code>。两者相乘得环带面积<br>
+            <code>dA = 2πr²·sinα·dα</code><br>
+            立体角 <code>dΩ = dA / r² = 2π·sinα·dα</code> —— 半径 r 被约掉，
+            <b>立体角只与角度有关</b>。整个球冠积分即 <code>Ω = 2π(1 − cosθ)</code>。
+            <br><br>
+            把 dα 调大即可看到近似偏差如何上升：dα 需足够小，<code>2π·sinα·dα</code>
+            才等于精确差值。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 第二行：平面轴截面图 + 推导过程 ============ -->
+    <div class="solid-layout" style="margin-top:18px">
+
+      <div>
+        <div class="card">
+          <h2><span class="num">§</span>平面轴截面图（过光轴的截面）</h2>
+          <div class="canvas-box" style="height:430px">
+            <canvas id="planar-canvas"></canvas>
+          </div>
+          <div class="legend" style="margin-top:12px">
+            <span><i style="background:#1d4ed8"></i>球冠弧（±θ）</span>
+            <span><i style="background:#f59e0b"></i>微圆环轴截面（角宽 dα）</span>
+            <span><i style="background:#0d9488"></i>纬圆半径 r·sinα</span>
+            <span><i style="background:#334155"></i>半径 r</span>
+            <span><i style="background:#94a3b8"></i>光轴</span>
+          </div>
+          <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
+            拖动上方的 θ、α、dα 滑块，本图与三维视图同步变化。
+            图上每一项都与推导式里的符号一一对应：
+            <b>绿线</b>是纬圆半径 <code>r·sinα</code>，
+            <b>橙弧</b>是带宽 <code>r·dα</code>，
+            两者相乘再乘周长 <code>2πr·sinα</code> 即为环带面积 <code>dA</code>。
+            <br>
+            其中绿色虚线是纬圈在<b>切面中的投影弦</b>，完整长度 <code>2r·sinα</code>；
+            它把左右两端的橙色小弧连了起来——那两段弧其实是<b>同一个微圆环的两个截面</b>。
+            轴上那一点到圆周的右半段，就是这个纬圈的半径 <code>r·sinα</code>。
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2><span class="num">∫</span>推导过程</h2>
+          <ol class="steps" id="deriv-steps">
+            <li>
+              <div class="t">立体角的定义</div>
+              <div class="f">Ω = A / r²&nbsp;&nbsp;<span style="color:#94a3b8">[sr]</span></div>
+              <div class="n">球面上面积 A 对球心张成的立体角。它是面积与半径平方之比，无量纲。</div>
+            </li>
+            <li>
+              <div class="t">在极角 α 处取环带微元</div>
+              <div class="f">纬圆半径 = r·sinα = <b id="dv-sin">—</b>&nbsp;r</div>
+              <div class="f">纬圆周长 = 2πr·sinα = <b id="dv-circ">—</b>&nbsp;r</div>
+              <div class="n">环带的走向是"绕光轴一圈"，所以取一圈的周长。</div>
+            </li>
+            <li>
+              <div class="t">环带的宽度（沿母线方向）</div>
+              <div class="f">带宽 = r·dα&nbsp;&nbsp;其中 dα = <b id="dv-da">—</b>&nbsp;rad</div>
+              <div class="n">球面上沿大圆的弧长 = 半径 × 角宽。dα 取得越小，环带越窄、近似越准。</div>
+            </li>
+            <li>
+              <div class="t">环带面积 = 周长 × 带宽</div>
+              <div class="f">dA = 2πr·sinα · r·dα = <b>2πr²·sinα·dα</b></div>
+              <div class="f">（取 r = 1 归一化）dA = <b id="dv-dA">—</b></div>
+              <div class="n">2πr·sinα 是"圈长"，r·dα 是"圈宽"，相乘即这一圈的面积。</div>
+            </li>
+            <li>
+              <div class="t">除以 r²，得到立体角微元</div>
+              <div class="f">dΩ = dA / r² = <b>2π·sinα·dα</b></div>
+              <div class="f">dΩ = <b id="dv-dOm">—</b>&nbsp;sr</div>
+              <div class="n"><b>r 被完全约掉</b> —— 立体角只由角度决定，与球半径无关。这正是它能描述"方向分布"的原因。</div>
+            </li>
+            <li>
+              <div class="t">从 α = 0 积分到 α = θ</div>
+              <div class="f">Ω = ∫<sub>0</sub><sup>θ</sup> 2π·sinα dα = 2π·[−cosα]<sub>0</sub><sup>θ</sup></div>
+              <div class="f">= 2π(1 − cosθ)</div>
+              <div class="n">这一整步的几何含义：把所有"圈"从球冠顶点累加到边缘，就拼出了整个球冠。</div>
+            </li>
+            <li>
+              <div class="t">代入当前 θ</div>
+              <div class="f">Ω = 2π(1 − cos <b id="dv-theta">—</b>°) = <b id="dv-omega">—</b>&nbsp;sr</div>
+              <div class="f">占全球面 4π = <b id="dv-pct">—</b></div>
+              <div class="n">
+                数值自检：差分精确值 <b id="dv-exact">—</b>，微分近似 2π·sinα·dα = <b id="dv-approx">—</b>，
+                相对偏差 <b id="dv-err">—</b>。dα → 0 时偏差趋于 0。
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 第三行：微元方块（弯曲矩形）+ 二重积分 ============ -->
+    <div class="solid-layout" style="margin-top:18px">
+
+      <div>
+        <div class="card">
+          <h2><span class="num">dA</span>球面微元方块（弯曲矩形，放大）</h2>
+          <div class="canvas-box" style="height:320px">
+            <canvas id="patch-canvas"></canvas>
+          </div>
+          <div class="legend" style="margin-top:12px">
+            <span><i style="background:#0d9488"></i>θ 方向边（沿经线）R·dθ</span>
+            <span><i style="background:#f59e0b"></i>φ 方向边（沿纬圈）R·sinθ·dφ</span>
+          </div>
+          <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
+            把球面上 (θ, φ) 附近的一个微元单独放大。注意两条边的弯曲程度<b>不一样</b>：
+            θ 方向的边走的是半径 R 的大圆，几乎笔直；φ 方向的边走的是半径 R·sinθ 的纬圈，
+            明显更弯。<b>这条边长差就是 sinθ 因子的几何来源</b>——离光轴越近，纬圈越小，
+            φ 方向的边长越短，到极点归零。
+            <span id="patch-caption" style="display:block;margin-top:8px;color:var(--amber-ink)"></span>
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2><span class="num">∫∫</span>推导过程 · 球面微元二重积分</h2>
+          <div class="note info" style="margin:0 0 14px">
+            <b>记号说明：</b>本页三维图与平面图把"微元所在极角"记作 <b>α</b>、
+            把"锥的半顶角"记作 <b>θ</b>。下面沿用常见教材写法，把<b>极角直接记作 θ</b>、
+            方位角记作 <b>φ</b>，积分上限即锥的半顶角。两种写法完全等价：<b>α ↔ θ</b>。
+          </div>
+          <ol class="steps" id="deriv2-steps">
+            <li>
+              <div class="t">在球面上取一个"弯曲矩形"微元</div>
+              <div class="n">过球心作两条经线（夹角 dφ）和两条纬线（夹角 dθ），它们在球面上围出一个小四边形。球面是弯的，所以四条边都是弧——这就是它叫"弯曲矩形"的原因。</div>
+              <div class="f">沿 θ 方向边长 = R·dθ = <b id="dq-a">—</b></div>
+              <div class="f">沿 φ 方向边长 = R·sinθ·dφ = <b id="dq-b">—</b></div>
+            </li>
+            <li>
+              <div class="t">为什么 φ 方向的边长要乘 sinθ</div>
+              <div class="n">φ 方向是"绕光轴转一圈"的方向，它走的那一圈是纬圈，而<b>纬圈半径是 R·sinθ，不是 R</b>。θ 越小（越靠近光轴）纬圈越小，边长越短；θ = 0 时纬圈缩成一个点，边长归零——所以极点附近没有面积。</div>
+              <div class="f">纬圈半径 = R·sinθ = <b id="dq-sin">—</b>&nbsp;R</div>
+            </li>
+            <li>
+              <div class="t">微元面积 = 两条边长相乘</div>
+              <div class="f">dA = (R·dθ)(R·sinθ·dφ) = <b>R²·sinθ·dθ·dφ</b></div>
+              <div class="f">（取 R = 1 归一化）dA = <b id="dq-dA">—</b></div>
+            </li>
+            <li>
+              <div class="t">除以 R²，得立体角微元</div>
+              <div class="f">dΩ = dA / R² = <b>sinθ·dθ·dφ</b></div>
+              <div class="f">dΩ = <b id="dq-dOm">—</b>&nbsp;sr</div>
+              <div class="n"><b>R² 被完全约掉</b>，立体角元素里只剩纯角度量，与球的大小无关。</div>
+            </li>
+            <li>
+              <div class="t">对整个球冠做二重积分</div>
+              <div class="f">Ω = ∫<sub>0</sub><sup>2π</sup> ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ·dφ</div>
+              <div class="n">θ 是极角（0 → 锥的半顶角 θₘ），φ 是方位角（0 → 2π，绕光轴整整一圈）。</div>
+            </li>
+            <li>
+              <div class="t">先对 φ 积分</div>
+              <div class="f">∫<sub>0</sub><sup>2π</sup> dφ = <b>2π</b></div>
+              <div class="f">Ω = 2π ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ</div>
+              <div class="n">这一步的几何含义就是把"弯曲矩形"沿 φ 方向首尾相接、拼成一整圈环带，于是二重积分退化成一重积分——<b>这正是上面"环带积分"法的来历</b>。两法同源。</div>
+            </li>
+            <li>
+              <div class="t">再对 θ 积分</div>
+              <div class="f">∫ sinθ·dθ = −cosθ</div>
+              <div class="f">Ω = 2π·[−cosθ]<sub>0</sub><sup>θₘ</sup> = <b>2π(1 − cos θₘ)</b></div>
+              <div class="n">与环带法得到的结果完全一致——这是一次独立的交叉验证。</div>
+            </li>
+            <li>
+              <div class="t">代入当前半顶角</div>
+              <div class="f">θₘ = <b id="dq-theta">—</b>°，cos θₘ = <b id="dq-cos">—</b></div>
+              <div class="f">Ω = 2π(1 − <b id="dq-cos2">—</b>) = <b id="dq-omega">—</b>&nbsp;sr</div>
+              <div class="f">占全球面 4π = <b id="dq-pct">—</b></div>
+              <div class="n">边界自检：θₘ = 90° → cos = 0 → Ω = 2π（半球）；θₘ = 180° → cos = −1 → Ω = 4π（整球）。与立体角的取值范围吻合。</div>
+            </li>
+          </ol>
+          <div class="note info" style="margin-top:14px">
+            <b>数值自检 · 微分近似有多准：</b>该微元的精确立体角有闭式解
+            <br><code style="font-family:var(--mono)">Ω = Δφ · (cos θ₁ − cos θ₂)</code>
+            &nbsp;（θ₁、θ₂ 为微元的两个边界极角）
+            <br>精确值 = <b id="dq-exact">—</b> sr；微分近似 <code>sinθ·dθ·dφ</code> = <b id="dq-dOm2">—</b> sr；
+            相对偏差 <b id="dq-err">—</b>。
+            <br>
+            本工具把微元<b>取在 θ 区间中点</b>，因此微分近似是<b>二阶精度</b>：
+            即使把 dθ 拉到 20°，偏差仍 &lt; 1%。若把微元取在区间<b>起点</b>（不少资料的写法），
+            精度退化成一阶——同一组参数下偏差会掉到 −10%（dθ = 8°）、
+            甚至 −70%（θ 很小且 dθ 很大时）。把 dθ 滑块拉大即可亲眼看到偏差如何变化。
+          </div>
+          <div class="note warn" style="margin-top:14px">
+            <b>为什么方块法才是"最一般"的形式：</b>圆环法暗含了一个前提——配光绕光轴<b>旋转对称</b>，
+            所以才能先把 φ 积成 2π。一旦配光不是圆的（例如<b>矩形配光</b>的洗墙灯、方形泛光灯），
+            光斑在 (θ, φ) 平面上不是一块"球冠"，而是任意形状的区域，圆环法直接失效；
+            而方块法只需把二重积分的上下限换成该区域的边界即可：
+            <br><code style="font-family:var(--mono)">Ω = ∬<sub>区域</sub> sinθ·dθ·dφ</code>
+            <br>本页的照度计算器目前只支持<b>旋转对称</b>配光（cosⁿ 模型），
+            所以矩形配光灯具请勿直接套用——需要按上面这个二重积分另算。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       视图 3 —— 公式与推导
+  ============================================================ -->
+  <div class="view" id="view-theory">
+    <div class="card theory">
+
+      <section>
+        <h3><span class="n">1</span>光强 · 光通量 · 立体角</h3>
+        <p>三者是光度学的定义性关系，没有"推导"，只有定义：</p>
+        <div class="eq">
+          立体角   Ω = A / r²        单位 sr（球面度）
+          <br>光通量   Φ = ∫ I dΩ        单位 lm（流明）
+          <br>光强     I = dΦ / dΩ      单位 cd = lm/sr
+        </div>
+        <p>
+          立体角是无量纲量的平方比，所以 1 sr 相当于"从球心看过去、面积等于半径平方的那块球面"。
+          整球 = 4π ≈ 12.5664 sr，半球 = 2π ≈ 6.2832 sr。
+        </p>
+        <p>圆锥（半顶角 θ）截出的球冠所张立体角：</p>
+        <div class="eq">
+          Ω = ∫<sub>0</sub><sup>θ</sup> 2π·sinα·dα = 2π(1 − cos θ)
+        </div>
+        <p>
+          推导：球面上极角 α 处的纬圆周长是 2πr·sinα，环带宽度是 r·dα，
+          故环带面积 dA = 2πr²·sinα·dα；除以 r² 得 dΩ = 2π·sinα·dα，积分即得。
+          <b>r 被完全约掉</b>——这是立体角"只看方向、不看距离"的本质。
+        </p>
+
+        <h4 style="margin:20px 0 8px;font-size:13.5px;color:var(--primary-ink)">
+          等价写法：球面微元（弯曲矩形）+ 二重积分
+        </h4>
+        <p>
+          上面那种算法是"先对 φ 积分、把微元拼成一整圈环带"。也可以不拼，
+          直接在球面上取一个二维微元算——这就是常见的教材写法，更基本也更直观：
+        </p>
+        <div class="eq">
+          在 (θ, φ) 处取微元：两条边分别是沿经线的一段弧与沿纬圈的一段弧
+          <br><br>沿 θ 方向边长 = R·dθ          <span class="c">（走半径 R 的大圆）</span>
+          <br>沿 φ 方向边长 = R·sinθ·dφ     <span class="c">（走半径 R·sinθ 的纬圈）</span>
+          <br><br>dA = (R·dθ)(R·sinθ·dφ) = R²·sinθ·dθ·dφ
+          <br>dΩ = dA / R² = sinθ·dθ·dφ        <span class="c">（R² 约掉）</span>
+        </div>
+        <p><b>为什么 φ 方向要乘 sinθ：</b>φ 方向是绕光轴转的方向，它走的圈是纬圈，
+          而纬圈半径是 R·sinθ 而不是 R。θ → 0（靠近光轴极点）时纬圈缩成一点，
+          该方向边长归零——所以极点附近没有贡献面积。</p>
+        <p>对球冠做二重积分（θ：0 → 半顶角 θₘ；φ：0 → 2π）：</p>
+        <div class="eq">
+          Ω = ∫<sub>0</sub><sup>2π</sup> ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ·dφ
+          <br>&nbsp;&nbsp;&nbsp;= ∫<sub>0</sub><sup>2π</sup> dφ · ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ
+          <br>&nbsp;&nbsp;&nbsp;= 2π · [−cosθ]<sub>0</sub><sup>θₘ</sup>
+          <br>&nbsp;&nbsp;&nbsp;= <b>2π(1 − cos θₘ)</b>
+        </div>
+        <p>
+          先积 φ 得到 2π —— 这一步的几何含义就是"把弯曲矩形沿 φ 方向首尾相接拼成一整圈环带"，
+          二重积分退化成一重积分。所以<b>环带法与二重积分法同源</b>，只是积分次序不同。
+          本工具首页给出两条路径，可作为彼此的交叉验证。
+        </p>
+        <div class="note info">
+          <b>记号提醒：</b>立体角可视化页的 3D 图与平面轴截面图把"微元所在极角"记作 α、
+          "锥的半顶角"记作 θ；上面这套二重积分写法把极角直接记作 θ、方位角记作 φ、
+          半顶角记作 θₘ。两者是同一个量的不同记号：<b>α ↔ θ</b>。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">2</span>半光强光束角 → 配光曲线指数</h3>
+        <p>
+          行业给出的"光束角"通常指<b>半光强全角</b>：光强降到峰值 50% 的两个方向之间的夹角。
+          记半角为 γ½，则 I(γ½) = 0.5·I₀。
+        </p>
+        <p>用余弦幂模型逼近配光（LED 投光灯最常用的解析近似）：</p>
+        <div class="eq">
+          I(γ) = I₀ · cos<sup>n</sup> γ
+          <br>cos<sup>n</sup>(γ½) = 0.5  ⟹  n = ln 0.5 / ln(cos γ½)
+        </div>
+        <p>
+          例：光束角 38° ⟹ γ½ = 19° ⟹ n = ln0.5 / ln(cos19°) = <b>12.3728</b>
+          （cos<sup>12.3728</sup>19° = 0.500000，定义自洽）。
+          光束角越窄，n 越大，配光越集中。
+        </p>
+        <div class="note info">
+          <b>限制：</b>cosⁿ 是单参数解析近似，只能保证在 γ½ 处准确降到 50%。
+          真实灯具的配光曲线需查 <b>IES / LDT 配光文件</b> 或实测光强分布，
+          本工具不替代配光文件。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">3</span>由总光通量求中心光强（关键一步）</h3>
+        <p>cosⁿ 配光在半球内的积分闭式：</p>
+        <div class="eq">
+          Φ = ∫<sub>0</sub><sup>2π</sup>∫<sub>0</sub><sup>π/2</sup> I₀ cos<sup>n</sup>γ · sinγ dγ dφ
+             = 2π·I₀ / (n + 1)
+          <br><br>⟹  I₀ = Φ (n + 1) / (2π)
+        </div>
+        <p>
+          以 Φ = 9000 lm、γ½ = 19°（n = 12.3728，n+1 = 13.3728）代入：
+          I₀ = 9000 × 13.3728 / 6.283185 ≈ <b>19 155 cd</b>。
+        </p>
+        <div class="note warn">
+          <b>直谏：Φ/Ω ≠ 中心光强。</b>
+          很多资料（含本工具参考的演示图）直接写 I = Φ/Ω，把总光通量除以半光强锥立体角
+          Ω = 0.34232 sr 得到 <b>26 291 cd</b>。这个数比真实峰值 19 155 cd 高 <b>37.2%</b>，
+          因为它隐含了"全部光通量都落在半光强锥内"的假设——实际上 cosⁿ 配光只有
+          <b>52.72%</b> 的光通量在这个锥内，另外 47.28% 分布在锥外。
+          Φ/Ω 算出的是"假想均匀分布时的锥内平均光强"，该锥内的真实平均光强其实只有
+          <b>13 862 cd</b>。用 Φ/Ω 反推照度会系统性高估。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">4</span>点光源照度：平方反比 + 余弦定律</h3>
+        <p>灯具到被照面上某点的斜距为 d，光线与被照面法线夹角为 γ：</p>
+        <div class="eq">
+          E = I(γ) · cos γ / d²        <span class="c">（点光源照度公式）</span>
+        </div>
+        <p>
+          被照面水平、灯具垂直向下、到面距离 h，面上某点距光轴落点水平距离 r，则
+          d = √(h² + r²)、cos γ = h/d。代入 cosⁿ 配光：
+        </p>
+        <div class="eq">
+          E(r) = I₀ · h<sup>n+1</sup> / (h² + r²)<sup>(n+3)/2</sup>
+          <br><br>r = 0（正下方）⟹  E<sub>max</sub> = I₀ / h²
+        </div>
+        <div class="note">
+          E(r) 关于 r <b>严格单调递减</b>（分母指数 3&nbsp;>&nbsp;0），
+          所以被照面上离光轴最远的点就是 E<sub>min</sub>：
+          圆形取边缘 r = R；矩形取角点 r = √((L/2)² + (W/2)²)。
+          <br>
+          注意：<b>E = I/d² 是错的</b>（除非被照面处处垂直于光线）。它是严格式的
+          1/cos γ 倍，恒 ≥ 1，即必然高估；γ 越大偏差越快发散（γ = 60° 时已高估一倍）。
+          本工具在剖面表里单列了这一列供对照。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">5</span>面域平均照度——不是取样平均</h3>
+        <p>
+          E<sub>avg</sub> 的正确定义是<b>该面域接收到的总光通量除以面积</b>，
+          而不是取几个点算术平均（那样会严重偏大）：
+        </p>
+        <div class="eq">
+          E<sub>avg</sub> = Φ<sub>A</sub> / A
+        </div>
+        <p><b>圆形面域</b>（半径 R，中心在光轴正下方）：圆盘张开的半顶角 γ<sub>R</sub> = arctan(R/h)，落在盘上的光通量等于该锥内的光通量：</p>
+        <div class="eq">
+          Φ<sub>A</sub> = 2π I₀ [1 − cos<sup>n+1</sup>γ<sub>R</sub>] / (n + 1)
+          <br>E<sub>avg</sub> = Φ<sub>A</sub> / (πR²)
+        </div>
+        <p><b>矩形面域</b>：无闭式解，本工具用 200×200 中点法数值积分
+          Φ<sub>A</sub> = Σ E(x,y)·ΔA。</p>
+        <p>
+          <b>均匀度</b>：U<sub>max</sub> = E<sub>min</sub>/E<sub>max</sub>，
+          U<sub>avg</sub> = E<sub>min</sub>/E<sub>avg</sub>。
+          国标道路/体育照明常用 U<sub>avg</sub> 口径，需注明是哪一个。
+        </p>
+      </section>
+
+      <section>
+        <h3><span class="n">6</span>默认算例（可用于交叉验算）</h3>
+        <div class="eq">
+          输入：Φ = 9000 lm，光束角 38°（γ½ = 19°，n = 12.3728），h = 3 m，
+                被照面 = 圆盘 R = h·tan19° = 1.0330 m，Ω(19°) = 0.34232 sr
+          <br><br>I₀      = Φ(n+1)/(2π) = 9000×13.3728/6.283185 = 19 155 cd
+          <br>E_max   = 19155 / 3²                    = 2 128 lx
+          <br>E_min   = 边缘 γ = 19°，I = 9578 cd，d = 3.1730 m
+          <br>        = 9578 × 0.94552 / 10.0677     = 899.5 lx
+          <br>Φ_A     = 2π×19155×[1 − cos<sup>13.3728</sup>19°]/13.3728 = 4 745 lm
+          <br>        （占 52.72%，即锥外还有 4 255 lm）
+          <br>E_avg   = 4745 / (π×1.0330²)          = 1 415.5 lx
+          <br>U(E_min/E_max) = 42.3%   U(E_min/E_avg) = 63.5%
+          <br>光通量利用率     = 4745 / 9000 = 52.7%
+          <br><br>对照：若误用 I₀ = Φ/Ω = 26 291 cd，则 E_max 会算成 2 921 lx（高估 37.2%）
+        </div>
+        <p>
+          注意 E_min/E_max 只有 42%：尽管边缘点光强已降到峰值一半（照 50% 定标），
+          再叠加 cos γ = 0.9455 的余弦衰减与更远的斜距，照度就掉到 42%。
+          这解释了为什么窄光束投光灯要"多灯叠加"才能拿到好看的面域均匀度。
+        </p>
+      </section>
+
+      <section>
+        <h3><span class="n">7</span>模型边界（诚实声明）</h3>
+        <ul class="tight">
+          <li><b>点光源近似</b>：要求受照距离 ≥ 5 倍发光面尺寸。近距离（＜1 m）大面阵灯具误差显著，应改用面光源或实测配光。</li>
+          <li><b>单一灯具</b>：不叠加多灯，不含墙面/顶棚的相互反射。</li>
+          <li><b>无遮挡</b>：不考虑灯具自身遮挡、灯罩、遮光罩、被照物阴影。</li>
+          <li><b>被照面水平且垂直于光轴</b>：不支持倾斜灯具（下照角 ≠ 90°）或竖直墙面。</li>
+          <li><b>配光为解析近似</b>：cosⁿ 单参数模型，不能复现真实配光的非对称性、旁瓣溢出光。</li>
+          <li><b>配光必须旋转对称</b>：cosⁿ 模型绕光轴各向同性，因此只能处理圆形光斑。
+              若灯具是<b>矩形/方形配光</b>（洗墙灯、方形泛光灯等），光斑在 (θ, φ) 平面上不是球冠，
+              Φ = 2π∫I dγ 与 Ω = 2π(1−cosθ) 这两步都不成立，必须改用
+              <code style="font-family:var(--mono)">Ω = ∬<sub>区域</sub> sinθ·dθ·dφ</code>
+              在非圆形区域上积分，并同步改掉光通量积分。本工具不覆盖此情形。</li>
+          <li><b>不含维护系数</b>：实际设计需再乘 LLD（光源光衰）× LDD（灯具积尘）× 其他损失系数，通常取 0.7~0.8。</li>
+          <li><b>不含法规判定</b>：是否满足照度标准（如 GB 50034、CJJ 45）需另按标准核对，本工具只给计算值。</li>
+        </ul>
+      </section>
+
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <div>
+    光学计算工具 v1.0.0 —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
+    E = I·cosγ/d²），cosⁿ 配光为解析近似，非实测配光文件。
+  </div>
+  <div>
+    计算核心见 <code>js/optics.js</code>，可脱离页面单独复核；
+    三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法，无外部依赖）。
+  </div>
+  <div>
+    本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
+    灯具 IES 文件复核。数值仅供参考，不构成设计依据。
+  </div>
+</div>
+
+<script src="js/optics.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/solidangle.js"></script>
+<script src="js/planar.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

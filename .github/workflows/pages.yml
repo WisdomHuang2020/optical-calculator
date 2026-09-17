@@ -1,0 +1,50 @@
+name: Deploy to GitHub Pages
+
+# 纯静态站，无构建步骤；CI 里跑一遍计算内核校验，数学被改坏时直接卡住部署。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署，新的推送取消进行中的旧任务
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 计算内核回归校验
+        run: node tests/verify.js
+
+      - name: 组装站点（只发布运行时需要的文件）
+        run: |
+          mkdir -p _site
+          cp -r index.html styles.css js preview _site/
+          touch _site/.nojekyll
+          echo "--- 发布内容 ---"
+          find _site -type f | sort
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

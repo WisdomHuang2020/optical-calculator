@@ -1,0 +1,15 @@
+# 部署/构建产物
+_site/
+
+# 本地诊断产物（无头浏览器探针、临时目录）
+__probe.html
+.ck/
+.tmpcheck/
+
+# 依赖
+node_modules/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+*.swp

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>运行时分步诊断</title>
+<style>
+  body { font: 13px/1.6 Consolas, monospace; padding: 16px; }
+  .box { width: 600px; height: 300px; border: 1px solid #ccc; }
+  .box canvas { display: block; width: 100%; height: 100%; }
+  #out { white-space: pre-wrap; background: #f6f6f6; padding: 12px; }
+</style>
+</head>
+<body>
+<div class="box"><canvas id="canvas-curve"></canvas></div>
+<div class="box" style="height:330px"><canvas id="canvas-heat"></canvas></div>
+<pre id="out">running…</pre>
+
+<script src="../js/optics.js"></script>
+<script src="../js/charts.js"></script>
+<script src="../js/solidangle.js"></script>
+<script>
+var log = [];
+function L(s) { log.push(s); }
+function step(name, fn) {
+  try { var r = fn(); L('OK    ' + name + (r !== undefined ? '  → ' + r : '')); }
+  catch (e) { L('FAIL  ' + name + '  ::  ' + e.name + ': ' + e.message); }
+}
+function report() { document.getElementById('out').textContent = 'RPT\n' + log.join('\n') + '\nEND'; }
+
+L('== 模块可用性 ==');
+L('Optics        ' + (typeof window.Optics));
+L('Charts        ' + (typeof window.Charts));
+L('SolidAngleViz ' + (typeof window.SolidAngleViz));
+for (var k in (window.Optics || {})) { /* 枚举 */ }
+L('Optics exports: ' + Object.keys(window.Optics || {}).length + ' 项');
+L('Charts exports: ' + Object.keys(window.Charts || {}).join(','));
+L('Optics exports: ' + Object.keys(window.Optics || {}).join(','));
+
+var m, res, R50, prof, pts;
+
+L('');
+L('== 计算链路 ==');
+step('buildModel', function () {
+  m = window.Optics.buildModel({ model: 'cosN', flux: 9000,
+        gammaHalfRad: 19 * Math.PI / 180, centerIntensity: null });
+  return 'n=' + m.n.toFixed(4) + ' Imax=' + m.Imax.toFixed(2);
+});
+step('spotRadius', function () { return R50 = window.Optics.spotRadius(3, 19 * Math.PI / 180); });
+step('analyze', function () {
+  res = window.Optics.analyze(m, 3, { type: 'circle', R: R50 });
+  return 'Emax=' + res.Emax.toFixed(1) + ' Emin=' + res.Emin.toFixed(1) + ' Eavg=' + res.Eavg.toFixed(1);
+});
+step('makeProfile', function () {
+  var rMax = Math.max(res.rFar, R50 * 1.4) * 1.12;
+  prof = window.Optics.makeProfile(m, 3, rMax, 320);
+  return 'N=' + prof.N + ' len=' + prof.E.length + ' rMax=' + prof.rMax.toFixed(3);
+});
+step('pts.map', function () {
+  pts = prof.E.map(function (E, i) { return { r: prof.rMax * i / prof.N, E: E }; });
+  return 'len=' + pts.length;
+});
+
+L('');
+L('== 画布尺寸 ==');
+var cv = document.getElementById('canvas-curve');
+L('canvas-curve clientWidth=' + cv.clientWidth + ' clientHeight=' + cv.clientHeight);
+var hv = document.getElementById('canvas-heat');
+L('canvas-heat  clientWidth=' + hv.clientWidth + ' clientHeight=' + hv.clientHeight);
+L('devicePixelRatio=' + window.devicePixelRatio);
+
+L('');
+L('== 绘图链路 ==');
+step('Charts.drawCurve', function () {
+  window.Charts.drawCurve(cv, {
+    pts: pts, rMax: prof.rMax, Emax: res.Emax, Eavg: res.Eavg,
+    Emin: res.Emin, rMin: res.rFar, r50: R50, r10: 2.015
+  });
+  return 'ok';
+});
+step('Charts.drawHeatmap', function () {
+  window.Charts.drawHeatmap(hv, {
+    model: m, h: 3, shape: { type: 'circle', R: R50 },
+    Emax: res.Emax, r50: R50, profile: null
+  });
+  return 'ok';
+});
+
+L('');
+L('== 剖面表循环 ==');
+step('table rows', function () {
+  var html = '';
+  for (var i = 0; i <= 11; i++) {
+    var r = res.rFar * i / 11;
+    var d = Math.sqrt(9 + r * r);
+    var cg = 3 / d;
+    var g = Math.acos(cg);
+    var I = window.Optics.intensity(m, g);
+    var E = window.Optics.illuminance(m, 3, r);
+    var Es = window.Optics.illuminanceNoCos(m, 3, r);
+    html += '<tr><td>' + r.toFixed(3) + '</td><td>' + (g * 180 / Math.PI).toFixed(2) +
+            '</td><td>' + d.toFixed(3) + '</td><td>' + I.toFixed(0) + '</td><td>' +
+            E.toFixed(0) + '</td><td>' + Es.toFixed(0) + '</td><td>' +
+            (E / res.Emax * 100).toFixed(1) + '%</td></tr>';
+  }
+  return 'rows=' + (html.match(/<tr>/g) || []).length;
+});
+
+report();
+</script>
+</body>
+</html>
