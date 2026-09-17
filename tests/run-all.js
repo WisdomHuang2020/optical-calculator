@@ -15,6 +15,7 @@ const { spawnSync } = require('child_process');
 
 const SUITES = [
   { name: '版本一致性 · 单一来源与 CHANGELOG', file: 'version-check.js' },
+  { name: '主题一致性 · 语义色与图例对齐', file: 'theme-check.js' },
   { name: '计算内核 · 光度学数值断言', file: 'verify.js' },
   { name: '参考算例 · 外部文件复核', file: 'verify-user-file.js' },
   { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' }

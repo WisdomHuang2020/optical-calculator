@@ -1,37 +1,75 @@
 /* ============================================================
  * 光学计算工具 — 样式表
- * 浅色主题（light）
+ * 深色主题（dark）—— 设计语言参照 LLC 设计工具
+ *   近黑底 + teal 主色 + amber 强调；Inter / JetBrains Mono；圆角 8/6px
+ *
+ * 语义色约定：
+ *   凡 canvas 绘图用到的颜色，一律在此定义为 --c-* 变量；
+ *   index.html 的图例色块引用同名变量，js 里的 COL 常量与之一致。
+ *   tests/theme-check.js 会断言三者不漂移 —— 图例与画布脱节是
+ *   "同一数据写多处"的典型翻车点，必须用断言守住。
  * ============================================================ */
 
 :root {
-  --bg:          #eef2f7;
-  --surface:     #ffffff;
-  --surface-2:   #f8fafc;
-  --surface-3:   #f1f5f9;
-  --border:      #e3e8ef;
-  --border-2:    #cbd5e1;
+  /* ---- 底色与层次（LLC: bg #0a0a0a / surface #171717 / elevated #262626）---- */
+  --bg:          #0a0a0a;
+  --surface:     #171717;
+  --surface-2:   #1e1e1e;
+  --surface-3:   #262626;
+  --border:      #333333;
+  --border-2:    #4d4d4d;
 
-  --text:        #0f172a;
-  --text-2:      #475569;
-  --text-3:      #94a3b8;
+  /* ---- 文字（LLC: #f5f5f5 / #a3a3a3 / #737373）---- */
+  --text:        #f5f5f5;
+  --text-2:      #a3a3a3;
+  --text-3:      #737373;
 
-  --primary:     #2563eb;
-  --primary-2:   #1d4ed8;
-  --primary-soft:#dbeafe;
-  --primary-ink: #1e40af;
+  /* ---- 主色 teal（LLC primary #0f766e / light #14b8a6 / dark #134e4a）---- */
+  --primary:     #14b8a6;                    /* 边框、焦点圈、色条：需醒目 */
+  --primary-2:   #2dd4bf;                    /* hover / 强调数字：更亮 */
+  --primary-deep:#0f766e;                    /* 实心按钮底：需承白字 */
+  --primary-soft:rgba(20, 184, 166, .14);    /* 选中态半透明底 */
+  --primary-ink: #5eead4;                    /* 半透明底上的文字 */
 
+  /* ---- 强调 amber（LLC accent #f59e0b / light #fbbf24）---- */
   --amber:       #f59e0b;
-  --amber-soft:  #fef3c7;
-  --amber-ink:   #b45309;
+  --amber-soft:  rgba(245, 158, 11, .14);
+  --amber-ink:   #fbbf24;
 
-  --teal:        #0d9488;
-  --violet:      #7c3aed;
+  /* ---- 数据区分色（仅用于区分维度，不作装饰）---- */
+  --teal:        #5eead4;   /* 亮青：E_avg */
+  --violet:      #a78bfa;   /* 紫：E_min */
 
-  --radius:      12px;
-  --radius-sm:   8px;
-  --shadow:      0 1px 2px rgba(15, 23, 42, .05), 0 10px 28px -16px rgba(15, 23, 42, .28);
-  --shadow-sm:   0 1px 2px rgba(15, 23, 42, .06);
+  /* ---- 图形语义色：canvas 绘图与页面图例共用，改主题只改这里 ---- */
+  --c-curve:     #14b8a6;   /* 照度—半径曲线 */
+  --c-emax:      #14b8a6;   /* E_max 标记 */
+  --c-emin:      #a78bfa;   /* E_min 标记 */
+  --c-eavg:      #5eead4;   /* E_avg 参考线 */
+  --c-r50:       #f59e0b;   /* 半光强光斑 R½ */
+  --c-r10:       #a78bfa;   /* 10% 光斑 R₁₀ */
+  --c-cap:       #2dd4bf;   /* 球冠 */
+  --c-ring:      #f59e0b;   /* 微圆环 */
+  --c-patch:     #a78bfa;   /* 微元方块 dA */
+  --c-cone:      #22d3ee;   /* 锥面线 */
+  --c-axis:      #737373;   /* 光轴 */
+  --c-lat:       #5eead4;   /* 纬圆半径 r·sinα */
+  --c-radius:    #a3a3a3;   /* 半径 r */
+  --c-theta:     #2dd4bf;   /* θ 方向边 R·dθ */
+  --c-phi:       #f59e0b;   /* φ 方向边 R·sinθ·dφ */
+  --c-grid:      #262626;   /* 图表网格线 */
+  --c-axisline:  #404040;   /* 坐标轴 */
+  --c-label:     #a3a3a3;   /* 图内标注文字 */
+  --c-label-bright: #e0e0e0;/* 图内主要标注（深色底上需比 --c-label 更亮） */
+  --c-label-dim: #8a8a8a;   /* 图内次要文字 / 坐标刻度小字 */
+  --c-halo:      rgba(10, 10, 10, .92);   /* 文字光晕（深色底上压线用） */
 
+  --radius:      8px;
+  --radius-sm:   6px;
+  --shadow:      0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -18px rgba(0, 0, 0, .9);
+  --shadow-sm:   0 1px 2px rgba(0, 0, 0, .4);
+
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
   --mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
 }
 
@@ -42,19 +80,20 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-               "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
+  font-family: var(--sans);
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4 { margin: 0; font-weight: 650; letter-spacing: -.01em; }
 p { margin: 0 0 8px; }
-a { color: var(--primary); text-decoration: none; }
+a { color: var(--primary-2); text-decoration: none; }
 a:hover { text-decoration: underline; }
+::selection { background: var(--primary-deep); color: #fff; }
 
-/* ---------------- 顶栏 ---------------- */
+/* ---------------- 顶栏（LLC 风格：深底 + 细边框 + 毛玻璃）---------------- */
 .topbar {
   position: sticky;
   top: 0;
@@ -63,7 +102,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   gap: 22px;
   padding: 10px 24px;
-  background: rgba(255, 255, 255, .88);
+  background: rgba(10, 10, 10, .86);
   backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--border);
 }
@@ -71,12 +110,15 @@ a:hover { text-decoration: underline; }
 .brand { display: flex; align-items: center; gap: 11px; flex: 0 0 auto; }
 .brand .logo {
   width: 34px; height: 34px; border-radius: 9px;
-  background: linear-gradient(140deg, #3b82f6, #1d4ed8);
-  color: #fff; display: grid; place-items: center;
-  font-size: 17px; box-shadow: 0 4px 12px -4px rgba(37, 99, 235, .7);
+  background: linear-gradient(140deg, var(--primary-2), var(--primary-deep));
+  color: #06201d; display: grid; place-items: center;
+  font-size: 17px; box-shadow: 0 4px 14px -5px rgba(20, 184, 166, .8);
 }
-.brand h1 { font-size: 15px; line-height: 1.2; }
-.brand p { margin: 0; font-size: 11.5px; color: var(--text-3); line-height: 1.3; letter-spacing: .02em; }
+.brand h1 { font-size: 15px; line-height: 1.2; color: var(--text); }
+.brand p {
+  margin: 0; font-size: 11.5px; line-height: 1.3; letter-spacing: .06em;
+  color: var(--primary); text-transform: uppercase;
+}
 
 .tabs { display: flex; gap: 4px; flex: 1 1 auto; }
 .tab {
@@ -87,7 +129,10 @@ a:hover { text-decoration: underline; }
   font-family: inherit;
 }
 .tab:hover { background: var(--surface-3); color: var(--text); }
-.tab.active { background: var(--primary); color: #fff; box-shadow: 0 4px 12px -6px rgba(37, 99, 235, .9); }
+.tab.active {
+  background: var(--primary-soft); color: var(--primary-ink);
+  box-shadow: inset 0 0 0 1px rgba(20, 184, 166, .45);
+}
 
 .ver {
   font-family: var(--mono); font-size: 11px; color: var(--text-3);
@@ -116,6 +161,12 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--shadow-sm);
   padding: 18px 20px;
   margin-bottom: 16px;
+  transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
+}
+/* LLC 特征：悬停时边框转青 + 极淡光晕 */
+.card:hover {
+  border-color: rgba(20, 184, 166, .55);
+  box-shadow: 0 0 0 1px rgba(20, 184, 166, .10);
 }
 .card > h2 {
   font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
@@ -153,21 +204,21 @@ a:hover { text-decoration: underline; }
 input[type="number"], input[type="text"], select {
   width: 100%; padding: 8px 11px;
   border: 1px solid var(--border-2); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--text);
+  background: var(--surface-2); color: var(--text);
   font-family: var(--mono); font-size: 13.5px;
   transition: border-color .15s, box-shadow .15s;
   appearance: none;
 }
-input[type="number"]:focus, select:focus {
+input[type="number"]:focus, input[type="text"]:focus, select:focus {
   outline: none; border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .13);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, .18);
 }
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; }
 select {
   font-family: inherit; font-size: 13px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.6' stroke-linecap='round'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23a3a3a3' stroke-width='1.6' stroke-linecap='round'/></svg>");
   background-repeat: no-repeat; background-position: right 11px center;
   padding-right: 28px;
 }
@@ -197,8 +248,8 @@ select {
 }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label:has(input:checked) {
-  background: var(--surface); color: var(--primary-ink);
-  font-weight: 650; box-shadow: var(--shadow-sm);
+  background: var(--primary-soft); color: var(--primary-ink);
+  font-weight: 650; box-shadow: inset 0 0 0 1px rgba(20, 184, 166, .45);
 }
 
 .hidden { display: none !important; }
@@ -213,13 +264,13 @@ input[type="range"] {
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
-  background: #fff; border: 2.5px solid var(--primary);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, .3); cursor: grab;
+  background: var(--text); border: 2.5px solid var(--primary);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .8); cursor: grab;
 }
 input[type="range"]::-moz-range-thumb {
   width: 14px; height: 14px; border-radius: 50%;
-  background: #fff; border: 2.5px solid var(--primary);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, .3); cursor: grab;
+  background: var(--text); border: 2.5px solid var(--primary);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .8); cursor: grab;
 }
 .slider-val {
   font-family: var(--mono); font-size: 13px; font-weight: 600;
@@ -231,7 +282,7 @@ input[type="range"]::-moz-range-thumb {
 .tg {
   font: inherit; font-size: 12.5px; font-weight: 550;
   padding: 6px 13px; border-radius: var(--radius-sm);
-  border: 1px solid var(--border-2); background: var(--surface);
+  border: 1px solid var(--border-2); background: var(--surface-2);
   color: var(--text-2); cursor: pointer; transition: all .15s;
   display: inline-flex; align-items: center; gap: 6px;
 }
@@ -240,22 +291,33 @@ input[type="range"]::-moz-range-thumb {
   background: var(--border-2); transition: background .15s;
 }
 .tg:hover { border-color: var(--primary); color: var(--primary-ink); }
-.tg.on { background: var(--primary-soft); border-color: #93c5fd; color: var(--primary-ink); }
+.tg.on {
+  background: var(--primary-soft); border-color: rgba(20, 184, 166, .55);
+  color: var(--primary-ink);
+}
 .tg.on::before { background: var(--primary); }
-.tg.amber.on { background: var(--amber-soft); border-color: #fcd34d; color: var(--amber-ink); }
+.tg.amber.on {
+  background: var(--amber-soft); border-color: rgba(245, 158, 11, .55);
+  color: var(--amber-ink);
+}
 .tg.amber.on::before { background: var(--amber); }
-.tg.violet.on { background: #ede9fe; border-color: #c4b5fd; color: #5b21b6; }
-.tg.violet.on::before { background: #7c3aed; }
+.tg.violet.on {
+  background: rgba(167, 139, 250, .14); border-color: rgba(167, 139, 250, .55);
+  color: #c4b5fd;
+}
+.tg.violet.on::before { background: var(--violet); }
 
 .btn {
   font: inherit; font-size: 12.5px; font-weight: 600;
   padding: 7px 14px; border-radius: var(--radius-sm);
-  border: 1px solid var(--border-2); background: var(--surface);
+  border: 1px solid var(--border-2); background: var(--surface-2);
   color: var(--text-2); cursor: pointer; transition: all .15s;
 }
 .btn:hover { border-color: var(--primary); color: var(--primary-ink); background: var(--primary-soft); }
-.btn.solid { background: var(--primary); border-color: var(--primary); color: #fff; }
-.btn.solid:hover { background: var(--primary-2); color: #fff; }
+.btn.solid {
+  background: var(--primary-deep); border-color: var(--primary-deep); color: #fff;
+}
+.btn.solid:hover { background: var(--primary); border-color: var(--primary); color: #06201d; }
 
 /* ---------------- 结果 ---------------- */
 .stats {
@@ -268,11 +330,13 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--surface); padding: 14px 15px 13px;
   box-shadow: var(--shadow-sm); position: relative; overflow: hidden;
+  transition: border-color .2s ease, box-shadow .2s ease;
 }
 .stat::after {
   content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
   background: var(--border-2);
 }
+.stat:hover { border-color: rgba(20, 184, 166, .45); }
 .stat.hero::after { background: var(--primary); }
 .stat.low::after  { background: var(--violet); }
 .stat.avg::after  { background: var(--teal); }
@@ -308,8 +372,9 @@ input[type="range"]::-moz-range-thumb {
   background: var(--surface-2); overflow: hidden;
 }
 .canvas-box canvas { display: block; width: 100%; height: 100%; }
+/* 三维画布：深底 + 中心极淡青晕，替代原来的白色径向渐变 */
 .canvas-3d { height: 460px; cursor: grab; background:
-  radial-gradient(circle at 50% 45%, #ffffff 0%, #f6f9fd 55%, #eaf0f8 100%); }
+  radial-gradient(circle at 50% 45%, #16202a 0%, #11161c 55%, #0d0d0d 100%); }
 .canvas-3d.dragging { cursor: grabbing; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 11.5px; color: var(--text-2); }
@@ -329,9 +394,9 @@ table th {
 table th:first-child, table td:first-child { text-align: left; }
 table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); }
 table tr:last-child td { border-bottom: 0; }
-table tbody tr:hover { background: var(--surface-2); }
+table tbody tr:hover { background: var(--surface-3); }
 table tr.hl { background: var(--primary-soft) !important; }
-table tr.hl td { font-weight: 650; }
+table tr.hl td { font-weight: 650; color: var(--primary-ink); }
 table td.muted { color: var(--text-3); }
 
 /* ---------------- 立体角视图 ---------------- */
@@ -353,12 +418,12 @@ table td.muted { color: var(--text-3); }
 .bigval { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
 .bigval .num {
   font-family: var(--mono); font-size: 46px; font-weight: 600;
-  letter-spacing: -.035em; line-height: 1; color: var(--text);
+  letter-spacing: -.035em; line-height: 1; color: var(--primary-2);
 }
 .bigval .u { font-family: var(--mono); font-size: 17px; color: var(--text-3); font-weight: 500; }
 
 .bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin-bottom: 7px; }
-.bar > i { display: block; height: 100%; background: linear-gradient(90deg, #60a5fa, #2563eb); border-radius: 999px; transition: width .18s; }
+.bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--primary-2), var(--primary-deep)); border-radius: 999px; transition: width .18s; }
 .bar-label { font-size: 12.5px; color: var(--text-2); margin-bottom: 16px; }
 .bar-label b { font-family: var(--mono); color: var(--text); }
 
@@ -369,7 +434,7 @@ table td.muted { color: var(--text-3); }
 }
 .deriv code {
   font-family: var(--mono); font-size: 12px;
-  background: #fff; border: 1px solid var(--border);
+  background: var(--surface-3); border: 1px solid var(--border);
   border-radius: 4px; padding: 1px 5px; color: var(--primary-ink);
 }
 
@@ -379,8 +444,12 @@ table td.muted { color: var(--text-3); }
   font-size: 12.5px; line-height: 1.7; margin: 12px 0 0;
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
 }
-.note.warn { background: var(--amber-soft); border-color: #fcd34d; color: var(--amber-ink); }
-.note.info { background: var(--primary-soft); border-color: #bfdbfe; color: var(--primary-ink); }
+.note.warn {
+  background: var(--amber-soft); border-color: rgba(245, 158, 11, .45); color: var(--amber-ink);
+}
+.note.info {
+  background: var(--primary-soft); border-color: rgba(20, 184, 166, .45); color: var(--primary-ink);
+}
 .note b { font-weight: 700; }
 
 /* ---------------- 理论页 ---------------- */
@@ -392,7 +461,7 @@ table td.muted { color: var(--text-3); }
 }
 .theory h3 .n {
   display: inline-grid; place-items: center; width: 22px; height: 22px;
-  border-radius: 6px; background: var(--primary); color: #fff;
+  border-radius: 6px; background: var(--primary-deep); color: #fff;
   font-family: var(--mono); font-size: 12px;
 }
 .theory p { color: var(--text-2); }
@@ -410,7 +479,7 @@ ul.tight li { margin-bottom: 5px; }
   max-width: 1320px; margin: 0 auto; padding: 0 24px 40px;
   font-size: 11.5px; color: var(--text-3); line-height: 1.9;
 }
-.footer code { font-family: var(--mono); }
+.footer code { font-family: var(--mono); color: var(--text-2); }
 
 /* 推导步骤 */
 .steps { counter-reset: st; list-style: none; margin: 0; padding: 0; }
@@ -426,7 +495,7 @@ ul.tight li { margin-bottom: 5px; }
   content: counter(st);
   position: absolute; left: -12px; top: -2px;
   width: 22px; height: 22px; border-radius: 50%;
-  background: var(--primary); color: #fff;
+  background: var(--primary-deep); color: #fff;
   font: 600 11px/22px var(--mono); text-align: center;
 }
 .steps .t { font-weight: 650; font-size: 12.5px; margin-bottom: 6px; }
@@ -447,7 +516,27 @@ ul.tight li { margin-bottom: 5px; }
 .steps .n b { color: var(--text); font-family: var(--mono); font-size: 11px; }
 
 /* 滚动条 */
-::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; border: 3px solid var(--bg); }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+
+/* 打印：深色站直接打印会几乎全黑，反转为白底黑字 */
+@media print {
+  html, body { background: #fff !important; color: #000 !important; }
+  .topbar, .tabs, .ver, .footer { display: none !important; }
+  .card, .stat, .summary .item, .deriv, .eq, .note, .canvas-box, .table-wrap {
+    background: #fff !important; border-color: #ccc !important; color: #000 !important;
+    box-shadow: none !important;
+  }
+  .stat .v, .bigval .num, table, table th, table td, .summary .item .v {
+    color: #000 !important;
+  }
+  .stat .v, .bigval .num, .summary .item .v, .readout .formula b { color: #000 !important; }
+  .stat .k, .stat .s, .card > h2, .footer, .mini-hint, .stat .v i { color: #555 !important; }
+  table th { background: #f0f0f0 !important; }
+  .note.warn, .note.info { background: #fff !important; color: #000 !important; }
+  .deriv code, .steps .f { background: #f5f5f5 !important; color: #000 !important; }
+  .canvas-3d { background: #fff !important; }
+  a { color: #000 !important; text-decoration: none !important; }
+}

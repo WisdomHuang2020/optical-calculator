@@ -6,17 +6,21 @@
 (function (global) {
   'use strict';
 
+  /* 配色：与 styles.css 里的 --c-* 变量一一对应（深色主题）。
+     改主题时两边都要改，tests/theme-check.js 会断言两者一致。 */
   var C = {
-    grid:    '#e8eef6',
-    axis:    '#cbd5e1',
-    text:    '#94a3b8',
-    text2:   '#475569',
-    curve:   '#2563eb',
-    fillTop: 'rgba(37,99,235,.20)',
-    fillBot: 'rgba(37,99,235,.02)',
-    marker:  '#f59e0b',
-    marker2: '#7c3aed',
-    teal:    '#0d9488'
+    grid:    '#262626',                  // --c-grid
+    axis:    '#404040',                  // --c-axisline
+    text:    '#8a8a8a',                  // --c-label-dim（刻度小字）
+    text2:   '#a3a3a3',                  // --c-label（轴标题）
+    curve:   '#14b8a6',                  // --c-curve
+    fillTop: 'rgba(20,184,166,.22)',
+    fillBot: 'rgba(20,184,166,.02)',
+    marker:  '#f59e0b',                  // --c-r50
+    marker2: '#a78bfa',                  // --c-r10
+    teal:    '#5eead4',                  // --c-eavg
+    pointFill:   '#0a0a0a',              // 关键点填充：深色底上形成彩色环
+    heatBorder:  '#6b6b6b'               // 伪彩图外框：深色底上需可见
   };
 
   function setup(canvas) {
@@ -152,7 +156,7 @@
       if (!(r >= 0) || r > rMax) return;
       ctx.beginPath();
       ctx.arc(X(r), Y(E), 4, 0, 6.2832);
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = C.pointFill;
       ctx.fill();
       ctx.lineWidth = 2.2;
       ctx.strokeStyle = color;
@@ -181,8 +185,10 @@
    * ------------------------------------------------------- */
 
   // 蓝 → 青 → 绿 → 黄 → 橙 → 红  （照度高 = 暖色，与照明设计软件一致）
+  // 深色主题下低值端比浅色主题略作提亮：原本的 (6,28,82) 与 #1e1e1e 画布底
+  // 明度太接近，伪彩图边界会看不出来。色相顺序与语义不变。
   var STOPS = [
-    [0.00, [  6,  28,  82]],
+    [0.00, [ 18,  42, 104]],
     [0.16, [ 14,  86, 158]],
     [0.34, [ 24, 158, 176]],
     [0.52, [ 90, 200,  96]],
@@ -274,8 +280,8 @@
     ctx.drawImage(off, ox, oy, pw, ph);
     ctx.restore();
 
-    // 边框
-    ctx.strokeStyle = '#0f172a';
+    // 边框（深色主题下用亮灰，否则深色描边在深底上不可见）
+    ctx.strokeStyle = C.heatBorder;
     ctx.globalAlpha = .55;
     ctx.lineWidth = 1.2;
     if (shape.type === 'rect') {

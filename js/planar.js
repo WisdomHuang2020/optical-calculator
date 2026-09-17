@@ -20,22 +20,30 @@
   var DEG = Math.PI / 180;
   var UP = -Math.PI / 2;      // canvas 角度：-90° 即竖直向上（α = 0 的方向）
 
+  /* 配色：深色主题。canvas 用到的颜色与 styles.css 的 --c-* 变量对应，
+     改主题时两边都要改，tests/theme-check.js 会断言一致。 */
   var COL = {
-    circle:   '#cbd5e1',
-    circleIn: '#fbfdff',
-    axis:     '#94a3b8',
-    sector:   'rgba(96,165,250,0.15)',
-    sectorEdge: 'rgba(96,165,250,0.55)',
-    cap:      '#1d4ed8',
-    ring:     '#f59e0b',
-    ringDim:  'rgba(245,158,11,0.38)',
-    radius:   '#334155',
-    latRadius:'#0d9488',
-    patchTheta: '#0d9488',
-    patchPhi:   '#f59e0b',
-    text:     '#334155',
-    textDim:  '#94a3b8',
-    origin:   '#0f172a'
+    circle:   '#6b6b6b',                  // 球面截面圆描边
+    circleIn: '#141414',                  // 圆内填充：比画布底(#1e1e1e)暗，形成清晰圆盘
+    axis:     '#737373',                  // --c-axis 光轴
+    sector:   'rgba(20,184,166,0.14)',    // 锥体轴截面填充
+    sectorEdge: 'rgba(20,184,166,0.50)',
+    cap:      '#2dd4bf',                  // --c-cap 球冠弧
+    ring:     '#f59e0b',                  // --c-ring 微圆环
+    ringDim:  'rgba(245,158,11,0.38)',    // 左侧镜像环（淡）
+    radius:   '#a3a3a3',                  // --c-radius 半径 r
+    latRadius:'#5eead4',                  // --c-lat 纬圆半径 r·sinα
+    patchTheta: '#2dd4bf',                // --c-theta  θ 方向边
+    patchPhi:   '#f59e0b',                // --c-phi    φ 方向边
+    text:     '#e0e0e0',                  // --c-label-bright 图内主要标注
+    textDim:  '#8a8a8a',                  // --c-label-dim 次要标注
+    origin:   '#e0e0e0',                  // O 点：深色底上需亮
+    amberInk: '#fbbf24',                  // --amber-ink 琥珀系标注（α / 微圆环 / r·dα）
+    halo:     'rgba(10,10,10,0.92)',      // --c-halo 文字光晕：深色底上压线，须为深色
+    angleBg:  '#0a0a0a',                  // 角度标签的圆底衬（浅色主题下是白底）
+    patchFill:'rgba(167,139,250,0.22)',   // 微元面片填充
+    patchDot: '#a78bfa',                  // --c-patch 微元顶点
+    leadLine: 'rgba(45,212,191,0.45)'     // 引出线
   };
 
   function fmt(v, d) { return isFinite(v) ? v.toFixed(d === undefined ? 3 : d) : '—'; }
@@ -185,13 +193,13 @@
       ctx.font = 'italic 600 14px "Cambria Math", Georgia, serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = COL.angleBg;
       ctx.beginPath(); ctx.arc(lx, ly, 9, 0, TWO_PI); ctx.fill();
       ctx.fillStyle = color;
       ctx.fillText(label, lx, ly + 0.5);
     }
     angleArc(th, R * 0.22, COL.cap, 'θ');
-    angleArc(al, R * 0.44, '#b45309', 'α');
+    angleArc(al, R * 0.44, COL.amberInk, 'α');
 
     /* --- 9. 文字标注 --- */
     function tag(txt, x, y, color, font, align, baseline) {
@@ -199,7 +207,7 @@
       ctx.textAlign = align || 'center';
       ctx.textBaseline = baseline || 'middle';
       ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+      ctx.strokeStyle = COL.halo;
       ctx.strokeText(txt, x, y);
       ctx.fillStyle = color || COL.text;
       ctx.fillText(txt, x, y);
@@ -226,7 +234,7 @@
     ctx.beginPath();
     ctx.moveTo(e1.x, e1.y); ctx.lineTo(e2.x, e2.y);
     ctx.strokeStyle = COL.ring; ctx.lineWidth = 1.6; ctx.stroke();
-    tag('r·dα', (e1.x + e2.x) / 2 + 8, (e1.y + e2.y) / 2 - 22, '#b45309',
+    tag('r·dα', (e1.x + e2.x) / 2 + 8, (e1.y + e2.y) / 2 - 22, COL.amberInk,
         '13px "Cambria Math", Georgia, serif', 'left');
 
     // 球冠引出线（指向球冠弧的左段，避免穿过整个扇形）
@@ -234,7 +242,7 @@
     ctx.beginPath();
     ctx.moveTo(C.x - R * 1.20, C.y - R * 0.60);
     ctx.lineTo(capOn.x, capOn.y);
-    ctx.strokeStyle = 'rgba(29,78,216,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = COL.leadLine; ctx.lineWidth = 1; ctx.stroke();
     tag('球冠 A', C.x - R * 1.42, C.y - R * 0.66, COL.cap,
         '12.5px -apple-system, "Microsoft YaHei", sans-serif', 'left', 'middle');
 
@@ -243,7 +251,7 @@
     var omOut = { x: C.x - R * 1.20, y: C.y + R * 0.05 };
     ctx.beginPath();
     ctx.moveTo(omIn.x, omIn.y); ctx.lineTo(omOut.x, omOut.y);
-    ctx.strokeStyle = 'rgba(29,78,216,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = COL.leadLine; ctx.lineWidth = 1; ctx.stroke();
     tag('Ω', omOut.x - 8, omOut.y, COL.cap,
         'italic 700 17px "Cambria Math", Georgia, serif', 'right', 'middle');
 
@@ -255,7 +263,7 @@
 
     // 右侧：微圆环
     var rl = pt(al, R * 1.24);
-    tag('微圆环', rl.x + 34, rl.y - 4, '#b45309',
+    tag('微圆环', rl.x + 34, rl.y - 4, COL.amberInk,
         '12.5px -apple-system, "Microsoft YaHei", sans-serif', 'left', 'middle');
 
     // O
@@ -361,7 +369,7 @@
     for (j = NP; j >= 0; j--) { var q2 = px(pts[NT][j]); ctx.lineTo(q2.x, q2.y); }
     for (i = NT; i >= 0; i--) { var q3 = px(pts[i][0]); ctx.lineTo(q3.x, q3.y); }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(139,92,246,0.14)';
+    ctx.fillStyle = COL.patchFill;
     ctx.fill();
 
     // 四条边
@@ -389,7 +397,7 @@
       ctx.textAlign = align || 'center';
       ctx.textBaseline = baseline || 'middle';
       ctx.lineWidth = 3.5;
-      ctx.strokeStyle = 'rgba(255,255,255,0.94)';
+      ctx.strokeStyle = COL.halo;
       ctx.strokeText(txt, x, y);
       ctx.fillStyle = color;
       ctx.fillText(txt, x, y);
@@ -409,7 +417,7 @@
     [[t1, p1], [t1, p2], [t2, p1], [t2, p2]].forEach(function (c) {
       var q = px(raw(c[0], c[1]));
       ctx.beginPath(); ctx.arc(q.x, q.y, 3, 0, TWO_PI);
-      ctx.fillStyle = '#6d28d9'; ctx.fill();
+      ctx.fillStyle = COL.patchDot; ctx.fill();
     });
 
     // 提示 Θ 与 φ 的含义

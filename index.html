@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>光学计算工具 · 照度计算与立体角可视化</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -163,12 +166,12 @@
             <canvas id="canvas-curve"></canvas>
           </div>
           <div class="legend">
-            <span><i style="background:#2563eb"></i>E(r) 严格式（含余弦）</span>
-            <span><i class="dot" style="background:#2563eb"></i>E_max</span>
-            <span><i class="dot" style="background:#7c3aed"></i>E_min</span>
-            <span><i style="background:#0d9488;opacity:.7"></i>E_avg</span>
-            <span><i style="background:#f59e0b;opacity:.7"></i>R½</span>
-            <span><i style="background:#7c3aed;opacity:.7"></i>R₁₀</span>
+            <span><i style="background:var(--c-curve)"></i>E(r) 严格式（含余弦）</span>
+            <span><i class="dot" style="background:var(--c-emax)"></i>E_max</span>
+            <span><i class="dot" style="background:var(--c-emin)"></i>E_min</span>
+            <span><i style="background:var(--c-eavg);opacity:.7"></i>E_avg</span>
+            <span><i style="background:var(--c-r50);opacity:.7"></i>R½</span>
+            <span><i style="background:var(--c-r10);opacity:.7"></i>R₁₀</span>
           </div>
           <p style="margin-top:10px;font-size:12px;color:var(--text-3)" id="curve-caption"></p>
         </div>
@@ -225,10 +228,10 @@
         </div>
         <div class="card">
           <div class="legend" style="margin-top:0">
-            <span><i style="background:#3b82f6"></i>球冠 —— 被锥截出的球面面积 A</span>
-            <span><i style="background:#f59e0b"></i>微圆环 —— 带宽 dα 的环带 dA</span>
-            <span><i style="background:#60a5fa"></i>锥面线 —— 光源到球冠边缘的母线</span>
-            <span><i style="background:#94a3b8"></i>光轴</span>
+            <span><i style="background:var(--c-cap)"></i>球冠 —— 被锥截出的球面面积 A</span>
+            <span><i style="background:var(--c-ring)"></i>微圆环 —— 带宽 dα 的环带 dA</span>
+            <span><i style="background:var(--c-cone)"></i>锥面线 —— 光源到球冠边缘的母线</span>
+            <span><i style="background:var(--c-axis)"></i>光轴</span>
           </div>
           <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
             <b>拖动画面可自由旋转视角</b>；默认缓慢自转。把视角转到侧面，可以看到微圆环的
@@ -364,11 +367,11 @@
             <canvas id="planar-canvas"></canvas>
           </div>
           <div class="legend" style="margin-top:12px">
-            <span><i style="background:#1d4ed8"></i>球冠弧（±θ）</span>
-            <span><i style="background:#f59e0b"></i>微圆环轴截面（角宽 dα）</span>
-            <span><i style="background:#0d9488"></i>纬圆半径 r·sinα</span>
-            <span><i style="background:#334155"></i>半径 r</span>
-            <span><i style="background:#94a3b8"></i>光轴</span>
+            <span><i style="background:var(--c-cap)"></i>球冠弧（±θ）</span>
+            <span><i style="background:var(--c-ring)"></i>微圆环轴截面（角宽 dα）</span>
+            <span><i style="background:var(--c-lat)"></i>纬圆半径 r·sinα</span>
+            <span><i style="background:var(--c-radius)"></i>半径 r</span>
+            <span><i style="background:var(--c-axis)"></i>光轴</span>
           </div>
           <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
             拖动上方的 θ、α、dα 滑块，本图与三维视图同步变化。
@@ -390,7 +393,7 @@
           <ol class="steps" id="deriv-steps">
             <li>
               <div class="t">立体角的定义</div>
-              <div class="f">Ω = A / r²&nbsp;&nbsp;<span style="color:#94a3b8">[sr]</span></div>
+              <div class="f">Ω = A / r²&nbsp;&nbsp;<span style="color:var(--text-3)">[sr]</span></div>
               <div class="n">球面上面积 A 对球心张成的立体角。它是面积与半径平方之比，无量纲。</div>
             </li>
             <li>
@@ -446,8 +449,8 @@
             <canvas id="patch-canvas"></canvas>
           </div>
           <div class="legend" style="margin-top:12px">
-            <span><i style="background:#0d9488"></i>θ 方向边（沿经线）R·dθ</span>
-            <span><i style="background:#f59e0b"></i>φ 方向边（沿纬圈）R·sinθ·dφ</span>
+            <span><i style="background:var(--c-theta)"></i>θ 方向边（沿经线）R·dθ</span>
+            <span><i style="background:var(--c-phi)"></i>φ 方向边（沿纬圈）R·sinθ·dφ</span>
           </div>
           <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
             把球面上 (θ, φ) 附近的一个微元单独放大。注意两条边的弯曲程度<b>不一样</b>：

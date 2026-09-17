@@ -16,26 +16,33 @@
   var DEG = Math.PI / 180;
   var TWO_PI = Math.PI * 2;
 
-  // 配色（浅色主题）
+  /* 配色（深色主题）。canvas 用到的颜色与 styles.css 的 --c-* 变量对应，
+     改主题时两边都要改，tests/theme-check.js 会断言一致。
+     注：浅色主题里「后半线框更亮、前半更暗」，深色主题必须反过来 ——
+     近处的线要比远处的亮，否则透视层次颠倒。 */
   var COL = {
-    wireBack:  '#94a3b8',
-    wireFront: '#64748b',
-    capBack:   'rgba(59,130,246,0.22)',
-    capFront:  'rgba(59,130,246,0.66)',
-    capEdge:   '#1d4ed8',
-    ring:      'rgba(245,158,11,0.90)',
-    ringEdge:  '#d97706',
-    patchBack: 'rgba(139,92,246,0.38)',
-    patchFront:'rgba(139,92,246,0.88)',
-    patchTheta:'#0d9488',
-    patchPhi:  '#f59e0b',
-    patchText: '#6d28d9',
-    cone:      '#60a5fa',
-    axis:      '#94a3b8',
-    thetaArc:  '#1d4ed8',
-    alphaArc:  '#d97706',
-    origin:    '#0f172a',
-    label:     '#334155'
+    wireBack:  '#5c5c5c',                  // 球面线框后半（应有"在远处"的暗淡感）
+    wireFront: '#9a9a9a',                  // 球面线框前半（比后半亮）
+    capBack:   'rgba(45,212,191,0.20)',    // 球冠背面填充
+    capFront:  'rgba(45,212,191,0.52)',    // 球冠正面填充
+    capEdge:   '#2dd4bf',                  // --c-cap 球冠边缘
+    ring:      'rgba(245,158,11,0.90)',    // --c-ring 微圆环
+    ringEdge:  '#f59e0b',                  // 环带上下沿
+    patchBack: 'rgba(167,139,250,0.32)',   // 微元背面填充
+    patchFront:'rgba(167,139,250,0.80)',   // 微元正面填充
+    patchTheta:'#2dd4bf',                  // --c-theta  θ 方向边
+    patchPhi:  '#f59e0b',                  // --c-phi    φ 方向边
+    patchText: '#c4b5fd',                  // 微元标注（深色底上需亮）
+    cone:      '#22d3ee',                  // --c-cone 锥面线
+    axis:      '#737373',                  // --c-axis 光轴
+    thetaArc:  '#2dd4bf',                  // θ 角弧
+    alphaArc:  '#fbbf24',                  // α 角弧
+    origin:    '#e0e0e0',                  // 光源点
+    label:     '#e0e0e0',                  // 图内标签
+    halo:      'rgba(10,10,10,0.92)',      // --c-halo 文字光晕（深色底上压线用）
+    glow:      'rgba(94,234,212,0.85)',    // 光源发光晕（浅色主题下是深色阴影）
+    glowEnd:   'rgba(94,234,212,0)',       // 同上，渐隐端
+    tagBg:     '#0a0a0a'                   // 角度标签圆底衬（浅色主题下是白底）
   };
 
   /* ---------------- 几何/投影 ---------------- */
@@ -212,8 +219,8 @@
     /* 10. 光源点 */
     var o = P(0, 0, 0);
     var g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 9);
-    g.addColorStop(0, 'rgba(15,23,42,.85)');
-    g.addColorStop(1, 'rgba(15,23,42,0)');
+    g.addColorStop(0, COL.glow);
+    g.addColorStop(1, COL.glowEnd);
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(o.x, o.y, 9, 0, TWO_PI); ctx.fill();
     ctx.fillStyle = COL.origin;
@@ -421,7 +428,7 @@
     ctx.textAlign = lx >= c.x ? 'left' : 'right';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = 3.5;
-    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.strokeStyle = COL.halo;
     ctx.strokeText('dA', lx + (lx >= c.x ? 4 : -4), ly);
     ctx.fillStyle = COL.patchText;
     ctx.fillText('dA', lx + (lx >= c.x ? 4 : -4), ly);
@@ -508,7 +515,7 @@
     ctx.textBaseline = 'middle';
     ctx.beginPath();
     ctx.arc(mid.x, mid.y, 9.5, 0, TWO_PI);
-    ctx.fillStyle = 'rgba(255,255,255,.88)';
+    ctx.fillStyle = COL.tagBg;
     ctx.fill();
     ctx.fillStyle = color;
     ctx.fillText(label, mid.x, mid.y + 0.5);

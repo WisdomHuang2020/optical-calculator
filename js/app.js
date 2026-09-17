@@ -138,7 +138,7 @@
     var dev = m.ImaxSource === 'given' ? (m.fluxImplied / inp.flux - 1) : 0;
     setText('sum-fluxcheck', fint(m.fluxImplied) + ' lm');
     var chk = $('sum-fluxcheck');
-    chk.style.color = Math.abs(dev) > 0.02 ? '#dc2626' : '';
+    chk.style.color = Math.abs(dev) > 0.02 ? '#f87171' : '';   // 深色底上提亮
 
     var note = $('calc-note');
     if (m.ImaxSource === 'given' && Math.abs(dev) > 0.02) {
