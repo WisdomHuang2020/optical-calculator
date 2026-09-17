@@ -64,6 +64,14 @@ function classOf(html, id) {
   const m = t.match(/class="([^"]*)"/);
   return m ? m[1] : '';
 }
+/* 按 class 取所有匹配元素的可见文本（用于 class 钩子型元素，如 .app-version） */
+function textsByClass(html, cls) {
+  const re = new RegExp('<[a-zA-Z]+[^>]*class="[^"]*\\b' + cls + '\\b[^"]*"[^>]*>([\\s\\S]*?)<\\/', 'g');
+  const out = [];
+  let m;
+  while ((m = re.exec(html)) !== null) out.push(m[1].replace(/<[^>]*>/g, '').trim());
+  return out;
+}
 
 let fail = 0, pass = 0;
 function ok(name, got, want) {
@@ -152,6 +160,18 @@ okTrue('三维画布已渲染', /id="sa-canvas"/.test(dom));
 okTrue('曲线说明已填充', (textOf(dom, 'curve-caption') || '').indexOf('R½') >= 0,
   (textOf(dom, 'curve-caption') || '').slice(0, 40));
 okTrue('末行高亮正确（最远点 = E_min）', /class="hl"[\s\S]{0,400}42\.3%/.test(dom));
+
+console.log('\n=== 5. 版本号注入（渲染层验证是否真的生效）===');
+const verSrc = fs.readFileSync(path.join(ROOT, 'js', 'version.js'), 'utf8');
+const expectedVer = (verSrc.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/) || [])[1];
+okTrue('已从 js/version.js 读到版本号', !!expectedVer, expectedVer);
+const vers = textsByClass(dom, 'app-version');
+ok('版本显示点数量（页头 + 页脚）', vers.length, 2);
+okTrue('所有显示点均已注入当前版本',
+  vers.length > 0 && vers.every(function (v) { return v === expectedVer; }),
+  JSON.stringify(vers));
+okTrue('页面未残留硬编码旧版本',
+  !/\bv1\.0\.0\b/.test(dom), '不应再出现 v1.0.0');
 
 console.log(`\n浏览器冒烟：通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail === 0 ? 0 : 1);

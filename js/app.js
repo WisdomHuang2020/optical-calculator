@@ -506,6 +506,13 @@
    * 启动
    * ========================================================= */
   function boot() {
+    // 版本号由 js/version.js 单一来源注入。
+    // 用 class 钩子而非 id：页面上有多个显示点（页头徽标 + 页脚），
+    // 写死 id 只能注入一处，将来再加一处又会漏。
+    var verTxt = window.APP_VERSION || 'v—';
+    document.querySelectorAll('.app-version').forEach(function (el) {
+      el.textContent = verTxt;
+    });
     bindTabs();
     bindCalc();
     initSolid();
