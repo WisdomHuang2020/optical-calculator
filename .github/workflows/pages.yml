@@ -1,6 +1,7 @@
 name: Deploy to GitHub Pages
 
-# 纯静态站，无构建步骤；CI 里跑一遍计算内核校验，数学被改坏时直接卡住部署。
+# 纯静态站，无构建步骤。部署前先跑完整测试套件（含浏览器冒烟），
+# 测试不过则整个部署中止 —— 坏版本不会上线。
 on:
   push:
     branches: [main]
@@ -11,22 +12,25 @@ permissions:
   pages: write
   id-token: write
 
-# 同一时间只跑一个部署，新的推送取消进行中的旧任务
+# 同一时间只跑一个部署，新推送取消进行中的旧任务
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
+  # 测试门禁：调用与 CI 完全相同的可复用工作流，不另写一套
+  test:
+    uses: ./.github/workflows/test.yml
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: 计算内核回归校验
-        run: node tests/verify.js
-
       - name: 组装站点（只发布运行时需要的文件）
         run: |
+          set -e
           mkdir -p _site
           cp -r index.html styles.css js preview _site/
           touch _site/.nojekyll

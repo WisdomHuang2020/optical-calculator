@@ -1,0 +1,38 @@
+name: Test (reusable)
+
+# 可复用工作流：CI 与 Pages 部署都调用它，
+# 保证"CI 跑的那几条"与"部署前跑的那几条"永远一致，不存在两套测试。
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: JS 语法检查
+        run: |
+          set -e
+          n=0
+          for f in $(find js tests tools -name '*.js' -type f | sort); do
+            node --check "$f"
+            n=$((n+1))
+          done
+          echo "已检查 $n 个 JS 文件，语法全部通过"
+
+      - id: chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: 全部测试套件
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+          REQUIRE_CHROME: '1'
+        run: node tests/run-all.js
