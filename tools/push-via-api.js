@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 /* ============================================================
- * tools/push-via-api.js —— 通过 GitHub REST API 推送（等效于 git push）
+ * tools/push-via-api.js —— 通过 GitHub REST API 推送（git push 的降级通道）
  *
- * 为什么需要它：
- *   本机网络下 github.com:443 不可达（直连超时、代理 502），
- *   git clone / fetch / push 全部走不通；而 api.github.com 可达。
- *   故改用 Git Data API：blob → tree → commit → 更新 ref，
+ * ⚠ 先看这条：本机 git push 失败时**首选换 SSH remote**，不是用本脚本。
+ *   实测（2026-09-17）：github.com 只有 HTTPS(443) 被墙，SSH(22) 一直是通的：
+ *       git remote set-url origin git@github.com:<owner>/<repo>.git
+ *   只有在 SSH 也不通时，才降级用本脚本走 REST API。
+ *
+ * 本脚本的适用场景：
+ *   - HTTPS 与 SSH 双双不可达，仅 api.github.com 可达；
+ *   - 或需要在无 git 客户端的环境里落一次提交。
+ *   原理：Git Data API：blob → tree → commit → 更新 ref，
  *   一次请求合成一个提交，与 git push 效果一致（不改写历史）。
+ *   注意：它**无法**更新本地 .git，因此本地与远端的 commit sha 会分叉
+ *   （tree 仍相同，内容逐字节等价）。
  *
  * 前提：本机已存 github.com 凭据，且 scope 含 repo（写工作流文件还需 workflow）。
  *       凭据由 git credential fill 读取，脚本内不落盘、不打印。
