@@ -34,16 +34,14 @@
    * ========================================================= */
 
   function readInputs() {
-    var conv = radioVal('conv');
-    var beam = num('beam');
-    var gh = conv === 'full' ? beam / 2 : beam;
+    // 光束角只接收半光强半角 θ½（不带全角口径换算，避免两套记法混淆）
+    var gh = num('beam');
     var itxt = $('imax').value.trim();
     return {
       model: $('model').value,
       flux: num('flux'),
       centerIntensity: itxt === '' ? null : parseFloat(itxt),
-      conv: conv,
-      beam: beam,
+      beam: gh,
       gammaHalfDeg: gh,
       h: num('height'),
       shapeType: radioVal('shape'),
@@ -70,10 +68,15 @@
     var inp = readInputs();
     renderErrors = [];
 
+    // 等价全角实时显示（放在校验之前，输入过程中也能看到），
+    // 让用户拿数据手册一眼对上是全角还是半角口径
+    var g = inp.gammaHalfDeg;
+    setText('beam-full', isFinite(g) && g > 0 ? (g * 2).toFixed(1) + '°' : '—');
+
     /* --- 校验 --- */
     var warn = [];
     if (!(inp.flux > 0)) warn.push('光通量需大于 0');
-    if (!(inp.gammaHalfDeg > 0.5) || !(inp.gammaHalfDeg < 89.5)) warn.push('半光强角需在 0.5° ~ 89.5°（即全角 1° ~ 179°）');
+    if (!(inp.gammaHalfDeg > 0.5) || !(inp.gammaHalfDeg < 89.5)) warn.push('半光强半角 θ½ 需在 0.5° ~ 89.5°');
     if (!(inp.h > 0)) warn.push('垂直距离需大于 0');
     if (inp.shapeType === 'circle' && !(inp.R > 0)) warn.push('半径需大于 0');
     if (inp.shapeType === 'rect' && (!(inp.L > 0) || !(inp.W > 0))) warn.push('矩形长宽需大于 0');
@@ -429,15 +432,10 @@
       $(id).addEventListener('input', recompute);
       $(id).addEventListener('change', recompute);
     });
-    document.querySelectorAll('input[name="conv"], input[name="shape"]').forEach(function (el) {
+    document.querySelectorAll('input[name="shape"]').forEach(function (el) {
       el.addEventListener('change', function () {
         $('field-R').classList.toggle('hidden', radioVal('shape') !== 'circle');
         $('field-rect').classList.toggle('hidden', radioVal('shape') !== 'rect');
-        // 光束角定义切换时，数值同步换算，避免"看着一样但其实翻倍"
-        var b = $('beam');
-        if (radioVal('conv') === 'half') {
-          if (parseFloat(b.value) > 89) b.value = (parseFloat(b.value) / 2).toFixed(1);
-        }
         recompute();
       });
     });
@@ -456,8 +454,7 @@
       $('model').value = 'cosN';
       $('flux').value = 9000;
       $('imax').value = '';
-      document.querySelector('input[name="conv"][value="full"]').checked = true;
-      $('beam').value = 38;
+      $('beam').value = 19;          // 半光强半角 θ½（手册全角写法为 38°）
       $('height').value = 3;
       document.querySelector('input[name="shape"][value="circle"]').checked = true;
       $('radius').value = '1.033';

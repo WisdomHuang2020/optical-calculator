@@ -119,6 +119,15 @@ ok('半光强锥立体角', textOf(dom, 'sum-omega'), '0.3423 sr');
 ok('占全球面比例', textOf(dom, 'sum-omegapct'), '2.72% × 4π');
 ok('半光强光斑 R½', textOf(dom, 'sum-r50'), '1.033 m');
 ok('10% 光斑 R₁₀', textOf(dom, 'sum-r10'), '2.015 m');
+ok('半光强半角 θ½', textOf(dom, 'sum-ghalf'), '19.00°');
+
+console.log('\n=== 2b. 光束角口径防错（只收 θ½）===');
+ok('等价全角 2θ½ 实时读数', textOf(dom, 'beam-full'), '38.0°');
+okTrue('已移除全角口径开关', !/name="conv"/.test(dom), '未发现 name="conv" 控件');
+okTrue('"请先除以 2" 提示在位',
+  /请先除以 2 再填入/.test(dom), '命中提示文案');
+okTrue('配光指数按 θ½ 计算（n 由 19° 定标）',
+  String(textOf(dom, 'sum-n')) === '12.37', 'n = ' + textOf(dom, 'sum-n'));
 
 console.log('\n=== 3. 立体角与两种积分解法 ===');
 ok('Ω', textOf(dom, 'sa-omega-v'), '0.3423');

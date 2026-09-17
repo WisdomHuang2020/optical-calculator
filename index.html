@@ -56,16 +56,12 @@
           </div>
 
           <div class="field">
-            <label>光束角定义</label>
-            <div class="seg">
-              <label><input type="radio" name="conv" value="full" checked>半光强全角 2γ½</label>
-              <label><input type="radio" name="conv" value="half">半光强半角 γ½</label>
+            <label>光束角 θ½ <span class="unit">°</span><em>半光强半角</em></label>
+            <input id="beam" type="number" value="19" min="0.5" max="89.5" step="0.5">
+            <div class="mini-hint">
+              等价全角 2θ½ = <b id="beam-full">38.0°</b>。
+              数据手册若标的是<b>全角</b>（如 38°、24°），请先除以 2 再填入上面。
             </div>
-          </div>
-
-          <div class="field">
-            <label>光束角数值 <span class="unit">°</span></label>
-            <input id="beam" type="number" value="38" min="1" max="179" step="1">
           </div>
         </div>
 
@@ -151,7 +147,7 @@
             <div class="item"><span class="k">配光指数 n</span><span class="v" id="sum-n">—</span></div>
             <div class="item"><span class="k">中心光强 I₀ <small>cd</small></span><span class="v" id="sum-imax">—</span></div>
             <div class="item"><span class="k">I₀ 来源</span><span class="v" id="sum-imaxsrc">—</span></div>
-            <div class="item"><span class="k">半光强半角 γ½</span><span class="v" id="sum-ghalf">—</span></div>
+            <div class="item"><span class="k">半光强半角 θ½</span><span class="v" id="sum-ghalf">—</span></div>
             <div class="item"><span class="k">半光强锥立体角 Ω</span><span class="v" id="sum-omega">—</span></div>
             <div class="item"><span class="k">占全球面比例</span><span class="v" id="sum-omegapct">—</span></div>
             <div class="item"><span class="k">半光强光斑 R½</span><span class="v" id="sum-r50">—</span></div>
@@ -612,21 +608,23 @@
       <section>
         <h3><span class="n">2</span>半光强光束角 → 配光曲线指数</h3>
         <p>
-          行业给出的"光束角"通常指<b>半光强全角</b>：光强降到峰值 50% 的两个方向之间的夹角。
-          记半角为 γ½，则 I(γ½) = 0.5·I₀。
+          <b>记号约定：</b>γ 表示"光线与光轴的夹角"这个<b>变量</b>；
+          <b>θ½</b> 表示<b>半光强半角</b>——光强降到峰值 50% 处与光轴的夹角。
+          行业手册常把"光束角"写成<b>全角 2θ½</b>（两个 50% 方向之间的夹角），
+          是 θ½ 的两倍。本工具只接收 θ½，避免口径混淆。
         </p>
         <p>用余弦幂模型逼近配光（LED 投光灯最常用的解析近似）：</p>
         <div class="eq">
-          I(γ) = I₀ · cos<sup>n</sup> γ
-          <br>cos<sup>n</sup>(γ½) = 0.5  ⟹  n = ln 0.5 / ln(cos γ½)
+          I(γ) = I_max · cos<sup>n</sup> γ
+          <br>cos<sup>n</sup>(θ½) = 0.5  ⟹  n = ln 0.5 / ln(cos θ½)
         </div>
         <p>
-          例：光束角 38° ⟹ γ½ = 19° ⟹ n = ln0.5 / ln(cos19°) = <b>12.3728</b>
+          例：手册标"光束角 38°"实为全角 ⟹ θ½ = 19° ⟹ n = ln0.5 / ln(cos19°) = <b>12.3728</b>
           （cos<sup>12.3728</sup>19° = 0.500000，定义自洽）。
-          光束角越窄，n 越大，配光越集中。
+          θ½ 越小，n 越大，配光越集中。
         </p>
         <div class="note info">
-          <b>限制：</b>cosⁿ 是单参数解析近似，只能保证在 γ½ 处准确降到 50%。
+          <b>限制：</b>cosⁿ 是单参数解析近似，只能保证在 θ½ 处准确降到 50%。
           真实灯具的配光曲线需查 <b>IES / LDT 配光文件</b> 或实测光强分布，
           本工具不替代配光文件。
         </div>
@@ -641,7 +639,7 @@
           <br><br>⟹  I₀ = Φ (n + 1) / (2π)
         </div>
         <p>
-          以 Φ = 9000 lm、γ½ = 19°（n = 12.3728，n+1 = 13.3728）代入：
+          以 Φ = 9000 lm、θ½ = 19°（n = 12.3728，n+1 = 13.3728）代入：
           I₀ = 9000 × 13.3728 / 6.283185 ≈ <b>19 155 cd</b>。
         </p>
         <div class="note warn">
@@ -706,7 +704,7 @@
       <section>
         <h3><span class="n">6</span>默认算例（可用于交叉验算）</h3>
         <div class="eq">
-          输入：Φ = 9000 lm，光束角 38°（γ½ = 19°，n = 12.3728），h = 3 m，
+          输入：Φ = 9000 lm，光束角 θ½ = 19°（手册写法为全角 38°，n = 12.3728），h = 3 m，
                 被照面 = 圆盘 R = h·tan19° = 1.0330 m，Ω(19°) = 0.34232 sr
           <br><br>I₀      = Φ(n+1)/(2π) = 9000×13.3728/6.283185 = 19 155 cd
           <br>E_max   = 19155 / 3²                    = 2 128 lx
