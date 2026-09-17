@@ -20,7 +20,14 @@
     marker2: '#a78bfa',                  // --c-r10
     teal:    '#5eead4',                  // --c-eavg
     pointFill:   '#0a0a0a',              // 关键点填充：深色底上形成彩色环
-    heatBorder:  '#6b6b6b'               // 伪彩图外框：深色底上需可见
+    heatBorder:  '#6b6b6b',              // 伪彩图外框：深色底上需可见
+    /* 伪彩照度图横跨深蓝→青→黄→红整个色域，其上叠加的参考圆与文字
+       必须自带底衬或描边 —— 任何单一文字色都必然在某些区域对比度不足。
+       实测缺陷：白色半透明文字压在青绿区上看不清（用户反馈）。 */
+    heatMark:     '#ffffff',             // 参考圆线 与 标注文字
+    heatMarkHalo: 'rgba(0,0,0,.60)',     // 参考圆的深色描边（先描深再描白）
+    heatLabelBg:  'rgba(8,8,8,.80)',     // 标注文字底衬
+    heatCross:    'rgba(255,255,255,.95)' // 中心十字
   };
 
   function setup(canvas) {
@@ -296,26 +303,43 @@
     // 半光强光斑参考圆
     if (cfg.r50 > 0 && cfg.r50 * scale < Math.max(pw, ph)) {
       ctx.save();
+      var rpx = cfg.r50 * scale;
+      var ccx = ox + pw / 2, ccy = oy + ph / 2;
+
+      // 参考圆：先描一遍深色粗线再叠白线。
+      // 只描白线时，压在伪彩的高亮区（黄/橙/红）上几乎看不见。
       ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = .95;
+      ctx.strokeStyle = C.heatMarkHalo;
+      ctx.lineWidth = 3.8;
       ctx.beginPath();
-      ctx.arc(ox + pw / 2, oy + ph / 2, cfg.r50 * scale, 0, 6.2832);
+      ctx.arc(ccx, ccy, rpx, 0, 6.2832);
       ctx.stroke();
-      ctx.globalAlpha = .8;
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '10px ui-monospace, Consolas, monospace';
+      ctx.strokeStyle = C.heatMark;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      // 标注文字：加深色底衬。伪彩是全色域，文字要么有底衬、要么在某些
+      // 区域必然对比度不足 —— 这是唯一稳妥的做法。
+      ctx.setLineDash([]);
+      ctx.font = '600 10.5px ui-monospace, Consolas, monospace';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText('½Imax 光斑  R=' + cfg.r50.toFixed(2) + ' m',
-                   ox + pw / 2, oy + Math.max(10, ph / 2 - cfg.r50 * scale - 3));
+      ctx.textBaseline = 'middle';
+      var label = '½Imax 光斑  R=' + cfg.r50.toFixed(2) + ' m';
+      var ly = Math.max(oy + 11, ccy - rpx - 11);   // 圆外上方；空间不够时退回圆内
+      var tw = ctx.measureText(label).width;
+      ctx.fillStyle = C.heatLabelBg;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(ccx - tw / 2 - 7, ly - 9.5, tw + 14, 19, 5);
+      else ctx.rect(ccx - tw / 2 - 7, ly - 9.5, tw + 14, 19);
+      ctx.fill();
+      ctx.fillStyle = C.heatMark;
+      ctx.fillText(label, ccx, ly);
       ctx.restore();
     }
 
     // 中心十字
-    ctx.strokeStyle = 'rgba(255,255,255,.75)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = C.heatCross;
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(ox + pw / 2 - 6, oy + ph / 2); ctx.lineTo(ox + pw / 2 + 6, oy + ph / 2);
     ctx.moveTo(ox + pw / 2, oy + ph / 2 - 6); ctx.lineTo(ox + pw / 2, oy + ph / 2 + 6);

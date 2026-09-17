@@ -142,12 +142,13 @@ for (const f of ['js/planar.js', 'js/solidangle.js']) {
 }
 ok('planar/solidangle 内白色残留', whiteLeft, 0);
 
-// charts.js 的伪彩图本身是彩色，画在其上的白色参考圆/十字/标注是正当的，
-// 因此只固定已知的 3 处，超出即视为回归（例如误把曲线图区域改成白）。
+// charts.js 的伪彩图本身是彩色，画在其上的白线白字是正当的 —— 但它们必须
+// 带底衬或描边（见第 5 节的对比度断言），且只允许出现在 C 常量定义里。
+// 目前 2 处：heatMark（参考圆与标注文字）、heatCross（中心十字）。
 const chSrc = read('js/charts.js');
 const chWhite = (chSrc.match(/'rgba\(255,\s*255,\s*255/g) || []).length +
                 (chSrc.match(/'#(fff|ffffff)'/gi) || []).length;
-ok('charts.js 白色数量（仅伪彩图上的参考圆/十字/标注）', chWhite, 3);
+ok('charts.js 白色字面量数量（仅 heatMark / heatCross）', chWhite, 2);
 
 const LIGHT_TELLS = ['#eef2f7', '#f8fafc', '#f1f5f9', '#0f172a', '#475569'];
 const kept = LIGHT_TELLS.filter((c) => new RegExp(c + '\\b', 'i').test(css));
@@ -157,6 +158,51 @@ okTrue('body 背景为深色（--bg = #0a0a0a）', sameRgb(bgVal, '#0a0a0a'),
   bgVal ? '--bg = ' + bgVal.trim() : '--bg 未定义');
 okTrue('已定义 3D 画布的深色底，不含白色径向渐变',
   !/radial-gradient\([^)]*#ffffff/i.test(css), '检查 .canvas-3d');
+
+/* ---------- 5. 伪彩图上的叠加元素：对比度下限 ---------- */
+console.log('\n=== 5. 伪彩图叠加元素的对比度 ===');
+/* 伪彩照度图横跨深蓝→青→黄→红整个色域，其上叠加的参考圆与标注文字
+   必须自带底衬/描边 —— 已验证的缺陷：白色半透明文字压在青绿区上看不清。
+   这里按 WCAG 的相对亮度公式，取「底衬叠在最亮伪彩色上」这一最坏情况算对比度。 */
+function srgbToLin(c) {
+  c = c / 255;
+  return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function relLum(rgb) {
+  return 0.2126 * srgbToLin(rgb[0]) + 0.7152 * srgbToLin(rgb[1]) + 0.0722 * srgbToLin(rgb[2]);
+}
+function contrastRgb(a, b) {
+  const la = relLum(a), lb = relLum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+function alphaOf(s) {
+  const m = String(s).match(/rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/);
+  return m ? parseFloat(m[1]) : 1;
+}
+function over(fg, alpha, bg) {
+  return [0, 1, 2].map((i) => fg[i] * alpha + bg[i] * (1 - alpha));
+}
+
+// 解析伪彩色标，取相对亮度最高的一档作为最坏底色
+const stops = [...chSrc.matchAll(/\[\s*[\d.]+\s*,\s*\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]\s*\]/g)]
+  .map((m) => [+m[1], +m[2], +m[3]]);
+okTrue('已解析出伪彩色标停靠点', stops.length >= 5, `共 ${stops.length} 档`);
+const brightest = stops.reduce((a, b) => (relLum(a) > relLum(b) ? a : b), stops[0]);
+console.log(`       最亮伪彩色 = rgb(${brightest.join(',')})，相对亮度 ${relLum(brightest).toFixed(3)}`);
+
+// 标注文字：白字 + 深色底衬
+const txtC = contrastRgb(parseColor(CH.heatMark), over(parseColor(CH.heatLabelBg), alphaOf(CH.heatLabelBg), brightest));
+okTrue(`标注文字在最坏底色上对比度 ${txtC.toFixed(1)}:1（WCAG AA 要求 ≥ 4.5）`, txtC >= 4.5);
+okTrue('标注文字底衬不透明度足够（≥ 0.6）', alphaOf(CH.heatLabelBg) >= 0.6,
+  'heatLabelBg alpha = ' + alphaOf(CH.heatLabelBg));
+
+// 参考圆白线：两侧有深色描边，有效底色同样按描边合成算
+const lineC = contrastRgb(parseColor(CH.heatMark), over(parseColor(CH.heatMarkHalo), alphaOf(CH.heatMarkHalo), brightest));
+okTrue(`参考圆白线在最坏底色上对比度 ${lineC.toFixed(1)}:1`, lineC >= 4.5);
+okTrue('参考圆已实现「先描深色再描白」的双描边',
+  /strokeStyle\s*=\s*C\.heatMarkHalo/.test(chSrc) && /strokeStyle\s*=\s*C\.heatMark\b/.test(chSrc));
+okTrue('伪彩图标注使用底衬而非裸文字',
+  /fillStyle\s*=\s*C\.heatLabelBg/.test(chSrc));
 
 console.log(`\n主题一致性：通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail === 0 ? 0 : 1);
