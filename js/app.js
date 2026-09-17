@@ -54,6 +54,25 @@
     };
   }
 
+  /* ---- 被照面半径 R：默认跟随半光强光斑半径 h·tan θ½ ----
+     用户要求改 h 就自动联动，不必再点一次「按半光强光斑填充」。
+     但若用户手动改过 R，就不能悄悄覆盖他的输入 —— 用「当前值是否仍等于
+     上次自动算出的值」判定他有没有动过。点「恢复默认」回到跟随态。 */
+  var lastAutoR = null;
+  function syncRadiusFromSpot() {
+    var h = num('height'), beam = num('beam');
+    if (!(h > 0) || !(beam > 0)) return;
+    var R = O.spotRadius(h, (beam / 2) * O.DEG);
+    if (!isFinite(R) || R <= 0) return;
+    var cur = parseFloat($('radius').value);
+    // 容差取半个末位（写回时 toFixed(3) 会截断）
+    var untouched = (lastAutoR === null) || Math.abs(cur - lastAutoR) < 5e-4;
+    if (untouched) {
+      lastAutoR = R;
+      $('radius').value = R.toFixed(3);
+    }
+  }
+
   var curModel = null;
   var renderErrors = [];
 
@@ -68,6 +87,9 @@
   }
 
   function recompute() {
+    // 先同步被照面半径（改 h 或光束角时自动跟随半光强光斑半径），再读输入 ——
+    // 否则本轮算的还是同步前的旧 R
+    syncRadiusFromSpot();
     var inp = readInputs();
     renderErrors = [];
 
@@ -444,14 +466,8 @@
       });
     });
 
-    $('btn-spot').addEventListener('click', function (e) {
-      e.preventDefault();
-      var inp = readInputs();
-      if (!(inp.h > 0) || !(inp.gammaHalfDeg > 0)) return;
-      var R = O.spotRadius(inp.h, inp.gammaHalfDeg * O.DEG);
-      $('radius').value = R.toFixed(3);
-      recompute();
-    });
+    // 原先的「按半光强光斑填充」按钮已移除：半径 R 现在由 syncRadiusFromSpot()
+    // 在每次重算时自动跟随 h 与光束角（见该函数注释）。
 
     $('btn-reset-calc').addEventListener('click', function (e) {
       e.preventDefault();
@@ -461,7 +477,8 @@
       $('beam').value = 38;          // 半光强全角 2θ½（等价半角 θ½ = 19°）
       $('height').value = 3;
       document.querySelector('input[name="shape"][value="circle"]').checked = true;
-      $('radius').value = '1.033';
+      lastAutoR = null;              // 回到自动跟随态
+      $('radius').value = '';        // 留空，交给 syncRadiusFromSpot() 重算
       $('len').value = '1.2';
       $('wid').value = '0.6';
       $('field-R').classList.remove('hidden');

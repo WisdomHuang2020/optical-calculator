@@ -94,7 +94,37 @@ if (!chrome) {
   process.exit(0);
 }
 console.log(`浏览器 : ${chrome}`);
-console.log(`页面   : ${INDEX}\n`);
+console.log(`页面   : ${INDEX}（注入交互探针后渲染）\n`);
+
+/* ---------- 生成带交互探针的副本 ----------
+   纯 dump-dom 只能看到初始 DOM。交互行为（如"改 h 后被照面半径是否自动跟随"）
+   必须在页面里真的跑一遍才能验证。副本必须放在项目目录内，否则相对路径的
+   styles.css / js/*.js 加载不到（踩过：探针放外面，读到的是空页面）。 */
+const INTERACTION_PROBE = [
+  '<script>',
+  'setTimeout(function () {',
+  '  function gi(id) { return document.getElementById(id); }',
+  '  function fire(id, v) { gi(id).value = v; gi(id).dispatchEvent(new Event("input", { bubbles: true })); }',
+  '  var r = {};',
+  '  r.defaultR = gi("radius").value;',
+  '  fire("height", "6"); r.radiusAfterH6 = gi("radius").value;',
+  '  fire("height", "3"); r.radiusBackH3 = gi("radius").value;',
+  '  gi("radius").value = "5";',
+  '  gi("radius").dispatchEvent(new Event("input", { bubbles: true }));',
+  '  fire("height", "4"); r.radiusManualKept = gi("radius").value;',
+  '  r.spotBtnGone = !document.getElementById("btn-spot");',
+  '  // 复位：探针改过页面状态（h=4、R=5），不复位会把前面的静态断言全部污染',
+  '  gi("btn-reset-calc").click();',
+  '  r.afterResetR = gi("radius").value;',
+  '  r.afterResetEmax = gi("st-emax-v").textContent;',
+  '  var p = document.createElement("pre"); p.id = "__interact";',
+  '  p.textContent = "INTERACT:" + JSON.stringify(r);',
+  '  document.body.appendChild(p);',
+  '}, 1200);',
+  '</' + 'script>'
+].join('\n');
+const PROBE = path.join(ROOT, '__probe.html');
+fs.writeFileSync(PROBE, fs.readFileSync(INDEX, 'utf8').replace('</body>', INTERACTION_PROBE + '\n</body>'));
 
 const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-smoke-'));
 let dom;
@@ -103,13 +133,14 @@ try {
     '--headless=new', '--no-sandbox', '--disable-gpu', '--hide-scrollbars',
     '--user-data-dir=' + profileDir,
     '--virtual-time-budget=8000',
-    '--dump-dom', pathToFileURL(INDEX).href
+    '--dump-dom', pathToFileURL(PROBE).href
   ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
 } catch (e) {
   console.error('✘ 无头 Chrome 执行失败：' + e.message);
   process.exit(1);
 } finally {
   try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (x) { /* ignore */ }
+  try { fs.unlinkSync(PROBE); } catch (x) { /* ignore */ }
 }
 
 console.log('=== 1. 照度计算：统计卡片 ===');
@@ -174,6 +205,21 @@ okTrue('所有显示点均已注入当前版本',
   JSON.stringify(vers));
 okTrue('页面未残留硬编码旧版本',
   !/\bv1\.0\.0\b/.test(dom), '不应再出现 v1.0.0');
+
+console.log('\n=== 6. 被照面半径自动跟随 h（交互验证）===');
+const im = dom.match(/id="__interact">([^<]*)</);
+if (!im) {
+  okTrue('交互探针已执行', false, '未找到 __interact 输出（页面内脚本可能抛错）');
+} else {
+  const R = JSON.parse(im[1].replace('INTERACT:', ''));
+  ok('默认 R = 3·tan19°', R.defaultR, '1.033');
+  ok('h→6 后 R 自动跟随为 6·tan19°', R.radiusAfterH6, '2.066');
+  ok('h→3 后 R 跟随回来', R.radiusBackH3, '1.033');
+  ok('R 被手动改过后不再被 h 覆盖', R.radiusManualKept, '5');
+  okTrue('「按半光强光斑填充」按钮已移除', R.spotBtnGone === true);
+  ok('点「恢复默认」后 R 回到跟随态', R.afterResetR, '1.033');
+  ok('点「恢复默认」后 E_max 复原', R.afterResetEmax, '2,128');
+}
 
 console.log(`\n浏览器冒烟：通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail === 0 ? 0 : 1);
