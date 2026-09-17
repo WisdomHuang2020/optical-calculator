@@ -34,14 +34,17 @@
    * ========================================================= */
 
   function readInputs() {
-    // 光束角只接收半光强半角 θ½（不带全角口径换算，避免两套记法混淆）
-    var gh = num('beam');
+    // 光束角按行业惯例接收「半光强全角 2θ½」（数据手册上的写法），
+    // 内部统一换算为半角 θ½ 参与计算。
+    // 字段分工：beam 存全角（用于回显用户原输入），gammaHalfDeg 存半角（计算用）。
+    var beamFull = num('beam');
+    var gh = beamFull / 2;
     var itxt = $('imax').value.trim();
     return {
       model: $('model').value,
       flux: num('flux'),
       centerIntensity: itxt === '' ? null : parseFloat(itxt),
-      beam: gh,
+      beam: beamFull,
       gammaHalfDeg: gh,
       h: num('height'),
       shapeType: radioVal('shape'),
@@ -68,15 +71,15 @@
     var inp = readInputs();
     renderErrors = [];
 
-    // 等价全角实时显示（放在校验之前，输入过程中也能看到），
+    // 等价半角实时显示（放在校验之前，输入过程中也能看到），
     // 让用户拿数据手册一眼对上是全角还是半角口径
     var g = inp.gammaHalfDeg;
-    setText('beam-full', isFinite(g) && g > 0 ? (g * 2).toFixed(1) + '°' : '—');
+    setText('beam-full', isFinite(g) && g > 0 ? g.toFixed(1) + '°' : '—');
 
     /* --- 校验 --- */
     var warn = [];
     if (!(inp.flux > 0)) warn.push('光通量需大于 0');
-    if (!(inp.gammaHalfDeg > 0.5) || !(inp.gammaHalfDeg < 89.5)) warn.push('半光强半角 θ½ 需在 0.5° ~ 89.5°');
+    if (!(inp.gammaHalfDeg > 0.5) || !(inp.gammaHalfDeg < 89.5)) warn.push('光束角 2θ½ 需在 1° ~ 179°');
     if (!(inp.h > 0)) warn.push('垂直距离需大于 0');
     if (inp.shapeType === 'circle' && !(inp.R > 0)) warn.push('半径需大于 0');
     if (inp.shapeType === 'rect' && (!(inp.L > 0) || !(inp.W > 0))) warn.push('矩形长宽需大于 0');
@@ -132,7 +135,8 @@
     setText('sum-omegapct', fpct(omHalf / O.FULL_SPHERE, 2) + ' × 4π');
     setText('sum-r50', fnum(R50, 3) + ' m');
     setText('sum-r10', fnum(R10, 3) + ' m');
-    setText('sum-ghalf', fnum(inp.gammaHalfDeg, 2) + '°');
+    // 摘要标签为「半光强全角 2θ½」，故回显 2×半角
+    setText('sum-ghalf', fnum(inp.gammaHalfDeg * 2, 2) + '°');
 
     // 光通量一致性
     var dev = m.ImaxSource === 'given' ? (m.fluxImplied / inp.flux - 1) : 0;
@@ -454,7 +458,7 @@
       $('model').value = 'cosN';
       $('flux').value = 9000;
       $('imax').value = '';
-      $('beam').value = 19;          // 半光强半角 θ½（手册全角写法为 38°）
+      $('beam').value = 38;          // 半光强全角 2θ½（等价半角 θ½ = 19°）
       $('height').value = 3;
       document.querySelector('input[name="shape"][value="circle"]').checked = true;
       $('radius').value = '1.033';

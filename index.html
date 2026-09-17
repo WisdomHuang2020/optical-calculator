@@ -59,11 +59,11 @@
           </div>
 
           <div class="field">
-            <label>光束角 θ½ <span class="unit">°</span><em>半光强半角</em></label>
-            <input id="beam" type="number" value="19" min="0.5" max="89.5" step="0.5">
+            <label>光束角 2θ½ <span class="unit">°</span><em>半光强全角</em></label>
+            <input id="beam" type="number" value="38" min="1" max="179" step="1">
             <div class="mini-hint">
-              等价全角 2θ½ = <b id="beam-full">38.0°</b>。
-              数据手册若标的是<b>全角</b>（如 38°、24°），请先除以 2 再填入上面。
+              等价半角 θ½ = <b id="beam-full">19.0°</b>。
+              数据手册若标的是<b>半角</b>（如 19°、12°），请先乘以 2 再填入上面。
             </div>
           </div>
         </div>
@@ -150,7 +150,7 @@
             <div class="item"><span class="k">配光指数 n</span><span class="v" id="sum-n">—</span></div>
             <div class="item"><span class="k">中心光强 I₀ <small>cd</small></span><span class="v" id="sum-imax">—</span></div>
             <div class="item"><span class="k">I₀ 来源</span><span class="v" id="sum-imaxsrc">—</span></div>
-            <div class="item"><span class="k">半光强半角 θ½</span><span class="v" id="sum-ghalf">—</span></div>
+            <div class="item"><span class="k">半光强全角 2θ½</span><span class="v" id="sum-ghalf">—</span></div>
             <div class="item"><span class="k">半光强锥立体角 Ω</span><span class="v" id="sum-omega">—</span></div>
             <div class="item"><span class="k">占全球面比例</span><span class="v" id="sum-omegapct">—</span></div>
             <div class="item"><span class="k">半光强光斑 R½</span><span class="v" id="sum-r50">—</span></div>
@@ -612,9 +612,10 @@
         <h3><span class="n">2</span>半光强光束角 → 配光曲线指数</h3>
         <p>
           <b>记号约定：</b>γ 表示"光线与光轴的夹角"这个<b>变量</b>；
-          <b>θ½</b> 表示<b>半光强半角</b>——光强降到峰值 50% 处与光轴的夹角。
-          行业手册常把"光束角"写成<b>全角 2θ½</b>（两个 50% 方向之间的夹角），
-          是 θ½ 的两倍。本工具只接收 θ½，避免口径混淆。
+          <b>θ½</b> 表示<b>半光强半角</b>——光强降到峰值 50% 处与光轴的夹角；
+          <b>2θ½</b> 表示<b>半光强全角</b>——两个 50% 方向之间的夹角，
+          也就是数据手册上写的"光束角"，它是 θ½ 的两倍。
+          本工具按行业惯例直接接收<b>全角 2θ½</b>，内部除以 2 换算为 θ½ 参与计算。
         </p>
         <p>用余弦幂模型逼近配光（LED 投光灯最常用的解析近似）：</p>
         <div class="eq">
@@ -707,7 +708,7 @@
       <section>
         <h3><span class="n">6</span>默认算例（可用于交叉验算）</h3>
         <div class="eq">
-          输入：Φ = 9000 lm，光束角 θ½ = 19°（手册写法为全角 38°，n = 12.3728），h = 3 m，
+          输入：Φ = 9000 lm，光束角 2θ½ = 38°（即半角 θ½ = 19°，n = 12.3728），h = 3 m，
                 被照面 = 圆盘 R = h·tan19° = 1.0330 m，Ω(19°) = 0.34232 sr
           <br><br>I₀      = Φ(n+1)/(2π) = 9000×13.3728/6.283185 = 19 155 cd
           <br>E_max   = 19155 / 3²                    = 2 128 lx
