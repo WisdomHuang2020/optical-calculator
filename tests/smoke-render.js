@@ -29,25 +29,13 @@ const ROOT = path.resolve(__dirname, '..');
 const INDEX = path.join(ROOT, 'index.html');
 const REQUIRE = !!process.env.REQUIRE_CHROME;
 
-/* ---------- 定位 Chrome ---------- */
-function findChrome() {
-  const cands = [
-    process.env.CHROME_BIN,
-    process.env.CHROME_PATH,
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-  ].filter(Boolean);
-  for (const c of cands) {
-    try { if (fs.existsSync(c)) return c; } catch (e) { /* ignore */ }
-  }
-  return null;
-}
+const { findChrome } = require('./lib/find-tool');
+/* 浏览器定位统一走 lib/find-tool：
+   CHROME_BIN 若被显式指定为非法路径，**必须直接失败**，不得静默换别的浏览器。
+   曾经的实现会回退到系统 Chrome，于是 CI 上传错路径也照样"全绿" ——
+   那正是"CI 失败、本地复现不了"的温床。 */
+const chromeRes = findChrome();
+const chrome = chromeRes.path;
 
 /* ---------- DOM 取值 ---------- */
 function tagOf(html, id) {
@@ -85,16 +73,42 @@ function okTrue(name, cond, extra) {
 }
 
 /* ---------- 主流程 ---------- */
-const chrome = findChrome();
 if (!chrome) {
+  /* 显式指定却不可用 → 无论如何都算失败（环境配错了，不能当成"跳过"） */
+  if (chromeRes.error) {
+    console.error('✘ ' + chromeRes.error);
+    process.exit(1);
+  }
   const msg = '未找到 Chrome/Chromium —— 浏览器冒烟测试已跳过';
   if (REQUIRE) { console.error('✘ ' + msg + '（REQUIRE_CHROME=1，按失败处理）'); process.exit(1); }
   console.log('SKIP  ' + msg);
   console.log('      设 CHROME_BIN 或 REQUIRE_CHROME=1 可改变此行为');
   process.exit(0);
 }
-console.log(`浏览器 : ${chrome}`);
+console.log(`浏览器 : ${chrome}  （来源：${chromeRes.source}）`);
 console.log(`页面   : ${INDEX}（注入交互探针后渲染）\n`);
+
+/* 探针文件带进程号命名：CI 上若有并发/残留，固定名字的探针会互相覆盖，
+   表现为"页面读到的是别人的探针"这类极难查的怪现象。 */
+const PROBE = path.join(ROOT, '__probe-' + process.pid + '.html');
+const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-smoke-'));
+
+/* 从进程被强杀（如虚拟时间预算内仍卡死、被 CI 超时截断）里也要留下痕迹：
+   否则退出码是 0，汇总显示"通过"——又一个假绿灯。 */
+process.on('exit', (code) => {
+  if (code === 0) return;
+  console.error('✘ smoke-render 异常退出，退出码 ' + code
+    + '（常见原因：无头 Chrome 被超时截断或崩溃）');
+});
+process.on('uncaughtException', (e) => {
+  console.error('✘ smoke-render 未捕获异常：' + (e && e.stack || e));
+  process.exit(1);
+});
+
+function cleanup() {
+  try { fs.unlinkSync(PROBE); } catch (x) { /* ignore */ }
+  try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (x) { /* ignore */ }
+}
 
 /* ---------- 生成带交互探针的副本 ----------
    纯 dump-dom 只能看到初始 DOM。交互行为（如"改 h 后被照面半径是否自动跟随"）
@@ -263,10 +277,8 @@ const INTERACTION_PROBE = [
   '}, 1200);',
   '</' + 'script>'
 ].join('\n');
-const PROBE = path.join(ROOT, '__probe.html');
 fs.writeFileSync(PROBE, fs.readFileSync(INDEX, 'utf8').replace('</body>', INTERACTION_PROBE + '\n</body>'));
 
-const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-smoke-'));
 let dom;
 try {
   dom = execFileSync(chrome, [
@@ -274,13 +286,31 @@ try {
     '--user-data-dir=' + profileDir,
     '--virtual-time-budget=8000',
     '--dump-dom', pathToFileURL(PROBE).href
-  ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 } catch (e) {
+  /* 把 Chrome 自己的 stderr 带出来。原来这里只打 e.message（"Command failed:
+     ..."），而真正的病因在 stderr 里 —— CI 上就是靠这条信息定位问题的。 */
+  const err = String(e.stderr || '').split('\n').map(s => s.trim())
+    .filter(Boolean).slice(0, 6).join('\n       ');
   console.error('✘ 无头 Chrome 执行失败：' + e.message);
+  if (err) console.error('  Chrome stderr:\n       ' + err);
+  console.error('  命令: chrome --headless=new --no-sandbox --disable-gpu \\\n'
+    + '        --user-data-dir=' + profileDir + ' --virtual-time-budget=8000 \\\n'
+    + '        --dump-dom ' + pathToFileURL(PROBE).href);
+  cleanup();
   process.exit(1);
 } finally {
-  try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (x) { /* ignore */ }
-  try { fs.unlinkSync(PROBE); } catch (x) { /* ignore */ }
+  cleanup();
+}
+
+/* 空输出必须立刻判负并说清楚。若 Chrome "成功退出"却什么都没导出，
+   下面所有 textOf() 都会返回 null，于是几十条断言一起失败 ——
+   真正的病因（DOM 是空的）会被埋在几十条 got=null 里。 */
+if (!dom || dom.length < 500) {
+  console.error('✘ 无头 Chrome 返回的 DOM 异常短：' + (dom ? dom.length + ' 字节' : '空'));
+  console.error('  预期为完整 index.html 的渲染结果（数万字节）。');
+  console.error('  常见原因：--dump-dom 未生效、页面加载失败、或探针脚本未执行。');
+  process.exit(1);
 }
 
 console.log('=== 1. 照度计算：统计卡片 ===');

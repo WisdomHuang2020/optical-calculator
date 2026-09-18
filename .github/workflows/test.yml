@@ -31,6 +31,22 @@ jobs:
       - id: chrome
         uses: browser-actions/setup-chrome@v1
 
+      - name: 校验 Chrome 输出变量非空
+        # 关键：CHROME_BIN 为空时，早期实现会**静默回退**到系统里的其它浏览器，
+        # 于是测试照样全绿 —— "CI 失败、本地复现不了"就是从这种地方长出来的。
+        # 现在 tests 侧已改为「显式指定不可用即判负」，这里再从源头确认它非空，
+        # 两侧同时守住，不让浏览器定位失配被掩盖。
+        run: |
+          set -e
+          echo "CHROME_BIN=${{ steps.chrome.outputs.chrome-path }}"
+          if [ -z "${{ steps.chrome.outputs.chrome-path }}" ]; then
+            echo "✘ setup-chrome 未产出 chrome-path，浏览器相关套件将无法可信运行"
+            exit 1
+          fi
+          test -x "${{ steps.chrome.outputs.chrome-path }}" \
+            || { echo "✘ chrome-path 指向的文件不可执行"; exit 1; }
+          echo "✔ Chrome 路径已确认可用"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -44,6 +60,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install cadquery-ocp
           python -c "import OCP; print('OCP 就绪')"
+
+      - name: 环境体检（先证明环境可用，再谈断言）
+        # 单独一步、独立可见。CI 上某步失败时，一眼就能把"环境问题"
+        # 与"代码问题"分开，省掉一整轮猜测。
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+          REQUIRE_CHROME: '1'
+          REQUIRE_OCP: '1'
+        run: node tests/env-probe.js
 
       - name: 全部测试套件
         env:

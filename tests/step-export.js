@@ -32,60 +32,9 @@ const { pathToFileURL } = require('url');
 const ROOT = path.join(__dirname, '..');
 const INDEX = path.join(ROOT, 'index.html');
 
-/* ---------- 定位无头 Chrome ---------- */
-function findChrome() {
-  const cands = [
-    /* CHROME_BIN 是 GitHub Actions 的 browser-actions/setup-chrome 输出变量，
-       工作流里已设为 env。必须先认它，否则 CI 上会误判"找不到 Chrome"。 */
-    process.env.CHROME_BIN,
-    process.env.CHROME_PATH,
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium', '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-  ].filter(Boolean);
-  for (const c of cands) {
-    try { if (fs.existsSync(c)) return c; } catch (e) { /* ignore */ }
-  }
-  return null;
-}
-
-/* ---------- 定位带 OCP 的 Python ---------- */
-function findPythonWithOCP() {
-  const cands = [
-    process.env.OCP_PYTHON,
-    /* CI 上由 pip 装到系统 python3；本地是托管 venv */
-    'python3', 'python',
-    path.join(os.homedir(), '.workbuddy/binaries/python/envs/default/Scripts/python.exe'),
-    path.join(os.homedir(), '.workbuddy/binaries/python/envs/default/bin/python')
-  ].filter(Boolean);
-  for (const p of cands) {
-    try {
-      const r = spawnSync(p, ['-c', 'import OCP'], { encoding: 'utf8', timeout: 60000 });
-      if (r.status === 0) return p;
-    } catch (e) { /* ignore */ }
-  }
-  return null;
-}
-
-/* ---------- 定位可用的 python（任何版本，跑零依赖校验器） ---------- */
-function findPython() {
-  const cands = [
-    process.env.PYTHON,
-    path.join(os.homedir(), '.workbuddy/binaries/python/versions/3.13.12/python.exe'),
-    path.join(os.homedir(), '.workbuddy/binaries/python/envs/default/Scripts/python.exe'),
-    'python3', 'python'
-  ].filter(Boolean);
-  for (const p of cands) {
-    try {
-      const r = spawnSync(p, ['-c', 'print(1)'], { encoding: 'utf8' });
-      if (r.status === 0) return p;
-    } catch (e) { /* ignore */ }
-  }
-  return null;
-}
+/* 工具定位统一走 lib/find-tool —— 显式指定的路径若不可用必须直接失败，
+   不得静默回退到别的候选（静默回退会让"CI 失败、本地复现不了"无从定位）。 */
+const { findChrome, findPython, findPythonWithOCP } = require('./lib/find-tool');
 
 let pass = 0, fail = 0, skip = 0;
 function ok(name, cond, detail) {
@@ -100,17 +49,34 @@ function skipped(name, why) {
 /* ============================================================
  * ① 用无头 Chrome 导出两个 STEP
  * ============================================================ */
-const chrome = findChrome();
+const chromeRes = findChrome();
+const chrome = chromeRes.path;
 if (!chrome) {
+  if (chromeRes.error) {
+    console.error('✘ ' + chromeRes.error);
+    process.exit(1);
+  }
   console.error('✘ 找不到 Chrome，无法导出 STEP');
   process.exit(1);
 }
+console.log('浏览器 : ' + chrome + '  （来源：' + chromeRes.source + '）');
 
 const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'step-export-'));
 /* 探针页面必须落在 index.html **旁边**：index.html 里全是相对路径
    （js/xxx.js、styles.css），放到临时目录会让所有脚本 404，
-   window.Prism 直接 undefined。 */
-const PROBE = path.join(ROOT, '__step-probe.html');
+   window.Prism 直接 undefined。带进程号避免并发互相覆盖。 */
+const PROBE = path.join(ROOT, '__step-probe-' + process.pid + '.html');
+
+function cleanup() {
+  try { fs.unlinkSync(PROBE); } catch (x) { /* ignore */ }
+  try { fs.rmSync(outDir, { recursive: true, force: true }); } catch (x) { /* ignore */ }
+}
+/* 被强杀/崩了也要留痕，别让退出码 0 冒充通过 */
+process.on('uncaughtException', (e) => {
+  console.error('✘ step-export 未捕获异常：' + (e && e.stack || e));
+  cleanup();
+  process.exit(1);
+});
 
 const PROBE_SRC = `
 (function () {
@@ -154,14 +120,24 @@ try {
     '--user-data-dir=' + profileDir,
     '--virtual-time-budget=20000',
     '--dump-dom', pathToFileURL(PROBE).href
-  ], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  ], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 } catch (e) {
+  /* 带上 Chrome 自己的 stderr。原来只打 e.message，
+     真正的病因（沙箱、共享库、虚拟时间预算不足被截断）全被吞掉。 */
+  const err = String(e.stderr || '').split('\n').map(s => s.trim())
+    .filter(Boolean).slice(0, 6).join('\n       ');
   console.error('✘ 无头 Chrome 执行失败：' + e.message);
-  try { fs.unlinkSync(PROBE); } catch (x) { /* ignore */ }
-  fs.rmSync(outDir, { recursive: true, force: true });
+  if (err) console.error('  Chrome stderr:\n       ' + err);
+  cleanup();
   process.exit(1);
 } finally {
   try { fs.unlinkSync(PROBE); } catch (x) { /* ignore */ }
+}
+
+if (!dom || dom.length < 500) {
+  console.error('✘ 无头 Chrome 返回的 DOM 异常短：' + (dom ? dom.length + ' 字节' : '空'));
+  cleanup();
+  process.exit(1);
 }
 
 function unesc(s) {
@@ -183,7 +159,11 @@ function body(t) {
 
 const metaRaw = grabPre('META');
 const M = metaRaw ? JSON.parse(metaRaw) : {};
-ok('页面内导出流程未抛错', M.ok === true, M.err ? '异常：' + M.err : '');
+if (!metaRaw) {
+  console.error('✘ 未取到 META 探针输出（页面内脚本可能未执行完）');
+  console.error('  已捕获的 <pre> 节点：' + (dom.match(/<pre[^>]*id="([^"]+)"/g) || []).join(', '));
+}
+ok('页面内导出流程未抛错', M.ok === true, M.err ? '异常：' + M.err : (metaRaw ? '' : 'META 缺失'));
 
 const s1 = body(grabPre('STEP1D'));
 const s2 = body(grabPre('STEP2D'));
@@ -191,8 +171,15 @@ ok('1D STEP 已生成', !!s1 && s1.length > 1000, '长度 = ' + (s1 ? s1.length 
 ok('2D STEP 已生成', !!s2 && s2.length > 1000, '长度 = ' + (s2 ? s2.length : 0));
 
 if (!s1 || !s2) {
-  console.log('\nSTEP 导出失败，后续校验无法进行');
-  fs.rmSync(outDir, { recursive: true, force: true });
+  /* 把"为什么"讲清楚。原实现只打一行"后续校验无法进行"，
+     CI 上看不出是探针没执行、还是 buildSTEP 抛了错、还是虚拟时间不够。 */
+  console.log('\nSTEP 导出失败，后续校验无法进行。诊断信息：');
+  console.log('  META          = ' + (metaRaw || '(缺失)'));
+  console.log('  页面内异常    = ' + (M.err || '(无)'));
+  console.log('  DOM 长度      = ' + dom.length + ' 字节');
+  console.log('  探针 <pre> id = ' + (dom.match(/<pre[^>]*id="([^"]+)"/g) || []).join(', ') || '(无)');
+  console.log('  window.Prism  = ' + (/Prism/.test(dom) ? '见页面' : '页面中未出现 Prism'));
+  cleanup();
   process.exit(1);
 }
 
@@ -206,11 +193,20 @@ fs.writeFileSync(f2, s2.replace(/\r\n/g, '\n'), 'utf8');
  * ② 零依赖结构校验（Python）
  * ============================================================ */
 console.log('\n--- ② 结构校验（零依赖 Python 校验器）---');
-const py = findPython();
+const pyRes = findPython();
+const py = pyRes.path;
 const validator = path.join(ROOT, 'tools/step_validate.py');
-if (!py || !fs.existsSync(validator)) {
+if (!py) {
+  /* 显式指定了却不可用 → 直接判负，不能算"跳过" */
+  if (pyRes.error) {
+    console.error('✘ ' + pyRes.error);
+    process.exit(1);
+  }
   skipped('结构校验', '缺少 python 或 tools/step_validate.py');
+} else if (!fs.existsSync(validator)) {
+  ok('结构校验器 tools/step_validate.py 存在', false, '文件缺失：' + validator);
 } else {
+  console.log('python : ' + py + '  （来源：' + pyRes.source + '）');
   for (const [label, f] of [['1D', f1], ['2D', f2]]) {
     let out = '';
     try {
@@ -230,17 +226,22 @@ if (!py || !fs.existsSync(validator)) {
  * ③ 真实内核读回（OCP，可选）
  * ============================================================ */
 console.log('\n--- ③ 内核读回（OpenCascade / OCP）---');
-const pyocp = findPythonWithOCP();
+const ocpRes = findPythonWithOCP();
+const pyocp = ocpRes.path;
 if (!pyocp) {
   /* REQUIRE_OCP=1 时把「内核未验证」升级为失败：
      这是本套件存在的核心理由 —— "没装内核就默认成功"是最危险的假象。 */
-  if (process.env.REQUIRE_OCP === '1') {
+  if (ocpRes.error) {
+    /* 显式指定了解释器却不可导入 OCP —— 配置错误，直接判负 */
+    ok('OCP 内核读回（显式指定的解释器可用）', false, ocpRes.error);
+  } else if (process.env.REQUIRE_OCP === '1') {
     ok('OCP 内核读回（REQUIRE_OCP=1，必须有 OCP）', false,
       '未找到可用的 OCP；CI 应 pip install cadquery-ocp');
   } else {
     skipped('OCP 读回 1D / 2D', '未安装 OCP —— 结构校验已通过，但"内核能否读入"未被验证');
   }
 } else {
+  console.log('OCP    : ' + pyocp + '  （来源：' + ocpRes.source + '）');
   const OCP_SCRIPT = `
 import sys, json, math
 from OCP.STEPControl import STEPControl_Reader
@@ -292,15 +293,22 @@ print(json.dumps({
         { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (e) {
       /* OCP 解析失败时可能直接 abort（Windows 退出码 0xC0000409），
-         stdout 里会留下 "ERR StepFile" 行 —— 把它带出来，别吞掉。 */
+         stdout 里会留下 "ERR StepFile" 行 —— 把它带出来，别吞掉。
+         行数放宽到 8：OCCT 的报错常常前几行只是环境警告，
+         真正的语法位置在后面。 */
       const so = String(e.stdout || '') + String(e.stderr || '');
-      console.log('  [OCP 异常] ' + so.split('\n').filter(Boolean).slice(0, 3).join(' | '));
+      const lines = so.split('\n').map(s => s.trim()).filter(Boolean);
+      console.log('  [OCP 异常] status=' + e.status + ' signal=' + e.signal
+        + ' 文件=' + path.basename(f));
+      if (lines.length) console.log('    ' + lines.slice(0, 8).join('\n    '));
       return { transfer: -1, nshapes: -1, solid: -1, valid: false, volume: NaN, cyl: {},
                _crash: true };
     }
     const line = out.split('\n').filter(l => l.trim().startsWith('{')).pop();
     if (!line) {
-      console.log('  [OCP 无输出] ' + out.split('\n').filter(Boolean).slice(0, 3).join(' | '));
+      const lines = String(out).split('\n').map(s => s.trim()).filter(Boolean);
+      console.log('  [OCP 无输出] 文件=' + path.basename(f) + '，原始输出 ' + lines.length + ' 行');
+      if (lines.length) console.log('    ' + lines.slice(0, 8).join('\n    '));
       return { transfer: -1, nshapes: -1, solid: -1, valid: false, volume: NaN, cyl: {},
                _crash: true };
     }
@@ -348,8 +356,11 @@ print(json.dumps({
 
 fs.rmSync(outDir, { recursive: true, force: true });
 
+const total = pass + fail;
 console.log('\n' + '='.repeat(64));
+/* 汇总行必须带**断言总数**：0 通过 + 0 失败 也曾经等于"全绿" */
 console.log('STEP 导出端到端：通过 ' + pass + ' 项，失败 ' + fail + ' 项' +
-  (skip ? '，跳过 ' + skip + ' 项' : ''));
+  (skip ? '，跳过 ' + skip + ' 项' : '') + '（断言总数 ' + total + '）');
+if (skip) console.log('       ⚠ 本轮有 ' + skip + ' 项被跳过 —— 这些性质未被验证');
 console.log('='.repeat(64));
-process.exit(fail === 0 ? 0 : 1);
+process.exit(fail === 0 && total > 0 ? 0 : 1);

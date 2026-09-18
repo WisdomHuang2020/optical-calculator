@@ -5,6 +5,9 @@ _site/
 __probe.html
 __probe*.js
 __index_probe.html
+# 探针 HTML 现在带进程号命名（避免并发/残留互相覆盖），通配兜住全部形式
+__probe-*.html
+__step-probe*.html
 .ck/
 .ck*/
 .tmpcheck/
