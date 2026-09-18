@@ -387,30 +387,38 @@
   /* ============================================================
    * 自动取景
    * ------------------------------------------------------------
-   * 只在首次进入、或模型尺寸发生实质变化时重新取景；
-   * 用户手动旋转/缩放后不会被强行拉回。
+   * 取景规则（按用户实测反馈确定）：
+   *   1. 首次进入某个模式  → 自动取景到标准 3/4 视角
+   *   2. 用户手动转过视角后改参数 → **完全不动相机**，只重建模型
+   *   3. 切换一维/二维     → 仍然自动取景（换的是完全不同的模型）
+   *   4. 点「重置视角」    → 回到标准视角，并恢复自动取景
    *
-   * 为什么不能只靠 cameraInit 一次性开关：实测发现把齿数
-   * 20→60、或从一维切到二维后，相机仍停在上一次的取景距离上，
-   * 模型要么溢出视口、要么缩成一小条，而"重置视角"是唯一出路。
-   * 故改为按包围盒签名（尺寸 + 模式）判定"是否需要重取景"。
+   * 为什么不能按"尺寸签名变化"取景：上一版就是这么写的，结果是
+   * 用户把视角固定好之后一改参数相机就被拉回标准视角 ——
+   * 因为改参数必然改变包围盒尺寸，签名必然变化，于是必然重取景。
+   *
+   * 现改为以「模式」为唯一的取景触发条件：同一模式内，模型怎么变
+   * 都不动相机。用户手动调整的视角因此天然被保留 —— 不需要额外的
+   * "用户是否调整过"标志位来保护（那种写法还要处理拖拽交互事件，
+   * 且"点一下没拖动"会误判）。模式切换与重置视角会清空 lastFrameMode，
+   * 从而显式触发一次重新取景。
    * ============================================================ */
-  var lastFrameKey = '';
+  var lastFrameMode = '';    // 上一次自动取景时的模式（'' = 尚未取景 / 已请求重置）
 
-  function frameKey(m, cx, cy, cz, half) {
-    return m + '|' + half[0].toFixed(3) + ',' + half[1].toFixed(3) + ',' + half[2].toFixed(3) +
-      '|' + cx.toFixed(3) + ',' + cy.toFixed(3) + ',' + cz.toFixed(3);
-  }
-
-  /* 若签名变化则重新取景；返回是否真的重取了 */
   function maybeFrame(m, cx, cy, cz, half, aspect) {
-    var key = frameKey(m, cx, cy, cz, half);
-    if (key === lastFrameKey) return false;
-    lastFrameKey = key;
     probeCenter = [cx, cy, cz];
     probeHalf = [half[0], half[1], half[2]];
+    if (m === lastFrameMode) return false;   // 同模式：绝不自动取景
+    lastFrameMode = m;
     frameObject(cx, cy, cz, half, aspect);
     return true;
+  }
+
+  /* 回到标准视角，并恢复"允许自动取景" */
+  function resetView() {
+    lastFrameMode = '';
+    if (!currentGeo) return;
+    if (mode === '1d') rebuildMesh(currentGeo); else rebuildMesh2D(currentGeo);
   }
 
   function rebuildMesh(geo) {
@@ -928,9 +936,14 @@
           var all = document.querySelectorAll('#view-prism .mode-btn');
           for (var k = 0; k < all.length; k++) all[k].classList.remove('active');
           btn.classList.add('active');
+          var prevMode = mode;
           mode = btn.dataset.mode;
           $('params_1d').style.display = (mode === '1d') ? '' : 'none';
           $('params_2d').style.display = (mode === '2d') ? '' : 'none';
+          /* 切模式 = 换了一个完全不同的模型（长条 vs 方阵），
+             尺寸差异大，视角一并重置，避免新模型落到视野外。
+             重复点当前模式不重置（避免误触把视角弄丢）。 */
+          if (mode !== prevMode) lastFrameMode = '';
           disposeMeshes();
           refresh();
           resize();
@@ -955,10 +968,8 @@
     $('btn_stl').onclick = function () { if (mesh) exportSTL(mesh); };
 
     $('btn_reset').onclick = function () {
-      /* 强制重取景：清掉签名，next 调用即会重新拟合 */
-      lastFrameKey = '';
-      if (!currentGeo) return;
-      if (mode === '1d') rebuildMesh(currentGeo); else rebuildMesh2D(currentGeo);
+      /* 回到标准视角，并恢复"允许自动取景" */
+      resetView();
     };
     $('btn_defaults').onclick = function () {
       $('p_pitch').value = 1.0;
@@ -974,7 +985,8 @@
       $('p2_base').value = 0.20;
       $('p2_nx').value = 20;
       $('p2_ny').value = 20;
-      lastFrameKey = '';
+      /* 「恢复默认」是整体复位，视角一并回到标准位（与「重置视角」一致） */
+      lastFrameMode = '';
       refresh();
     };
     $('btn_xray').onclick = function () {
@@ -1183,6 +1195,15 @@
     get geo() { return currentGeo; },
     buildSTEP: function () { return currentGeo ? buildSTEP(currentGeo) : ''; },
     buildScripts: function () { return currentGeo ? buildScripts(currentGeo) : null; },
+    /* 供无头验证同步驱动 OrbitControls 的阻尼收敛。
+       真实浏览器里由 rAF 循环逐帧调 controls.update()；
+       无头环境 rAF 被节流（实测 9000ms 预算只跑 3~5 帧），
+       拖拽产生的角度变化靠阻尼逼近，不显式驱动就永远落不了地。 */
+    spin: function (n) {
+      n = n || 40;
+      for (var i = 0; i < n; i++) { if (controls) controls.update(); }
+      drawOnce();
+    },
     /* 供无头验证读取的内部状态：把模型包围盒 8 角点投到屏幕，
        直接量出屏占比与居中偏移，避免靠截图目测/像素近似判断。 */
     probe: function () {
@@ -1217,7 +1238,12 @@
         topMargin: Math.round(miny), bottomMargin: Math.round(r.height - maxy),
         fillH: (maxx - minx) / r.width, fillV: (maxy - miny) / r.height,
         offX: Math.round((minx + maxx) / 2 - r.width / 2),
-        offY: Math.round((miny + maxy) / 2 - r.height / 2)
+        offY: Math.round((miny + maxy) / 2 - r.height / 2),
+        /* 相机状态：用于断言"固定视角后改参数不复原"。
+           这三个数是判断相机有没有被动的唯一直接依据。 */
+        camPos: [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
+        camTarget: [+controls.target.x.toFixed(4), +controls.target.y.toFixed(4), +controls.target.z.toFixed(4)],
+        frameMode: lastFrameMode
       };
     }
   };
