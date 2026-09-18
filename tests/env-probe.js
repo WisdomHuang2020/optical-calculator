@@ -172,6 +172,24 @@ if (ocpRes.path) {
     importsOk ? '9 个 import 全部成功'
       : '子模块导入失败 —— 这会让 step-export 整段失败，而只测 import OCP 看不出来');
 
+  /* shape -> TopoDS_Face 的转换名字在 OCP 各版本并不统一：
+       CI（py3.12 + OCP 7.8）只有 TopoDS.Face
+       本地（py3.13 + OCP 7.9）Face 与 Face_s 都在
+     实测教训：写死 Face_s 会让本地全绿、CI 全红，且报错极难取回。
+     把"这个环境到底有哪些名字"变成一条可读事实，下次一眼就能定位。 */
+  const castProbe = [
+    'from OCP.TopoDS import TopoDS',
+    'names = [n for n in ("Face_s", "Face") if hasattr(TopoDS, n)]',
+    'print("OCP_CAST_NAMES=" + ",".join(names) if names else "OCP_CAST_NAMES=(none)")'
+  ].join('\n');
+  const rc = spawnSync(ocpRes.path, ['-c', castProbe], { encoding: 'utf8', timeout: 120000 });
+  const castOut = String(rc.stdout || '').trim();
+  const castNames = (castOut.match(/OCP_CAST_NAMES=(.*)/) || [])[1] || '(未取到)';
+  say('ocp_cast_names', castNames);
+  rep.require('OCP 提供 shape->face 的转换入口（Face 或 Face_s）',
+    /Face/.test(castNames) && castNames !== '(none)',
+    '实测可用的 cast 名字：' + castNames + ' —— step-export 会据此自动选择');
+
   /* 再进一步：**真的读一个 STEP 文件**。
      import 全过但 `STEPControl_Reader.ReadFile` 崩，是可能的
      （数据文件缺失、OCCT 资源未随 wheel 分发等）。

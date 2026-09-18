@@ -279,6 +279,19 @@ try:
     from OCP.GProp import GProp_GProps
     from OCP.BRepCheck import BRepCheck_Analyzer
 
+    # shape -> TopoDS_Face 的转换，OCP 各版本暴露的名字不一样：
+    #   OCP 7.9（本地 py3.13）  TopoDS.Face 与 TopoDS.Face_s 都在
+    #   OCP 7.8（CI  py3.12）   只有 TopoDS.Face，没有 Face_s
+    #                             -> AttributeError: ... has no attribute 'Face_s'
+    # 而且 BRepAdaptor_Surface 只接受 TopoDS_Face，传 TopoDS_Shape 会
+    #   TypeError: incompatible constructor arguments
+    # 所以这里必须 cast，但不能写死后缀。按可用性依次尝试。
+    _casts = [n for n in ('Face_s', 'Face') if hasattr(TopoDS, n)]
+    if not _casts:
+        raise RuntimeError('OCP.TopoDS 上找不到 Face/Face_s，无法做 shape->face 转换')
+    _face_cast = getattr(TopoDS, _casts[0])
+    print('OCP_CAST=' + _casts[0])
+
     print('OCP_PY=' + sys.version.replace(chr(10), ' '))
     print('OCP_ARGV=' + repr(sys.argv[1]))
 
@@ -298,8 +311,7 @@ try:
     rad = {}
     acc = TopExp_Explorer(sh, TopAbs_FACE)
     while acc.More():
-        f = TopoDS.Face_s(acc.Current())
-        ad = BRepAdaptor_Surface(f)
+        ad = BRepAdaptor_Surface(_face_cast(acc.Current()))
         if ad.GetType() == GeomAbs_SurfaceType.GeomAbs_Cylinder:
             k = round(ad.Cylinder().Radius(), 6)
             rad[k] = rad.get(k, 0) + 1

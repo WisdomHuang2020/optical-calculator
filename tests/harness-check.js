@@ -140,5 +140,27 @@ okTrue('env-probe 验证完整子模块链', /OCP_IMPORTS_OK/.test(ep));
 okTrue('env-probe 真读一个 STEP 文件', /STEPControl_Reader/.test(ep));
 okTrue('env-probe 的 STEP 读回断言为硬门禁', /require\(\s*'OCP 能真的调用/.test(ep));
 
+/* ---------- 8. OCP 跨版本 API 兼容 ---------- */
+console.log('\n=== 8. OCP API 不得写死版本相关名字 ===');
+/* 真实教训（CI run 35350403615，注解给出了完整 traceback）：
+      AttributeError: module 'OCP.OCP.TopoDS.TopoDS' has no attribute 'Face_s'
+   同一份代码在本地 py3.13 + OCP 7.9 全绿、在 CI py3.12 + OCP 7.8 全红。
+   原因是 shape->face 的转换在 7.8 叫 TopoDS.Face、7.9 两个名字都有，
+   而 BRepAdaptor_Surface 只接受 TopoDS_Face，传 TopoDS_Shape 会 TypeError。
+   这类"版本相关名字"必须按可用性探测，不能写死。
+   注意：BRepGProp.VolumeProperties_s 是例外 —— 它没有不带 _s 的版本，
+   是唯一形式，所以不算写死。 */
+const se = read('tests/step-export.js');
+okTrue('OCP_SCRIPT 包在 try/except 里（异常必可见）',
+  /try:[\s\S]*except Exception:[\s\S]*traceback\.print_exc\(\)/.test(se));
+okTrue('异常 traceback 打到 stdout（绕开 stderr 收集差异）',
+  /OCP_EXC=|OCP_JSON=/.test(se));
+okTrue('shape->face 转换按可用性探测，不写死 Face_s',
+  /hasattr\(TopoDS,\s*n\)/.test(se) && !/_face_cast\s*=\s*getattr\(TopoDS,\s*'Face_s'\)/.test(se));
+okTrue('readOCC 按 OCP_JSON= 前缀解析（不与内核自身 stdout 混行）',
+  /startsWith\('OCP_JSON='\)/.test(se));
+okTrue('失败重现时保留 40 行输出（traceback 正文不被截断）',
+  /slice\(0,\s*40\)/.test(se));
+
 console.log(`\n测试基础设施：通过 ${pass} 项，失败 ${fail} 项（断言总数 ${pass + fail}）`);
 process.exit(fail === 0 ? 0 : 1);
