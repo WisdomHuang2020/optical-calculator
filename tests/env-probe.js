@@ -139,4 +139,78 @@ if (ocpRes.path) {
   rep.skip('OCP 可导入', '未安装 cadquery-ocp（内核读回将被跳过）');
 }
 
+/* ---------- 只 import OCP 不够：真跑一遍 step-export 依赖的完整子模块链 ---------- */
+/* 为什么必须做到这一步（代价换来的教训）：
+   env-probe 一开始只做 `import OCP`，在 CI 上"通过"了；
+   而同一个 CI 上 step-export 仍然整段失败（TransferRoots = -1，
+   子进程无任何输出即死）。**只验证包能导入会给出假的安全感** ——
+   真正会用到的子模块（BRepGProp / BRepCheck / BRepAdaptor …）
+   可能加载即崩，而那些才是 STEP 读回的实际依赖。
+   故这里把完整 import 列表真跑一遍，通过才算数。 */
+if (ocpRes.path) {
+  const SMOKE = [
+    'from OCP.STEPControl import STEPControl_Reader',
+    'from OCP.TopExp import TopExp_Explorer',
+    'from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID, TopAbs_EDGE, TopAbs_VERTEX',
+    'from OCP.TopoDS import TopoDS',
+    'from OCP.BRepAdaptor import BRepAdaptor_Surface',
+    'from OCP.GeomAbs import GeomAbs_SurfaceType',
+    'from OCP.BRepGProp import BRepGProp',
+    'from OCP.GProp import GProp_GProps',
+    'from OCP.BRepCheck import BRepCheck_Analyzer',
+    'print("OCP_IMPORTS_OK")'
+  ].join('\n');
+  const rs = spawnSync(ocpRes.path, ['-c', SMOKE], { encoding: 'utf8', timeout: 180000 });
+  const so = String(rs.stdout || '') + String(rs.stderr || '');
+  const importsOk = rs.status === 0 && /OCP_IMPORTS_OK/.test(so);
+  if (!importsOk) {
+    say('ocp_import_status', rs.status + ' signal=' + rs.signal);
+    say('ocp_import_stderr', so.split('\n').map(s => s.trim())
+      .filter(Boolean).slice(0, 4).join(' | ') || '(无输出，疑加载即崩)');
+  }
+  rep.require('OCP 全部子模块可导入（STEP 读回真正依赖的）', importsOk,
+    importsOk ? '9 个 import 全部成功'
+      : '子模块导入失败 —— 这会让 step-export 整段失败，而只测 import OCP 看不出来');
+
+  /* 再进一步：**真的读一个 STEP 文件**。
+     import 全过但 `STEPControl_Reader.ReadFile` 崩，是可能的
+     （数据文件缺失、OCCT 资源未随 wheel 分发等）。
+     这个最小 STEP 在测试里现写现用，不依赖任何外部输入。 */
+  if (importsOk) {
+    const minimal = [
+      'ISO-10303-21;',
+      'HEADER;',
+      "FILE_DESCRIPTION((''),'2;1');",
+      "FILE_NAME('','',(''),(''),'','','');",
+      "FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));",
+      'ENDSEC;',
+      'DATA;',
+      "ENDSEC;",
+      'END-ISO-10303-21;'
+    ].join('\n');
+    const stepFile = path.join(os.tmpdir(), 'env-probe-min-' + process.pid + '.step');
+    fs.writeFileSync(stepFile, minimal + '\n', 'utf8');
+    const READ = [
+      'import sys',
+      'from OCP.STEPControl import STEPControl_Reader',
+      'r = STEPControl_Reader()',
+      'st = r.ReadFile(sys.argv[1])',
+      'print("READ_STATUS=" + str(st))'
+    ].join('\n');
+    const rr = spawnSync(ocpRes.path, ['-c', READ, stepFile],
+      { encoding: 'utf8', timeout: 180000 });
+    const ro = String(rr.stdout || '') + String(rr.stderr || '');
+    const readOk = rr.status === 0 && /READ_STATUS=/.test(ro);
+    if (!readOk) {
+      say('ocp_read_status', rr.status + ' signal=' + rr.signal);
+      say('ocp_read_stderr', ro.split('\n').map(s => s.trim())
+        .filter(Boolean).slice(0, 4).join(' | ') || '(无输出，疑进程启动即崩)');
+    }
+    rep.require('OCP 能真的调用 STEPControl_Reader.ReadFile', readOk,
+      readOk ? (ro.match(/READ_STATUS=\S+/) || [''])[0]
+        : '连空 STEP 都读不了 —— step-export 的内核读回必然全灭');
+    try { fs.unlinkSync(stepFile); } catch (e) { /* */ }
+  }
+}
+
 rep.finish();

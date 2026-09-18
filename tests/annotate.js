@@ -59,6 +59,23 @@ for (let i = 0; i < lines.length; i++) {
   }
 }
 
+/* 诊断上下文：这类行的信息量常常比 FAIL 本身更大 ——
+   [OCP 异常] 会带出内核子进程的真实报错与退出码，
+   没有它就只能看到一串 -1 / NaN 哨兵值（本轮实际如此）。 */
+const diag = [];
+for (let i = 0; i < lines.length; i++) {
+  if (/^\s*\[OCP/.test(lines[i]) || /^\s{4}/.test(lines[i]) && diag.length
+      && /^\s*\[OCP/.test(lines[Math.max(0, i - 1)] || '')) {
+    diag.push(lines[i].trim());
+  }
+}
+/* 套件标题也带上，便于判断失败落在哪个阶段 */
+const sections = [];
+for (let i = 0; i < lines.length; i++) {
+  const m = lines[i].match(/^---\s*([①-⑨②③].*?)---\s*$/);
+  if (m) sections.push(m[1].trim());
+}
+
 /* 套件级失败（非零退出但没打出 FAIL 行，例如崩溃）也要体现 */
 const suiteFails = [];
 for (let i = 0; i < lines.length; i++) {
@@ -77,6 +94,15 @@ if (!fails.length && !suiteFails.length) {
 console.log(`::error file=${esc(file)},title=测试失败 (${fails.length} 条断言)::`
   + esc(clip(`共 ${fails.length} 条断言失败${suiteFails.length ? '，' + suiteFails.join('；') : ''}\n`
     + fails.slice(0, 12).map(f => '第 ' + f.line + ' 行: ' + f.text).join('\n'))));
+
+/* 诊断上下文单独一条 —— 往往比 FAIL 行更能说明病因 */
+if (diag.length) {
+  console.log('::error title=诊断上下文（内核子进程报错等）::'
+    + esc(clip(diag.slice(0, 15).join('\n'))));
+}
+if (sections.length) {
+  console.log('::notice title=套件阶段::' + esc(clip(sections.join(' → '))));
+}
 
 /* 逐条 FAIL 打注解。上限 20 条 —— 注解过多反而淹没重点。 */
 for (const f of fails.slice(0, 20)) {

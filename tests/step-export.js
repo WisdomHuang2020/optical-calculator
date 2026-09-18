@@ -299,8 +299,16 @@ print(json.dumps({
       const so = String(e.stdout || '') + String(e.stderr || '');
       const lines = so.split('\n').map(s => s.trim()).filter(Boolean);
       console.log('  [OCP 异常] status=' + e.status + ' signal=' + e.signal
-        + ' 文件=' + path.basename(f));
-      if (lines.length) console.log('    ' + lines.slice(0, 8).join('\n    '));
+        + ' 文件=' + path.basename(f) + ' 解释器=' + pyocp);
+      if (lines.length) {
+        console.log('    ' + lines.slice(0, 8).join('\n    '));
+      } else {
+        /* 无任何输出 + 非零退出 = 进程在 import/启动阶段就死了
+           （Linux 上是段错误，Windows 上是 0xC0000409 abort）。
+           把这一事实明确说出来，不要留一串 -1 让人猜。 */
+        console.log('    （子进程无任何输出即退出 —— 内核绑定很可能在导入阶段就崩溃；'
+          + '若为 cadquery-ocp 在较新 CPython 上的 ABI 不匹配，改用 3.11/3.12 重装可解）');
+      }
       return { transfer: -1, nshapes: -1, solid: -1, valid: false, volume: NaN, cyl: {},
                _crash: true };
     }

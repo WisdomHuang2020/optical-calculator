@@ -113,5 +113,32 @@ for (const f of ['tests/smoke-render.js', 'tests/step-export.js']) {
     /DOM 异常短|返回的 DOM 异常短/.test(src));
 }
 
+/* ---------- 7. 失败的公开证据通道（注解） ---------- */
+console.log('\n=== 7. 失败可被公开读取（GitHub 注解）===');
+/* 本项目实测最难的一种处境：CI 失败但**拿不到日志**——
+   Actions 日志接口未认证返回 403、本机无 gh、check-run 注解接口
+   对未认证请求返回 404。而工作流运行中输出的 ::error:: 会以注解形式
+   挂在 check run 上，公开可读。这条路必须一直留着。 */
+const ann = read('tests/annotate.js');
+okTrue('存在 tests/annotate.js', exists('tests/annotate.js'));
+okTrue('输出 ::error 工作流命令', /::error/.test(ann));
+okTrue('对 %, 换行 做转义', /%25/.test(ann) && /%0A/.test(ann));
+okTrue('单条注解截断（防超长被丢）', /const MAX\s*=/.test(ann));
+/* 诊断上下文（[OCP 异常] 之类）比 FAIL 行更能说明病因 */
+okTrue('把诊断上下文也转成注解', /诊断上下文/.test(ann));
+const wf = read('.github/workflows/test.yml');
+okTrue('CI 测试步骤 tee 保留输出', /tee\s/.test(wf));
+okTrue('CI 失败时调用 annotate', /annotate\.js/.test(wf));
+okTrue('CI 用 PIPESTATUS 取真实退出码（不让 tee 掩盖判负）',
+  /PIPESTATUS/.test(wf));
+
+/* env-probe 不能只验 `import OCP` —— 那会给出假的安全感：
+   本项目实测 env-probe 报"OCP 可用"通过，而 step-export 仍整段失败。
+   必须验完整子模块链 + 真读一个 STEP。 */
+const ep = read('tests/env-probe.js');
+okTrue('env-probe 验证完整子模块链', /OCP_IMPORTS_OK/.test(ep));
+okTrue('env-probe 真读一个 STEP 文件', /STEPControl_Reader/.test(ep));
+okTrue('env-probe 的 STEP 读回断言为硬门禁', /require\(\s*'OCP 能真的调用/.test(ep));
+
 console.log(`\n测试基础设施：通过 ${pass} 项，失败 ${fail} 项（断言总数 ${pass + fail}）`);
 process.exit(fail === 0 ? 0 : 1);
