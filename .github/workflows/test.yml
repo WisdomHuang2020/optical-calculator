@@ -31,8 +31,23 @@ jobs:
       - id: chrome
         uses: browser-actions/setup-chrome@v1
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装 OpenCascade Python 绑定（STEP 内核读回校验）
+        # tests/step-export.js 的第 ③ 步要用真实内核读回导出的 STEP。
+        # 没有它那一步会 SKIP —— 于是"文件能被内核读成一个有效实体"
+        # 这条最重要的性质在 CI 上无人看守。装上前把它变成硬门禁。
+        run: |
+          set -e
+          python -m pip install --upgrade pip
+          python -m pip install cadquery-ocp
+          python -c "import OCP; print('OCP 就绪')"
+
       - name: 全部测试套件
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
           REQUIRE_CHROME: '1'
+          REQUIRE_OCP: '1'
         run: node tests/run-all.js

@@ -8,6 +8,137 @@ annotated tag，并在本文件记录变更。
 
 对应站点：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v3.4.0] - 2026-09-18
+
+### 修复（棱镜板 STEP 导出：圆角是假的 + 内核读不进）
+
+针对一份针对「棱镜板设计」页面的审核报告逐条核实，确认并修复三处缺陷，
+其中两处在报告之外自行发现（见后两节）。
+
+#### 1. 圆角在 STEP 里根本不存在（报告属实）
+
+- **现象**：导出的 1D 文件里 `CIRCLE` 出现 0 次、`CYLINDRICAL_SURFACE` 0 次，
+  只有 `PLANE` 432 + `LINE` 1290。页面上的 `radius` 圆角仅在 Three.js 预览里
+  用 10 段直线拟合可见，**下载到的文件没有任何圆角**。
+- **修复**：`filletDetailed()` 现同时返回每个圆角的圆心与半径，
+  `buildSTEP()` 据此把采样点**压缩回拓扑**（43 个圆角 × 每个 9 段合并成 1 条圆弧边，
+  129 条边 = 43 弧 + 86 直线），并写出**有理二次 B 样条**表示精确圆弧：
+
+  ```
+  #n = ( BOUNDED_CURVE() B_SPLINE_CURVE(2,(#P0,#P1,#P2),...)
+         B_SPLINE_CURVE_WITH_KNOTS((3,3),(0.0,1.0),...)
+         CURVE() GEOMETRIC_REPRESENTATION_ITEM()
+         RATIONAL_B_SPLINE_CURVE((1.0,w1,1.0)) REPRESENTATION_ITEM('') );
+  ```
+
+  侧面同步写为 `CYLINDRICAL_SURFACE`（轴平行拉伸方向）。
+- **实测**：用真实 OpenCascade 读回，`CYLINDRICAL_SURFACE = 43`，
+  **全部半径精确等于 0.02 mm**（即输入的 `radius`）。
+
+  为什么不用 `CIRCLE` + `TRIMMED_CURVE`：STEP 里 `CIRCLE` 语义是「整圆」，
+  表达其中一段必须靠 `TRIMMED_CURVE` 钉参数区间，而 trim 点/参数、
+  `sense_agreement`、轴系三者的组合约定极易踩错 —— 实测扫角翻成补弧
+  （264°~306° 的优弧，材料被多切一大块），调整过程中还让 OCCT 在
+  `TransferRoots` 直接崩。有理 B 样条把「这一小段弧」写进曲线自身定义，
+  不含裁剪语义，各内核读法一致。
+
+#### 2. 圆角圆心算错，凹角被当成凸角（报告未提，自行发现）
+
+- **现象**：修复圆角表示后，体积反而比无圆角理论值**更离谱**。
+  用单角独立圆角法做交叉验证发现：正确圆角只应把截面积从 6.5000 削到
+  **6.49976 mm²**（−0.0037%），而原实现得到 **6.38418 mm²**（−1.8%）——
+  少算了约 **26 倍**的材料。
+- **根因**：圆心用「两切线单位向量之和」定方向，该式对凸角与凹角给出的是
+  **同一侧**的角平分线，于是凹角（齿根）的圆心落到材料外，采样弧朝内凹，
+  把本应**补上**的缺口反而又挖掉一块。
+- **修复**：改由切点沿**入射边的内侧法线**偏移半径定圆心，
+  法线方向按转向符号取（凸角取左法线、凹角取右法线）：
+
+  ```
+  nIn = turn > 0 ? [-d1y, d1x] : [d1y, -d1x]
+  c   = a + rr · nIn
+  ```
+
+- **实测**：修正后凹角与凸角的圆心分居两侧（扫角分别为 −53.13° / +53.13°），
+  密集采样的截面积收敛到 **6.499762210 mm²**，与解析式**逐位吻合**（9 位小数）。
+
+#### 3. 显示值与导出件口径不一（报告属实）
+
+- 页面显示的体积原取自**折线近似**的鞋带公式（6.397425 mm² → 319.87 mm³），
+  而导出件走真圆弧 —— 「显示正确」与「文件正确」是两件事。
+  现新增 `exactArea()`：无圆角多边形面积 + 逐角按真实圆弧的解析增减量，
+  显示值与导出件同源。
+- 顺带修正 `exactArea` 自身的两处公式错误：扇形圆心角应取**外角** `|turn|`
+  而非内角 `θ`（对 126.87° 的齿角误差达 2.4 倍）；凹角不能整体取反号。
+
+#### 4. 内核静默失败 → 已可正常读入（报告属实）
+
+- **现象**：OCCT `ReadFile` 返回 `RetDone`，但 `TransferRoots() = 0`、
+  `NbShapes() = 0` —— 不报错但从头到尾没读进任何几何，用户会以为导出成功。
+- **根因**：三处参数元数（arity）错误：
+  - `APPLICATION_CONTEXT('…',1)` —— 该实体只接受 **1** 个参数；
+  - 裸 `GEOMETRIC_REPRESENTATION_CONTEXT(3)` —— 必须与
+    `GLOBAL_UNIT_ASSIGNED_CONTEXT` 组成**复合实体**才合法；
+  - `ADVANCED_BREP_SHAPE_REPRESENTATION` 只有 2 个参数
+    —— 需要 3 个（name、items、context），原代码把上下文塞进了 items。
+- **修复**：纠正三处元数，并**显式声明单位**（mm / rad / steradian）。
+- **实测**：修复后 `TransferRoots = 1`、`NbShapes = 1`、`SOLID = 1`、
+  `BRepCheck_Analyzer.IsValid() = True`，体积 **324.99 mm³**，
+  与页面显示 325.0 mm³ 一致。
+
+#### 5. `buildSTEP()` 不按模式分派（报告未提，自行发现）
+
+- `window.Prism.buildSTEP()` 始终调用 1D 生成器，在二维模式下访问
+  `geo.prof` 抛 `TypeError`。现按 `mode` 分派。
+
+### 审核报告中**不成立**的两条
+
+对报告逐条核实，以下两条经实测**否定**（保留在此以便追溯）：
+
+- **「缺装配实体：`APPLICATION_PROTOCOL_DEFINITION`、`PRODUCT_CONTEXT`、
+  `PRODUCT_DEFINITION_FORMATION`、`PRODUCT_DEFINITION_CONTEXT` 全无」**
+  —— 后三者各存在 1 个（`PRODUCT_CONTEXT` / `PRODUCT_DEFINITION_FORMATION` /
+  `PRODUCT_DEFINITION_CONTEXT` 原本就在文件里）。仅
+  `APPLICATION_PROTOCOL_DEFINITION` 确实缺失，但它是**可选**实体，
+  当前表示方式不需要它。
+- **「端盖缺一条闭合边：`EDGE_LOOP` 列了 430 条边，而轮廓是 430 点开折线，
+  首尾不重合、中间有 19.96 mm 跳变，需要 431 条边」**
+  —— `rawProfile()` 实际是 **43 个点**（不是 430；430 是圆角**采样后**的点数）。
+  圆角后轮廓经拓扑压缩为 129 条边，端盖 `EDGE_LOOP` 成员数 = 129，
+  与侧边数一致；末点→首点距离恰为 **0.200000 mm**（即 `base` 厚度，
+  是合法的左立壁），并非「19.96 mm 跳变」。
+  校验器已断言 131 个环全部首尾相接。
+
+### 工具与测试
+
+- 新增 `tools/step_validate.py`：**零依赖** STEP 结构校验器 ——
+  分节完整性、编号连续性、悬空引用、每个 `EDGE_LOOP` 的边链闭合、
+  封闭壳的**边平衡**（每条 `EDGE_CURVE` 恰好被 2 个面引用 = 水密）、
+  几何/曲面类型统计、产品结构普查。
+  本版修正了它自身的两处缺陷：解析正则不认识**复合实例**
+  （`#n = ( … )`，无单一类型名），导致误报编号空洞；以及无法在复合实例内
+  数到 `GLOBAL_UNIT_ASSIGNED_CONTEXT`。
+- 新增 `tools/step_occ_check.py`：用真实 OpenCascade 读回 STEP，
+  报告 `ReadFile` 状态、`TransferRoots`、`NbShapes`、实体/面/边/顶点计数、
+  体积、`BRepCheck_Analyzer.IsValid()`、曲面类型分布。
+- `tests/smoke-render.js` 新增 **22 条 STEP 结构断言**，把上述缺陷逐项设卡，
+  防止回归：`#undefined` 计数为 0；1D 圆弧数 = 86、圆柱面数 = 43、
+  `CIRCLE` = 0；`EDGE_LOOP` = 131、`VERTEX_POINT` = 258；
+  产品结构实体齐全；单位已声明；`APPLICATION_CONTEXT` 参数数 = 1；
+  `ADVANCED_BREP_SHAPE_REPRESENTATION` 为 3 参数；2D 无圆弧且结构完整。
+  原先只有一条 `stepLen > 1000` 的弱断言 —— 圆角全是假的时候它照样通过。
+- 体积断言由 319.9 更正为 **325.0 mm³**（旧值对应折线近似，量级本身就错）。
+
+### 验证矩阵（默认参数：pitch 1.0 / h 0.25 / 60° / t 0.20 / r 0.02 / N 20 / L 50）
+
+| 量 | 页面显示 | OCC 读回实体 | 解析预期 |
+|---|---|---|---|
+| 截面积 | — | — | 6.499762210 mm² |
+| 体积 | 325.0 mm³ | **324.985648 mm³** | 324.98811 mm³ |
+| 圆弧曲线 | — | 86 条有理 B 样条 | 43 角 × 2 端环 |
+| 圆柱面 | — | 43 个，半径 **0.02** | 输入 radius |
+| 实体有效性 | — | `IsValid() = True` | — |
+
 ## [v3.3.0] - 2026-09-18
 
 ### 变更（棱镜板页的视角保持）

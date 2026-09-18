@@ -151,8 +151,19 @@ const INTERACTION_PROBE = [
   '  r.prismVolBack = gi("s_vol").textContent;',
   '  // STEP 生成不得抛错（纯前端 AP214 拼装，最容易出现未定义引用）',
   '  try {',
-  '    r.stepLen = window.Prism.buildSTEP().length;',
+  '    var s1 = window.Prism.buildSTEP();',
+  '    r.stepLen = s1.length;',
+  '    r.s1 = s1;',
   '  } catch (e) { r.stepLen = -1; r.stepErr = e.message; }',
+  '  // 二维模式下的 STEP：buildSTEP 必须按 mode 分派（曾固定走 1D 分支，',
+  '  // 在 2D 下访问 geo.prof 抛 TypeError）',
+  '  try {',
+  '    if (b2) b2.click();',
+  '    var s2 = window.Prism.buildSTEP();',
+  '    r.step2Len = s2.length;',
+  '    r.s2 = s2;',
+  '  } catch (e) { r.step2Len = -1; r.step2Err = e.message; }',
+  '  if (b1) b1.click();',
   '  // ---- 自动取景规则（按用户实测反馈确定）----',
   '  //   1. 首次进入某模式 → 自动取景',
   '  //   2. 用户手动转视角后改参数 → 相机完全不动（本轮修的正是这条）',
@@ -357,7 +368,11 @@ if (!im) {
   ok('window.Prism 接口已暴露', R.prismApi, 'object');
   // 默认参数：pitch=1, h=0.25, apex=60, t=0.20, r=0.02, N=20, L=50
   ok('一维板宽 W = N·pitch = 20', R.prismW1D, '20.000 mm');
-  ok('一维体积（圆角后 319.9，无圆角理论值 325.0）', R.prismVol1D, '319.9 mm³');
+  /* 圆角后截面积 6.499762 mm² × L=50 = 324.988 mm³，显示取 1 位小数 = 325.0。
+     半径 0.02 mm 在 1.0 mm 齿距上只削掉 0.0037% 的面积 —— 这正是
+     「圆角是真实圆弧」的正确量级；旧值 319.9（对应面积 6.3974）来自
+     10 段折线近似，既高估了圆角的削料量，又与 STEP 导出件口径不一。 */
+  ok('一维体积（真实圆弧圆角，无圆角理论值 325.0）', R.prismVol1D, '325.0 mm³');
   okTrue('生成脚本已渲染', R.prismCodeLen > 500, 'codeview 长度 = ' + R.prismCodeLen);
   /* 画布必须贴合宿主。原文件在未布局时初始化，实测停在 20px 高；
      本站历史同类缺陷是停在默认 300×150。两者都要拦住。 */
@@ -378,9 +393,67 @@ if (!im) {
   ok('二维体积 = 基底 80 + 金字塔 33.33', R.prismVol2D, '113.3 mm³');
   okTrue('切二维后 2D 参数组显示', R.params2DShown === true);
   okTrue('切二维后 1D 参数组隐藏', R.params1DHidden === true);
-  ok('切回一维后体积复原', R.prismVolBack, '319.9 mm³');
+  ok('切回一维后体积复原', R.prismVolBack, '325.0 mm³');
   okTrue('STEP 生成未抛错且内容完整', R.stepLen > 1000,
     R.stepErr ? '异常：' + R.stepErr : 'ISO-10303-21 长度 = ' + R.stepLen);
+
+  console.log('\n=== 8b. STEP 结构断言（历史缺陷的回归门禁） ===');
+  /* 这一组断言针对审核报告指出的三项已修复缺陷，逐项设卡，
+     避免"改一次好一次、下次又退化"：
+       ① 圆角必须是真几何（有理 B 样条弧 + 圆柱面），不能是直线段折面；
+       ② 端盖环必须真正闭合（点数与边数一致、无重复点、无隐形补边）；
+       ③ 产品结构完整且声明单位，否则 OCC 静默失败（RetDone 但 NbShapes=0）。
+     `#undefined` 一并守住 —— 它是索引错位最直接的症状。 */
+  function cnt(s, re) { return (s.match(re) || []).length; }
+  var s1 = R.s1 || '', s2 = R.s2 || '';
+
+  okTrue('1D STEP 无 #undefined 悬空引用', cnt(s1, /#undefined/g) === 0,
+    '#undefined 出现 ' + cnt(s1, /#undefined/g) + ' 次');
+  okTrue('2D STEP 无 #undefined 悬空引用', cnt(s2, /#undefined/g) === 0,
+    '#undefined 出现 ' + cnt(s2, /#undefined/g) + ' 次');
+
+  /* ① 真圆角：43 个齿顶/齿根圆角 × 2 个端环 = 86 条圆弧曲线，
+        侧面 = 43 个圆柱面。半径必须是输入的 radius（非钳位时）。 */
+  var nArc = cnt(s1, /\bRATIONAL_B_SPLINE_CURVE\s*\(/g);
+  var nCyl = cnt(s1, /=\s*CYLINDRICAL_SURFACE\s*\(/g);
+  okTrue('1D 圆角为真实圆弧（有理 B 样条）', nArc === 86, 'RATIONAL_B_SPLINE_CURVE = ' + nArc);
+  okTrue('1D 圆角侧面为圆柱面', nCyl === 43, 'CYLINDRICAL_SURFACE = ' + nCyl);
+  okTrue('1D 不再用直线段折面冒充圆角',
+    cnt(s1, /=\s*CIRCLE\s*\(/g) === 0, 'CIRCLE = ' + cnt(s1, /=\s*CIRCLE\s*\(/g));
+
+  /* ② 端盖闭合：轮廓 473 点 → 拓扑压缩为 129 条边（43 弧 + 86 直线），
+        加 2 个端盖环共 131 个 EDGE_LOOP；顶点数 = 2×129 = 258。 */
+  var loops = cnt(s1, /=\s*EDGE_LOOP\s*\(/g);
+  var vtx = cnt(s1, /=\s*VERTEX_POINT\s*\(/g);
+  okTrue('1D EDGE_LOOP 数 = 129 侧面 + 2 端盖', loops === 131, 'EDGE_LOOP = ' + loops);
+  okTrue('1D 顶点数 = 2 × 129（底环 + 顶环）', vtx === 258, 'VERTEX_POINT = ' + vtx);
+
+  /* ③ 产品结构 + 单位：缺任何一项都可能导致内核静默不转移几何。 */
+  ['APPLICATION_CONTEXT', 'PRODUCT', 'PRODUCT_CONTEXT',
+   'PRODUCT_DEFINITION_FORMATION', 'PRODUCT_DEFINITION_CONTEXT',
+   'PRODUCT_DEFINITION', 'SHAPE_DEFINITION_REPRESENTATION'].forEach(function (k) {
+    var hit = new RegExp('=\\s*' + k + '\\s*\\(').test(s1) ||
+      new RegExp('\\b' + k + '\\s*\\(').test(s1);
+    okTrue('1D 含产品结构实体 ' + k, hit);
+  });
+  okTrue('1D 声明 GLOBAL_UNIT_ASSIGNED_CONTEXT（mm）',
+    /GLOBAL_UNIT_ASSIGNED_CONTEXT\s*\(/.test(s1) && /\.MILLI\.\s*,\s*\.METRE\./.test(s1));
+  okTrue('1D ADVANCED_BREP_SHAPE_REPRESENTATION 为 3 参数形式',
+    /ADVANCED_BREP_SHAPE_REPRESENTATION\s*\([^)]*\)\s*,/.test(s1));
+  /* APPLICATION_CONTEXT 只接受 1 个参数（历史 bug 是多写了个 ,1） */
+  okTrue('1D APPLICATION_CONTEXT 参数数 = 1',
+    !/APPLICATION_CONTEXT\s*\([^)]*,\s*1\s*\)/.test(s1));
+
+  /* 2D：金字塔全平面，无圆弧；端盖环同理闭合。 */
+  okTrue('2D STEP 生成为有效实体', R.step2Len > 1000,
+    R.step2Err ? '异常：' + R.step2Err : '长度 = ' + R.step2Len);
+  okTrue('2D 无圆弧（金字塔面全为平面）',
+    cnt(s2, /\bRATIONAL_B_SPLINE_CURVE\s*\(/g) === 0);
+  okTrue('2D 声明单位与产品结构',
+    /GLOBAL_UNIT_ASSIGNED_CONTEXT\s*\(/.test(s2) &&
+    /=\s*PRODUCT_DEFINITION\s*\(/.test(s2));
+  okTrue('2D ADVANCED_BREP_SHAPE_REPRESENTATION 为 3 参数形式',
+    /ADVANCED_BREP_SHAPE_REPRESENTATION\s*\([^)]*\)\s*,/.test(s2));
 
   console.log('\n=== 9. 棱镜板视角保持与自动取景规则 ===');
   /* 这组断言守两条**方向相反**的规则，缺一不可：

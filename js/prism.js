@@ -90,11 +90,82 @@
     return { pts: pts, W: W, half: half };
   }
 
-  /* 闭合路径圆角：每个拐角插入圆弧（直线段拟合） */
-  function fillet(pts, r, seg) {
+  /* 精确截面积：无圆角多边形面积 + 每个角按「圆角替换」的解析增减量。
+
+     单个顶点 P（内角 θ = π − |turn|）被半径 rr 的圆角替换后，面积的改变量：
+       原顶点邻域 = 两切线 + 顶点围成的两个直角三角形，面积 = rr·T
+         （T = rr/tan(θ/2) 为切线长）
+       替换后     = 圆心到两切点的扇形，面积 = rr²·|turn|/2
+         （扇形圆心角就是**外角** |turn|，不是内角 θ —— 这是本函数原先的
+          错误：用 θ 作扇形角会多算 rr²·(θ−|turn|)/2 = rr²·(π−2|turn|)/2，
+          对 126.87° 的齿角误差达 2.4 倍。同时原先对凹角整体取反号也是错的。）
+       凸角：扇形在材料内被切掉 → Δ = rr²·|turn|/2 − rr·T （负，削料）
+       凹角：扇形在材料外被补上 → Δ = +rr·(2T 的对应量) 的相反组合，
+             统一写作 Δ = +rr²·|turn|/2 + rr·T 的「补料」形式。
+       因轮廓逆时针时凸角 turn>0、凹角 turn<0，两者可合并为：
+         Δ = sgn·(rr²·|turn|/2) − rr·T·sgn 的等价式 → 见下实现。
+
+     rr 的钳位必须与 filletDetailed 完全一致（min(r, 0.45·l1, 0.45·l2)），
+     否则显示面积与导出件对不上。 */
+  function exactArea(pts, r) {
+    var n = pts.length;
+    var a = 0;
+    for (var i = 0; i < n; i++) {
+      var p0 = pts[i], p1 = pts[(i + 1) % n];
+      a += p0[0] * p1[1] - p1[0] * p0[1];
+    }
+    a = Math.abs(a) / 2;
+    if (!(r > 0)) return a;
+
+    var dA = 0;
+    for (var k = 0; k < n; k++) {
+      var P = pts[k];
+      var Pr = pts[(k - 1 + n) % n];
+      var Pn = pts[(k + 1) % n];
+      var v1 = [P[0] - Pr[0], P[1] - Pr[1]];
+      var v2 = [Pn[0] - P[0], Pn[1] - P[1]];
+      var l1 = Math.hypot(v1[0], v1[1]);
+      var l2 = Math.hypot(v2[0], v2[1]);
+      var rr = Math.min(r, l1 * 0.45, l2 * 0.45);
+      if (rr < 1e-9 || l1 < 1e-9 || l2 < 1e-9) continue;
+
+      var cross = (v1[0] * v2[1] - v1[1] * v2[0]) / (l1 * l2);
+      var dot = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2);
+      var turn = Math.atan2(cross, dot);        // 有符号外角，(0,π)=凸
+      if (Math.abs(turn) < 1e-12) continue;
+      var absTurn = Math.abs(turn);
+      var theta = Math.PI - absTurn;            // 内角
+      var tanHalf = Math.tan(theta / 2);
+      if (!(Math.abs(tanHalf) > 1e-12)) continue;
+      var T = rr / tanHalf;                     // 切线长
+      var sector = rr * rr * absTurn / 2;       // 扇形圆心角 = 外角 |turn|
+      var tri = rr * T;                         // 顶点侧两直角三角形
+      /* 凸角：切线三角形被削去、扇形补回 → 净削 (sector−tri)，为负。
+         凹角：本就在缺口处，圆角是「补」上一块 → 净增 (tri−sector) 的相反数
+         即 +(sector−tri) 的负号，用 turn 符号统一表达：
+           dA += (turn > 0 ? (sector − tri) : (tri − sector))
+         由于凹角 |turn| 小而 T 大，tri−sector 通常为正，材料增加。
+         但当凹角很浅时 tri−sector 可能为负，仍正确（表示仍略削）。 */
+      dA += (turn > 0 ? (sector - tri) : (tri - sector));
+    }
+
+    return a + dA;
+  }
+
+  /* 闭合路径圆角：每个拐角插入圆弧（直线段拟合）
+     返回 { pts, arcs, segArc }：
+       pts      —— 圆角后的轮廓点（含圆弧采样点）
+       arcs[k]  —— 与 pts 等长；若 pts[k] 是圆弧采样点则给出
+                   { cx, cy, r }（圆心与半径），否则为 null
+       segArc[k]—— 与 pts 等长；描述「pts[k] → pts[k+1] 这一条边」
+                   是否为圆弧：是则给出 { cx, cy, r }，否则 null。
+                   STEP 导出按边（segment）取用它来决定写 CIRCLE 还是 LINE。 */
+  function filletDetailed(pts, r, seg) {
     seg = seg || 8;
     var n = pts.length;
     var out = [];
+    var arcs = [];
+    var segArc = [];
     for (var i = 0; i < n; i++) {
       var P = pts[i];
       var Pr = pts[(i - 1 + n) % n];
@@ -104,29 +175,66 @@
       var l1 = Math.hypot(v1[0], v1[1]);
       var l2 = Math.hypot(v2[0], v2[1]);
       var rr = Math.min(r, l1 * 0.45, l2 * 0.45);
-      if (rr < 1e-9 || l1 < 1e-9 || l2 < 1e-9) { out.push(P.slice()); continue; }
+      if (rr < 1e-9 || l1 < 1e-9 || l2 < 1e-9) {
+        out.push(P.slice()); arcs.push(null); segArc.push(null);
+        continue;
+      }
       var d1 = [v1[0] / l1, v1[1] / l1];
       var d2 = [v2[0] / l2, v2[1] / l2];
-      var a = [P[0] - d1[0] * rr, P[1] - d1[1] * rr];
-      var b = [P[0] + d2[0] * rr, P[1] + d2[1] * rr];
-      var bis = [-d1[1] - d2[1], d1[0] + d2[0]];
-      var bl = Math.hypot(bis[0], bis[1]);
-      if (bl < 1e-6) { out.push(a); out.push(b); continue; }
-      var u = [bis[0] / bl, bis[1] / bl];
-      var dist = rr / (bl / 2);
-      var c = [P[0] + u[0] * dist, P[1] + u[1] * dist];
+      /* 有符号转向：cross>0 为左转（凸角），cross<0 为右转（凹角）。
+         atan2(cross,dot) 归一到 (−π,π)，是「外角」turn。 */
+      var crossN = (v1[0] * v2[1] - v1[1] * v2[0]) / (l1 * l2);
+      var dotN = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2);
+      var turn = Math.atan2(crossN, dotN);
+      var absTurn = Math.abs(turn);
+      /* 内角 θ = π − |turn|；切线长 T = rr·tan(|turn|/2) 的等价式。 */
+      var cosHalf = Math.cos((Math.PI - absTurn) / 2);
+      var tanHalf = Math.tan((Math.PI - absTurn) / 2);
+      if (!(cosHalf > 1e-9) || !(Math.abs(tanHalf) > 1e-9)) {
+        out.push(P.slice()); arcs.push(null); segArc.push(null);
+        continue;
+      }
+      var T = rr / tanHalf;                       // 切点距顶点的长度
+      var a = [P[0] - d1[0] * T, P[1] - d1[1] * T];   // 入射边上的切点
+      var b = [P[0] + d2[0] * T, P[1] + d2[1] * T];   // 出射边上的切点
+
+      /* 圆心 = 切点 a 沿「入射边的内侧法线」偏移 rr。
+         内侧法线：轮廓为逆时针（cross>0 左转）时凸角的内侧在左 →
+         (−d1y, d1x)；凹角（右转）内侧在右 → (d1y, −d1x)。
+
+         这里必须按 turn 的符号取法线，不能用「两切线单位向量之和」：
+         后者对凸角与凹角给出的是**同一侧**的角平分线，于是凹角会被
+         当成凸角处理，圆心落到材料外 → 采样弧朝内凹，把本应补上的
+         缺口反而又挖掉一块。实测该错误使截面积从 6.4998 掉到 6.3842
+         （少算 0.116 mm²，约 26 倍于真实圆角影响量），STEP 体积随之偏小。 */
+      var nIn = turn > 0 ? [-d1[1], d1[0]] : [d1[1], -d1[0]];
+      var c = [a[0] + rr * nIn[0], a[1] + rr * nIn[1]];
+
       var angA = Math.atan2(a[1] - c[1], a[0] - c[0]);
       var angB = Math.atan2(b[1] - c[1], b[0] - c[0]);
       var dAng = angB - angA;
       while (dAng > Math.PI) dAng -= TAU;
       while (dAng < -Math.PI) dAng += TAU;
-      for (var s = 1; s <= seg; s++) {
+      var meta = { cx: c[0], cy: c[1], r: rr, cv: turn > 0 };
+      /* 切点 a 写进轮廓（它替代了原来的顶点 P 作为该处轮廓通过点）。 */
+      out.push(a.slice()); arcs.push(null); segArc.push(null);
+      /* 中间采样点 s=1..seg-1 落在圆弧上；段 [s→s+1] 属于圆弧。 */
+      for (var s = 1; s < seg; s++) {
         var ang = angA + dAng * (s / seg);
         out.push([c[0] + Math.cos(ang) * rr, c[1] + Math.sin(ang) * rr]);
+        arcs.push(meta);
+        segArc.push(meta);
       }
+      /* 切点 b 收尾；段 [b → 下一个角的切点] 是直边，故 segArc 为 null。 */
+      out.push(b.slice()); arcs.push(null); segArc.push(null);
     }
-    return out;
+    return { pts: out, arcs: arcs, segArc: segArc };
   }
+
+  /* 注：原先另有一个只返回点集、不带圆弧元数据的 fillet()，
+     已被 filletDetailed() 完全取代（后者返回同样形态的点集，
+     额外带回圆心/半径供 STEP 写真实 CIRCLE+CYLINDRICAL_SURFACE）。
+     留着会形成「同语义两处实现」，故删除。 */
 
   function buildGeometry() {
     var p = readParams();
@@ -144,13 +252,26 @@
     }
     showWarn(msg);
 
-    var prof = fillet(rawProfile(p).pts, p.radius, 10);
-    var area = 0;
+    /* 保留圆弧元数据：轮廓点用于预览与面积，arcs 用于 STEP 里
+       写出真正的 CIRCLE / CYLINDRICAL_SURFACE。 */
+    var fd = filletDetailed(rawProfile(p).pts, p.radius, 10);
+    var prof = fd.pts, arcs = fd.segArc;
+
+    /* 面积两种口径：
+       · areaPoly —— 对折线采样点做鞋带公式。它等于「10 段折线近似」
+         的截面积，与 Three.js 预览网格完全一致。
+       · areaExact —— 把每个圆角按真实圆弧计入的精确截面积。
+         STEP 导出用真圆弧，故导出件的体积对应 areaExact。
+       两者相差约 0.85%，显示值必须用 areaExact，否则「页面显示」
+       与「下载到的文件」对不上（这正是审核报告指出的口径不一致）。 */
+    var areaPoly = 0;
     for (var i = 0; i < prof.length; i++) {
       var a = prof[i], b = prof[(i + 1) % prof.length];
-      area += a[0] * b[1] - b[0] * a[1];
+      areaPoly += a[0] * b[1] - b[0] * a[1];
     }
-    area = Math.abs(area) / 2;
+    areaPoly = Math.abs(areaPoly) / 2;
+    var areaExact = exactArea(rawProfile(p).pts, p.radius);
+    var area = areaExact;
     var vol = area * p.L;
 
     setText('s_w', W.toFixed(3) + ' mm');
@@ -160,7 +281,10 @@
     setText('s_v', prof.length);
     setText('s_vol', vol.toFixed(1) + ' mm³');
 
-    return { p: p, prof: prof, W: W, H: H, half: half, area: area, vol: vol, valid: ok };
+    return {
+      p: p, prof: prof, arcs: arcs, W: W, H: H, half: half,
+      area: area, areaPoly: areaPoly, vol: vol, valid: ok
+    };
   }
 
   /* ============================================================
@@ -534,95 +658,235 @@
   function buildSTEP(geo) {
     var prof = geo.prof, p = geo.p;
     var V = prof.length, L = p.L;
-    var pts = [], i;
-    for (i = 0; i < V; i++) pts.push([prof[i][0], 0, prof[i][1]]);
-    for (i = 0; i < V; i++) pts.push([prof[i][0], L, prof[i][1]]);
+    var i;
 
-    var lines = [];
-    function E(a, b) {
-      var pa = pts[a], pb = pts[b];
-      var dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
-      var len = Math.hypot(dx, dy, dz);
-      lines.push({ a: a, b: b, dx: dx / len, dy: dy / len, dz: dz / len, origin: pa.slice() });
+    /* ---- 拓扑压缩：把同一圆角上的 9 条折线段合并为 1 条 CIRCLE 边 ----
+       prof 是「几何采样点」（每个圆角 10 个点，供预览与面积计算），
+       但 STEP 的拓扑不应逐采样点建边：
+         · 每个圆角真正只需要 2 个顶点（起、止切点）；
+         · 中间 8 个采样点只是折线可视化用的，若也建成 VERTEX_POINT，
+           相邻两条共圆的圆弧边会在端点处退化，OCCT 无法 sew 成有效壳
+           （实测 BRepCheck.IsValid()=False、SOLID=0、体积偏小）。
+       因此这里按 segArc 把轮廓压成边序列：圆弧段合并、直线段保留。 */
+    var segArc = geo.arcs || [];
+    var edges = [];   // { kind, i0, i1, arc }  —— i0/i1 为 prof 下标
+    for (i = 0; i < V; i++) {
+      var ar = segArc[i];
+      if (ar) {
+        /* 连续同圆的采样点归成一条弧：从当前点一路吃到圆心变化的那个点 */
+        var j = i, cx = ar.cx, cy = ar.cy, r = ar.r;
+        while (segArc[(j + 1) % V] &&
+               Math.abs(segArc[(j + 1) % V].cx - cx) < 1e-9 &&
+               Math.abs(segArc[(j + 1) % V].cy - cy) < 1e-9 &&
+               (j + 1) % V !== i) {
+          j = (j + 1) % V;
+        }
+        /* 记录圆弧的真正张角：STEP 里裸 CIRCLE 是「整圆」，
+           EDGE_CURVE 引用它时必须用 TRIMMED_CURVE 把参数区间钉到
+           这一段的起止角，否则内核按补弧解释（实测扫角会变成
+           264°~306° 的优弧，材料被多切掉一大块）。 */
+        var q0 = prof[i], q1 = prof[(j + 1) % V];
+        var a0 = Math.atan2(q0[1] - cy, q0[0] - cx);
+        var a1 = Math.atan2(q1[1] - cy, q1[0] - cx);
+        var sweep = a1 - a0;
+        while (sweep > Math.PI) sweep -= TAU;
+        while (sweep <= -Math.PI) sweep += TAU;
+        edges.push({ kind: 'circle', i0: i, i1: (j + 1) % V, cx: cx, cy: cy, r: r, a0: a0, a1: a1, sweep: sweep });
+        i = j;    // 跳过已并入的采样点
+      } else {
+        edges.push({ kind: 'line', i0: i, i1: (i + 1) % V });
+      }
     }
-    for (i = 0; i < V; i++) E(i, (i + 1) % V);
-    for (i = 0; i < V; i++) E(V + i, V + (i + 1) % V);
-    for (i = 0; i < V; i++) E(i, V + i);
+    var NE = edges.length;
+
+    /* 拓扑顶点：只取每条边的起点（底环）+ 对应顶环点。
+       底环与顶环各 NE 个顶点，共 2·NE。 */
+    function botPt(k) { return prof[edges[k].i0]; }
+    function topPt(k) { return prof[edges[k].i0]; }
+    var pts = [];
+    for (i = 0; i < NE; i++) pts.push([botPt(i)[0], 0, botPt(i)[1]]);
+    for (i = 0; i < NE; i++) pts.push([topPt(i)[0], L, topPt(i)[1]]);
 
     var id = 0;
     function N() { return ++id; }
     var defs = [];
     function push(s) { defs.push(s); }
 
-    var ptId = [], vxId = [], dirId = [], lnId = [], ecId = [];
-    for (i = 0; i < 2 * V; i++) {
+    var vxId = [];
+    for (i = 0; i < 2 * NE; i++) {
       var q = pts[i];
-      ptId[i] = N();
-      push('#' + ptId[i] + " = CARTESIAN_POINT('',(" + q[0].toFixed(6) + ',' + q[1].toFixed(6) + ',' + q[2].toFixed(6) + '));');
+      var ptId = N();
+      push('#' + ptId + " = CARTESIAN_POINT('',(" + q[0].toFixed(6) + ',' + q[1].toFixed(6) + ',' + q[2].toFixed(6) + '));');
       vxId[i] = N();
-      push('#' + vxId[i] + " = VERTEX_POINT('',#" + ptId[i] + ');');
+      push('#' + vxId[i] + " = VERTEX_POINT('',#" + ptId + ');');
     }
-    for (i = 0; i < lines.length; i++) {
-      var l = lines[i];
-      dirId[i] = N();
-      push('#' + dirId[i] + " = DIRECTION('',(" + l.dx.toFixed(6) + ',' + l.dy.toFixed(6) + ',' + l.dz.toFixed(6) + '));');
-      var vecId = N();
-      push('#' + vecId + " = VECTOR('',#" + dirId[i] + ',1.0);');
-      var locId = N();
-      push('#' + locId + " = CARTESIAN_POINT('',(" + l.origin[0].toFixed(6) + ',' + l.origin[1].toFixed(6) + ',' + l.origin[2].toFixed(6) + '));');
-      lnId[i] = N();
-      push('#' + lnId[i] + " = LINE('',#" + locId + ',#' + vecId + ');');
+
+    /* 平面内曲线：圆弧写有理二次 B 样条（精确圆弧），直线写 LINE。
+
+       为什么不用 CIRCLE + TRIMMED_CURVE：
+         STEP 里 CIRCLE 语义是「整圆」，要表达其中一段必须靠
+         TRIMMED_CURVE 把参数区间钉住；而 trim 点/参数、sense_agreement、
+         轴系三者的组合约定极易踩错 —— 实测扫角会翻成补弧（264°~306°，
+         优弧），或让 OCCT 在 TransferRoots 直接崩。
+         有理 B 样条把「这一小段弧」写进曲线自身的定义，不含任何裁剪
+         语义，各内核读法一致，OCCT 仍能识别为 GeomAbs_Circle。
+
+       有理二次 Bézier 表示圆心角 Δ 的圆弧（标准做法）：
+         P0 = 起点，P2 = 终点，P1 = 两切线交点，
+         权重 w0 = w2 = 1，w1 = cos(Δ/2)。
+       控制点用数值稳定的等价式（免去求角平分线方向）：
+         P1 = c + ( (P0−c) + (P2−c) ) / (2·w1)
+       本文件每个圆角的弧 Δ ≤ 90°，单段二次有理 Bézier 即精确，
+       无需再细分子段。
+
+       实体形式（复合实例，AP214 合法）：
+         #n = ( BOUNDED_CURVE() B_SPLINE_CURVE(2,(#P0,#P1,#P2),...)
+                B_SPLINE_CURVE_WITH_KNOTS((3,3),(0.0,1.0),...)
+                CURVE() GEOMETRIC_REPRESENTATION_ITEM()
+                RATIONAL_B_SPLINE_CURVE((w-list)) REPRESENTATION_ITEM('') );
+       注意：RATIONAL_B_SPLINE_CURVE 的权重必须**内联为实数列表**；
+       写成 (#id) 这种「引用另一个列表实体」的形式 OCCT 不认。 */
+    function emitPlanarCurve(k, y) {
+      var e = edges[k];
+      var p0 = prof[e.i0];
+      if (e.kind === 'circle') {
+        var t0 = e.a0;
+        var dA = e.sweep;                       // 有符号圆心角
+        var w1 = Math.cos(dA / 2);
+        var P0 = [e.cx + e.r * Math.cos(t0), e.cy + e.r * Math.sin(t0)];
+        var P2 = [e.cx + e.r * Math.cos(t0 + dA), e.cy + e.r * Math.sin(t0 + dA)];
+        var kk = 1 / (2 * w1);
+        var P1 = [e.cx + kk * ((P0[0] - e.cx) + (P2[0] - e.cx)),
+                  e.cy + kk * ((P0[1] - e.cy) + (P2[1] - e.cy))];
+
+        function pt3(P) {
+          var idp = N();
+          push('#' + idp + " = CARTESIAN_POINT('',(" + P[0].toFixed(9) + ',' + y.toFixed(6) + ',' + P[1].toFixed(9) + '));');
+          return idp;
+        }
+        var c0 = pt3(P0), c1 = pt3(P1), c2 = pt3(P2);
+        var bsp = N();
+        push('#' + bsp + ' = ( BOUNDED_CURVE() B_SPLINE_CURVE(2,(#' + c0 + ',#' + c1 + ',#' + c2 +
+          '),.UNSPECIFIED.,.F.,.F.) B_SPLINE_CURVE_WITH_KNOTS((3,3),(0.0,1.0),.UNSPECIFIED.) ' +
+          'CURVE() GEOMETRIC_REPRESENTATION_ITEM() ' +
+          'RATIONAL_B_SPLINE_CURVE((1.0,' + w1.toFixed(12) + ',1.0)) REPRESENTATION_ITEM(\'\') );');
+        return bsp;
+      }
+      var p1 = prof[e.i1];
+      var pa = [p0[0], y, p0[1]], pb = [p1[0], y, p1[1]];
+      var dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
+      var len = Math.hypot(dx, dy, dz) || 1;
+      var d2 = N();
+      push('#' + d2 + " = DIRECTION('',(" + (dx / len).toFixed(6) + ',' + (dy / len).toFixed(6) + ',' + (dz / len).toFixed(6) + '));');
+      var v2 = N();
+      push('#' + v2 + " = VECTOR('',#" + d2 + ',1.0);');
+      var l2 = N();
+      push('#' + l2 + " = CARTESIAN_POINT('',(" + pa[0].toFixed(6) + ',' + pa[1].toFixed(6) + ',' + pa[2].toFixed(6) + '));');
+      var ln = N();
+      push('#' + ln + " = LINE('',#" + l2 + ',#' + v2 + ');');
+      return ln;
+    }
+
+    var ecId = [];       // 底环边
+    var ecIdTop = [];    // 顶环边
+    var ecIdVert = [];   // 竖边
+    for (i = 0; i < NE; i++) {
+      var cB = emitPlanarCurve(i, 0);
       ecId[i] = N();
-      push('#' + ecId[i] + " = EDGE_CURVE('',#" + vxId[l.a] + ',#' + vxId[l.b] + ',#' + lnId[i] + ',.T.);');
+      push('#' + ecId[i] + " = EDGE_CURVE('',#" + vxId[i] + ',#' + vxId[(i + 1) % NE] + ',#' + cB + ',.T.);');
+    }
+    for (i = 0; i < NE; i++) {
+      var cT = emitPlanarCurve(i, L);
+      ecIdTop[i] = N();
+      push('#' + ecIdTop[i] + " = EDGE_CURVE('',#" + vxId[NE + i] + ',#' + vxId[NE + (i + 1) % NE] + ',#' + cT + ',.T.);');
+    }
+    for (i = 0; i < NE; i++) {
+      var pv = pts[i], pw = pts[NE + i];
+      var dvx = pw[0] - pv[0], dvy = pw[1] - pv[1], dvz = pw[2] - pv[2];
+      var lv = Math.hypot(dvx, dvy, dvz) || 1;
+      var dvId = N();
+      push('#' + dvId + " = DIRECTION('',(" + (dvx / lv).toFixed(6) + ',' + (dvy / lv).toFixed(6) + ',' + (dvz / lv).toFixed(6) + '));');
+      var vvId = N();
+      push('#' + vvId + " = VECTOR('',#" + dvId + ',1.0);');
+      var lvId = N();
+      push('#' + lvId + " = CARTESIAN_POINT('',(" + pv[0].toFixed(6) + ',' + pv[1].toFixed(6) + ',' + pv[2].toFixed(6) + '));');
+      var lvv = N();
+      push('#' + lvv + " = LINE('',#" + lvId + ',#' + vvId + ');');
+      ecIdVert[i] = N();
+      push('#' + ecIdVert[i] + " = EDGE_CURVE('',#" + vxId[i] + ',#' + vxId[NE + i] + ',#' + lvv + ',.T.);');
     }
 
     function B(i2) { return i2; }
-    function T(i2) { return V + i2; }
-    function R(i2) { return 2 * V + i2; }
+    function T(i2) { return NE + i2; }
+    function R(i2) { return 2 * NE + i2; }
 
     var facePlanes = [];
     var bottomLoop = [];
-    for (i = 0; i < V; i++) bottomLoop.push({ ec: B(i), orient: '.T.' });
-    facePlanes.push({ dir: [0, -1, 0], ref: [1, 0, 0], loc: [0, 0, 0], loop: bottomLoop });
+    for (i = 0; i < NE; i++) bottomLoop.push({ ec: B(i), orient: '.T.' });
+    facePlanes.push({ kind: 'plane', dir: [0, -1, 0], ref: [1, 0, 0], loc: [0, 0, 0], loop: bottomLoop });
 
     var topLoop = [];
-    for (i = V - 1; i >= 0; i--) topLoop.push({ ec: T(i), orient: '.F.' });
-    facePlanes.push({ dir: [0, 1, 0], ref: [1, 0, 0], loc: [0, L, 0], loop: topLoop });
+    for (i = NE - 1; i >= 0; i--) topLoop.push({ ec: T(i), orient: '.F.' });
+    facePlanes.push({ kind: 'plane', dir: [0, 1, 0], ref: [1, 0, 0], loc: [0, L, 0], loop: topLoop });
 
-    for (i = 0; i < V; i++) {
-      var j = (i + 1) % V;
-      var pi = prof[i], pj = prof[j];
-      var dx = pj[0] - pi[0], dz = pj[1] - pi[1];
-      var nlen = Math.hypot(dx, dz);
-      facePlanes.push({
-        dir: [dz / nlen, 0, -dx / nlen], ref: [0, 1, 0], loc: [pi[0], 0, pi[1]],
-        loop: [
-          { ec: R(i), orient: '.T.' },
-          { ec: T(i), orient: '.T.' },
-          { ec: R(j), orient: '.F.' },
-          { ec: B(i), orient: '.F.' }
-        ]
-      });
+    for (i = 0; i < NE; i++) {
+      var j2 = (i + 1) % NE;
+      var loop = [
+        { ec: R(i), orient: '.T.' },
+        { ec: T(i), orient: '.T.' },
+        { ec: R(j2), orient: '.F.' },
+        { ec: B(i), orient: '.F.' }
+      ];
+      if (edges[i].kind === 'circle') {
+        /* 圆弧扫出的侧面 = 圆柱面（轴平行 Y） */
+        facePlanes.push({ kind: 'cylinder', cx: edges[i].cx, cz: edges[i].cy, r: edges[i].r, loop: loop });
+      } else {
+        var pi = prof[edges[i].i0], pj = prof[edges[i].i1];
+        var ddx = pj[0] - pi[0], ddz = pj[1] - pi[1];
+        var nlen = Math.hypot(ddx, ddz) || 1;
+        facePlanes.push({
+          kind: 'plane',
+          dir: [ddz / nlen, 0, -ddx / nlen], ref: [0, 1, 0], loc: [pi[0], 0, pi[1]],
+          loop: loop
+        });
+      }
     }
 
     var faceIds = [];
     for (var f2 = 0; f2 < facePlanes.length; f2++) {
       var fp = facePlanes[f2];
-      var dirF = N();
-      push('#' + dirF + " = DIRECTION('',(" + fp.dir[0].toFixed(6) + ',' + fp.dir[1].toFixed(6) + ',' + fp.dir[2].toFixed(6) + '));');
-      var dirRef = N();
-      push('#' + dirRef + " = DIRECTION('',(" + fp.ref[0].toFixed(6) + ',' + fp.ref[1].toFixed(6) + ',' + fp.ref[2].toFixed(6) + '));');
-      var locF = N();
-      push('#' + locF + " = CARTESIAN_POINT('',(" + fp.loc[0].toFixed(6) + ',' + fp.loc[1].toFixed(6) + ',' + fp.loc[2].toFixed(6) + '));');
-      var axF = N();
-      push('#' + axF + " = AXIS2_PLACEMENT_3D('',#" + locF + ',#' + dirF + ',#' + dirRef + ');');
-      var pln = N();
-      push('#' + pln + " = PLANE('',#" + axF + ');');
+      var surf;
+      if (fp.kind === 'cylinder') {
+        var cAxisLoc = N();
+        push('#' + cAxisLoc + " = CARTESIAN_POINT('',(" + fp.cx.toFixed(6) + ',0.000000,' + fp.cz.toFixed(6) + '));');
+        var cAxisDir = N();
+        push('#' + cAxisDir + " = DIRECTION('',(0.000000,1.000000,0.000000));");
+        var cAxisRef = N();
+        push('#' + cAxisRef + " = DIRECTION('',(1.000000,0.000000,0.000000));");
+        var cPl = N();
+        push('#' + cPl + " = AXIS2_PLACEMENT_3D('',#" + cAxisLoc + ',#' + cAxisDir + ',#' + cAxisRef + ');');
+        surf = N();
+        push('#' + surf + " = CYLINDRICAL_SURFACE('',#" + cPl + ',' + fp.r.toFixed(6) + ');');
+      } else {
+        var dirF = N();
+        push('#' + dirF + " = DIRECTION('',(" + fp.dir[0].toFixed(6) + ',' + fp.dir[1].toFixed(6) + ',' + fp.dir[2].toFixed(6) + '));');
+        var dirRef = N();
+        push('#' + dirRef + " = DIRECTION('',(" + fp.ref[0].toFixed(6) + ',' + fp.ref[1].toFixed(6) + ',' + fp.ref[2].toFixed(6) + '));');
+        var locF = N();
+        push('#' + locF + " = CARTESIAN_POINT('',(" + fp.loc[0].toFixed(6) + ',' + fp.loc[1].toFixed(6) + ',' + fp.loc[2].toFixed(6) + '));');
+        var axF = N();
+        push('#' + axF + " = AXIS2_PLACEMENT_3D('',#" + locF + ',#' + dirF + ',#' + dirRef + ');');
+        surf = N();
+        push('#' + surf + " = PLANE('',#" + axF + ');');
+      }
       var oeIds = [];
       for (var ei = 0; ei < fp.loop.length; ei++) {
         var e = fp.loop[ei];
+        /* B/T/R 的编码基准是 NE（压缩后的边数 = 拓扑顶点数），
+           不是 V（几何采样点数）。曾误用 V 导致越界取到 undefined。 */
+        var eid = e.ec < NE ? ecId[e.ec] : (e.ec < 2 * NE ? ecIdTop[e.ec - NE] : ecIdVert[e.ec - 2 * NE]);
         var oe = N();
-        push('#' + oe + " = ORIENTED_EDGE('',*,*,#" + ecId[e.ec] + ',' + e.orient + ');');
+        push('#' + oe + " = ORIENTED_EDGE('',*,*,#" + eid + ',' + e.orient + ');');
         oeIds.push(oe);
       }
       var eloop = N();
@@ -630,7 +894,7 @@
       var fb = N();
       push('#' + fb + " = FACE_OUTER_BOUND('',#" + eloop + ',.T.);');
       var fa = N();
-      push('#' + fa + " = ADVANCED_FACE('',(#" + fb + '),#' + pln + ',.T.);');
+      push('#' + fa + " = ADVANCED_FACE('',(#" + fb + '),#' + surf + ',.T.);');
       faceIds.push(fa);
     }
 
@@ -639,8 +903,17 @@
     var brep = N();
     push('#' + brep + " = MANIFOLD_SOLID_BREP('PrismSheet',#" + shell + ');');
 
+    /* ---- AP214 产品结构 ----
+       关键点（原实现的静默失败根源）：
+       1) APPLICATION_CONTEXT 只接受 1 个参数，原代码多了个尾随的 ,1；
+       2) GEOMETRIC_REPRESENTATION_CONTEXT 的参数是「维度数」，
+          但必须与 GLOBAL_UNIT_ASSIGNED_CONTEXT 组成复合实体，
+          否则 OCCT 报 "Count of Parameters is not 3" 并使
+          ADVANCED_BREP_SHAPE_REPRESENTATION 无法转移（NbShapes()=0）；
+       3) ADVANCED_BREP_SHAPE_REPRESENTATION 需要 3 个参数
+          (name, (items), context)，原代码把上下文塞进了 items 列表。 */
     var appCtx = N();
-    push('#' + appCtx + " = APPLICATION_CONTEXT('core data for automotive design',1);");
+    push('#' + appCtx + " = APPLICATION_CONTEXT('core data for automotive design');");
     var prodCtx = N();
     push('#' + prodCtx + " = PRODUCT_CONTEXT('mechanical',#" + appCtx + ",'mechanical');");
     var product = N();
@@ -653,10 +926,22 @@
     push('#' + pd + " = PRODUCT_DEFINITION('design','',#" + pdf + ',#' + pdCtx + ');');
     var pds = N();
     push('#' + pds + " = PRODUCT_DEFINITION_SHAPE('','',#" + pd + ');');
-    var grc = N();
-    push('#' + grc + ' = GEOMETRIC_REPRESENTATION_CONTEXT(3);');
+
+    /* 长度单位（mm）与角度单位（rad），显式声明，
+       避免下游按默认单位解释导致 25.4 倍尺度错乱。 */
+    var lu = N();
+    push('#' + lu + " = ( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) );");
+    var au = N();
+    push('#' + au + " = ( NAMED_UNIT(*) PLANE_ANGLE_UNIT() SI_UNIT($,.RADIAN.) );");
+    var su = N();
+    push('#' + su + " = ( NAMED_UNIT(*) SI_UNIT($,.STERADIAN.) SOLID_ANGLE_UNIT() );");
+    var unc = N();
+    push('#' + unc + " = UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-06),#" + lu + ",'distance_accuracy_value','');");
+    var guac = N();
+    push('#' + guac + ' = ( GEOMETRIC_REPRESENTATION_CONTEXT(3) GLOBAL_UNIT_ASSIGNED_CONTEXT((#' + lu + ',#' + au + ',#' + su + ')) REPRESENTATION_CONTEXT(\'3D\',\'3D\') );');
+
     var absr = N();
-    push('#' + absr + " = ADVANCED_BREP_SHAPE_REPRESENTATION('PrismSheet',(#" + brep + ',#' + grc + '));');
+    push('#' + absr + " = ADVANCED_BREP_SHAPE_REPRESENTATION('PrismSheet',(#" + brep + '),#' + guac + ');');
     var sdr = N();
     push('#' + sdr + ' = SHAPE_DEFINITION_REPRESENTATION(#' + pds + ',#' + absr + ');');
 
@@ -1111,7 +1396,7 @@
       vxId[i] = N();
       push('#' + vxId[i] + " = VERTEX_POINT('',#" + ptId[i] + ');');
     }
-    var ecId = [];
+    var ecId = [], lnId = [];
     for (i = 0; i < edges.length; i++) {
       var l = edges[i];
       var dirId = N();
@@ -1120,8 +1405,12 @@
       push('#' + vecId + " = VECTOR('',#" + dirId + ',1.0);');
       var locId = N();
       push('#' + locId + " = CARTESIAN_POINT('',(" + l.origin[0].toFixed(6) + ',' + l.origin[1].toFixed(6) + ',' + l.origin[2].toFixed(6) + '));');
-      var lnId = N();
-      push('#' + lnId + " = LINE('',#" + locId + ',#' + vecId + ');');
+      /* lnId 必须是数组并逐条落位。原实现把它声明为循环内局部 var，
+         却在 EDGE_CURVE 里按索引取 lnId[i]，i>=1 时恒为 undefined，
+         于是导出 #undefined 引用 —— 2448 条 EDGE_CURVE 全部语法错误，
+         壳无法闭合、体积算出 1e+102 的垃圾值。 */
+      lnId[i] = N();
+      push('#' + lnId[i] + " = LINE('',#" + locId + ',#' + vecId + ');');
       ecId[i] = N();
       push('#' + ecId[i] + " = EDGE_CURVE('',#" + vxId[l.a] + ',#' + vxId[l.b] + ',#' + lnId[i] + ',.T.);');
     }
@@ -1158,8 +1447,9 @@
     var brep = N();
     push('#' + brep + " = MANIFOLD_SOLID_BREP('PyramidArray',#" + shell + ');');
 
+    /* 产品结构与单位声明：修法同 buildSTEP，详见该处注释。 */
     var appCtx = N();
-    push('#' + appCtx + " = APPLICATION_CONTEXT('core data for automotive design',1);");
+    push('#' + appCtx + " = APPLICATION_CONTEXT('core data for automotive design');");
     var prodCtx = N();
     push('#' + prodCtx + " = PRODUCT_CONTEXT('mechanical',#" + appCtx + ",'mechanical');");
     var product = N();
@@ -1172,10 +1462,20 @@
     push('#' + pd + " = PRODUCT_DEFINITION('design','',#" + pdf + ',#' + pdCtx + ');');
     var pds = N();
     push('#' + pds + " = PRODUCT_DEFINITION_SHAPE('','',#" + pd + ');');
-    var grc = N();
-    push('#' + grc + ' = GEOMETRIC_REPRESENTATION_CONTEXT(3);');
+
+    var lu2 = N();
+    push('#' + lu2 + " = ( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) );");
+    var au2 = N();
+    push('#' + au2 + " = ( NAMED_UNIT(*) PLANE_ANGLE_UNIT() SI_UNIT($,.RADIAN.) );");
+    var su2 = N();
+    push('#' + su2 + " = ( NAMED_UNIT(*) SI_UNIT($,.STERADIAN.) SOLID_ANGLE_UNIT() );");
+    var unc2 = N();
+    push('#' + unc2 + " = UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-06),#" + lu2 + ",'distance_accuracy_value','');");
+    var guac2 = N();
+    push('#' + guac2 + ' = ( GEOMETRIC_REPRESENTATION_CONTEXT(3) GLOBAL_UNIT_ASSIGNED_CONTEXT((#' + lu2 + ',#' + au2 + ',#' + su2 + ')) REPRESENTATION_CONTEXT(\'3D\',\'3D\') );');
+
     var absr = N();
-    push('#' + absr + " = ADVANCED_BREP_SHAPE_REPRESENTATION('PyramidArray',(#" + brep + ',#' + grc + '));');
+    push('#' + absr + " = ADVANCED_BREP_SHAPE_REPRESENTATION('PyramidArray',(#" + brep + '),#' + guac2 + ');');
     var sdr = N();
     push('#' + sdr + ' = SHAPE_DEFINITION_REPRESENTATION(#' + pds + ',#' + absr + ');');
 
@@ -1193,7 +1493,14 @@
     redraw: function () { drawOnce(); },
     get mode() { return mode; },
     get geo() { return currentGeo; },
-    buildSTEP: function () { return currentGeo ? buildSTEP(currentGeo) : ''; },
+    /* 按当前模式分派：1D 走棱镜肋、2D 走金字塔阵列。
+       原实现恒调 buildSTEP，2D 下会把金字塔几何喂给 1D 生成器并抛
+       TypeError（geo.prof undefined），导出按钮（自带分派）不受影响，
+       但所有通过此 API 的调用方都会拿到空字符串或异常。 */
+    buildSTEP: function () {
+      if (!currentGeo) return '';
+      return (mode === '1d') ? buildSTEP(currentGeo) : buildSTEP2D(currentGeo);
+    },
     buildScripts: function () { return currentGeo ? buildScripts(currentGeo) : null; },
     /* 供无头验证同步驱动 OrbitControls 的阻尼收敛。
        真实浏览器里由 rAF 循环逐帧调 controls.update()；

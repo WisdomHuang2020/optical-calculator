@@ -19,7 +19,8 @@ const SUITES = [
   { name: '棱镜板页 · 依赖/选择器/命名一致性', file: 'prism-check.js' },
   { name: '计算内核 · 光度学数值断言', file: 'verify.js' },
   { name: '参考算例 · 外部文件复核', file: 'verify-user-file.js' },
-  { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' }
+  { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' },
+  { name: 'STEP 导出 · 结构校验 + 内核读回', file: 'step-export.js' }
 ];
 
 const results = [];
