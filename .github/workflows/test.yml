@@ -75,4 +75,16 @@ jobs:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
           REQUIRE_CHROME: '1'
           REQUIRE_OCP: '1'
-        run: node tests/run-all.js
+        # tee 保留完整输出；失败时把 FAIL 行转成 GitHub 注解。
+        # 这一步的意义：Actions 的**日志接口需要认证**（实测未认证返回 403），
+        # 而注解是公开可读的 —— 失败原因因此能直接挂在 check run 上，
+        # 不必再去要日志。本项目之前就在"拿不到日志"上耗了很久。
+        run: |
+          set +e
+          node tests/run-all.js 2>&1 | tee /tmp/run-all.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            node tests/annotate.js /tmp/run-all.log
+            echo "::error::测试未全部通过（退出码 $code）"
+          fi
+          exit $code
