@@ -117,9 +117,77 @@ const INTERACTION_PROBE = [
   '  gi("btn-reset-calc").click();',
   '  r.afterResetR = gi("radius").value;',
   '  r.afterResetEmax = gi("st-emax-v").textContent;',
-  '  var p = document.createElement("pre"); p.id = "__interact";',
-  '  p.textContent = "INTERACT:" + JSON.stringify(r);',
-  '  document.body.appendChild(p);',
+  '',
+  '  // ---- 棱镜板页：切到该 tab 后验证控件真的绑上了 ----',
+  '  // 并入时实际踩到：prism.js 用 .prism-view 作作用域，而视图元素',
+  '  // 的 class 是 "view" —— querySelectorAll 返回 0 个元素，',
+  '  // 所有按钮静默失效，页面看起来却完全正常。必须用真交互验证。',
+  '  var prismTab = document.querySelector(\'.tab[data-tab="prism"]\');',
+  '  r.prismTabExists = !!prismTab;',
+  '  if (prismTab) prismTab.click();',
+  '  r.prismViewActive = gi("view-prism").classList.contains("active");',
+  '  r.threeLoaded = (typeof THREE !== "undefined");',
+  '  r.prismApi = typeof window.Prism;',
+  '  r.prismVol1D = gi("s_vol").textContent;',
+  '  r.prismW1D = gi("s_w").textContent;',
+  '  r.prismCodeLen = gi("codeview").textContent.length;',
+  '  // 画布必须贴合宿主尺寸，不得停在默认 300x150',
+  '  r.prismCanvasW = gi("gl").width;',
+  '  r.prismCanvasH = gi("gl").height;',
+  '  r.prismStageW = document.querySelector(".prism-stage").clientWidth;',
+  '  r.prismStageH = document.querySelector(".prism-stage").clientHeight;',
+  '  // 切二维模式：按钮若未绑定，读数不会变（这正是要抓的缺陷）',
+  '  var b2 = document.querySelector(\'#view-prism .mode-btn[data-mode="2d"]\');',
+  '  r.mode2BtnFound = !!b2;',
+  '  if (b2) b2.click();',
+  '  r.prismW2D = gi("s_w").textContent;',
+  '  r.prismK4_2D = gi("s_k4").textContent;',
+  '  r.prismVol2D = gi("s_vol").textContent;',
+  '  r.params2DShown = gi("params_2d").style.display === "";',
+  '  r.params1DHidden = gi("params_1d").style.display === "none";',
+  '  // 切回一维并复位，供后续断言使用',
+  '  var b1 = document.querySelector(\'#view-prism .mode-btn[data-mode="1d"]\');',
+  '  if (b1) b1.click();',
+  '  r.prismVolBack = gi("s_vol").textContent;',
+  '  // STEP 生成不得抛错（纯前端 AP214 拼装，最容易出现未定义引用）',
+  '  try {',
+  '    r.stepLen = window.Prism.buildSTEP().length;',
+  '  } catch (e) { r.stepLen = -1; r.stepErr = e.message; }',
+  '  // ---- 自动取景：切模式/改尺寸后必须重新拟合 ----',
+  '  // 并入时实际踩到：相机只在首次进入时取景一次，之后切到二维、',
+  '  // 或把板长从 50 改到 120，画面仍停在上一次的距离上（模型溢出或缩成一条），',
+  '  // 而界面上没有任何提示。故这里按"取景签名变化"做回归。',
+  '  function frameSig() {',
+  '    var p = window.Prism.probe();',
+  '    if (!p) return null;',
+  '    return p.modelW + "x" + p.modelH + "/" + p.mode;',
+  '  }',
+  '  var b1x = document.querySelector(\'#view-prism .mode-btn[data-mode="1d"]\');',
+  '  if (b1x) b1x.click();',
+  '  r.frame1D = frameSig();',
+  '  // 同样在 1D 下只改板长，隔离出"尺寸变化"这一个变量。',
+  '  // 注意：参数输入有 120ms 防抖，必须等它落地后再读签名，',
+  '  // 否则读到的是改动前的旧值（这一点最初就踩了，误判成"没重取景"）。',
+  '  var lenEl = gi("p_length");',
+  '  r.lenBefore = lenEl.value;',
+  '  lenEl.value = "120";',
+  '  lenEl.dispatchEvent(new Event("input", { bubbles: true }));',
+  '  setTimeout(function () {',
+  '    r.frame1DLong = frameSig();',
+  '    lenEl.value = r.lenBefore;',
+  '    lenEl.dispatchEvent(new Event("input", { bubbles: true }));',
+  '    setTimeout(function () {',
+  '      if (b2) b2.click();',
+  '      r.frame2D = frameSig();',
+  '      if (b1x) b1x.click();',
+  '      r.probe1D = window.Prism.probe();',
+  '      var calcTab = document.querySelector(\'.tab[data-tab="calc"]\');',
+  '      if (calcTab) calcTab.click();',
+  '      var p = document.createElement("pre"); p.id = "__interact";',
+  '      p.textContent = "INTERACT:" + JSON.stringify(r);',
+  '      document.body.appendChild(p);',
+  '    }, 400);',
+  '  }, 400);',
   '}, 1200);',
   '</' + 'script>'
 ].join('\n');
@@ -219,6 +287,66 @@ if (!im) {
   okTrue('「按半光强光斑填充」按钮已移除', R.spotBtnGone === true);
   ok('点「恢复默认」后 R 回到跟随态', R.afterResetR, '1.033');
   ok('点「恢复默认」后 E_max 复原', R.afterResetEmax, '2,128');
+
+  console.log('\n=== 7. 棱镜板设计页（并入后必须真渲染）===');
+  okTrue('导航含「棱镜板设计」tab', R.prismTabExists === true);
+  okTrue('切 tab 后棱镜视图激活', R.prismViewActive === true);
+  okTrue('three.js 已从本地 vendor 加载', R.threeLoaded === true,
+    '原文件走 CDN，此处必须为本地');
+  ok('window.Prism 接口已暴露', R.prismApi, 'object');
+  // 默认参数：pitch=1, h=0.25, apex=60, t=0.20, r=0.02, N=20, L=50
+  ok('一维板宽 W = N·pitch = 20', R.prismW1D, '20.000 mm');
+  ok('一维体积（圆角后 319.9，无圆角理论值 325.0）', R.prismVol1D, '319.9 mm³');
+  okTrue('生成脚本已渲染', R.prismCodeLen > 500, 'codeview 长度 = ' + R.prismCodeLen);
+  /* 画布必须贴合宿主。原文件在未布局时初始化，实测停在 20px 高；
+     本站历史同类缺陷是停在默认 300×150。两者都要拦住。 */
+  okTrue('3D 画布宽度贴合宿主',
+    R.prismCanvasW > 0 && R.prismCanvasW === R.prismStageW,
+    `canvas=${R.prismCanvasW} stage=${R.prismStageW}`);
+  okTrue('3D 画布高度贴合宿主（非默认 150、非 20）',
+    R.prismCanvasH > 100 && R.prismCanvasH === R.prismStageH,
+    `canvas=${R.prismCanvasH} stage=${R.prismStageH}`);
+
+  console.log('\n=== 8. 棱镜板二维模式切换（控件绑定验证）===');
+  /* 这组断言的意义：若作用域选择器写错（如 .prism-view vs 实际 class="view"），
+     按钮点击不会报错、页面照常显示，只是什么都不发生 —— 只有真点击才抓得到。 */
+  okTrue('二维模式按钮可被选中', R.mode2BtnFound === true,
+    '选择器 #view-prism .mode-btn[data-mode="2d"]');
+  ok('二维板宽（X × Y）', R.prismW2D, '20.000 × 20.000 mm');
+  ok('二维指标标签已切换', R.prismK4_2D, '三角形面数');
+  ok('二维体积 = 基底 80 + 金字塔 33.33', R.prismVol2D, '113.3 mm³');
+  okTrue('切二维后 2D 参数组显示', R.params2DShown === true);
+  okTrue('切二维后 1D 参数组隐藏', R.params1DHidden === true);
+  ok('切回一维后体积复原', R.prismVolBack, '319.9 mm³');
+  okTrue('STEP 生成未抛错且内容完整', R.stepLen > 1000,
+    R.stepErr ? '异常：' + R.stepErr : 'ISO-10303-21 长度 = ' + R.stepLen);
+
+  console.log('\n=== 9. 棱镜板自动取景（切模式/改尺寸后重新拟合）===');
+  /* 这组断言的意义：相机的自动取景曾经只做一次（首次进入时），
+     之后切到二维、或把板长从 50 改成 120，相机都停在上一次的距离上 ——
+     模型要么溢出视口、要么缩成一条细线，且没有任何报错。
+     判据用"取景签名"（模型投影包围盒 + 模式）是否随状态变化。 */
+  okTrue('一维取景签名有效', typeof R.frame1D === 'string' && R.frame1D.length > 0,
+    'signature = ' + R.frame1D);
+  okTrue('切到二维后取景签名改变（证明相机真的重拟合了）',
+    R.frame1D !== R.frame2D,
+    `1d=${R.frame1D}  2d=${R.frame2D}`);
+  okTrue('同样 1D 下板长 50→120 后取景签名改变（隔离尺寸变量）',
+    R.frame1D !== R.frame1DLong,
+    `1d=${R.frame1D}  long=${R.frame1DLong}`);
+  okTrue('取景后模型居中（|水平偏移| ≤ 40px）',
+    R.probe1D && Math.abs(R.probe1D.offX) <= 40,
+    R.probe1D ? `offX=${R.probe1D.offX}px` : 'probe 不可用');
+  okTrue('取景后模型居中（|垂直偏移| ≤ 40px）',
+    R.probe1D && Math.abs(R.probe1D.offY) <= 40,
+    R.probe1D ? `offY=${R.probe1D.offY}px` : 'probe 不可用');
+  okTrue('取景后模型未被裁切（四边余量为正）',
+    R.probe1D && R.probe1D.leftMargin > 0 && R.probe1D.rightMargin > 0 &&
+    R.probe1D.topMargin > 0 && R.probe1D.bottomMargin > 0,
+    R.probe1D ? `边距 L${R.probe1D.leftMargin} R${R.probe1D.rightMargin} T${R.probe1D.topMargin} B${R.probe1D.bottomMargin}` : 'probe 不可用');
+  okTrue('取景后垂直占比合理（≥ 50%，不缩成一小条）',
+    R.probe1D && R.probe1D.fillV >= 0.5,
+    R.probe1D ? `fillV=${(R.probe1D.fillV * 100).toFixed(1)}%` : 'probe 不可用');
 }
 
 console.log(`\n浏览器冒烟：通过 ${pass} 项，失败 ${fail} 项`);

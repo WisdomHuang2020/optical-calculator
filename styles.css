@@ -1,5 +1,5 @@
 /* ============================================================
- * 光学计算工具 — 样式表
+ * 光学概念和光学设计 — 样式表
  * 深色主题（dark）—— 设计语言参照 LLC 设计工具
  *   近黑底 + teal 主色 + amber 强调；Inter / JetBrains Mono；圆角 8/6px
  *
@@ -18,6 +18,11 @@
   --surface-3:   #262626;
   --border:      #333333;
   --border-2:    #4d4d4d;
+
+  /* ---- 3D 画布底色：Three.js 场景背景与二维 3D 视图共用，单一来源 ----
+     原值散落在两处（.canvas-3d 的径向渐变、prism.js 的场景色）。
+     棱镜页并入时统一到此变量，避免两套 3D 底色漂移。 */
+  --bg-3d:       #0a0a0a;
 
   /* ---- 文字（LLC: #f5f5f5 / #a3a3a3 / #737373）---- */
   --text:        #f5f5f5;
@@ -372,9 +377,10 @@ input[type="range"]::-moz-range-thumb {
   background: var(--surface-2); overflow: hidden;
 }
 .canvas-box canvas { display: block; width: 100%; height: 100%; }
-/* 三维画布：深底 + 中心极淡青晕，替代原来的白色径向渐变 */
+/* 三维画布：深底 + 中心极淡青晕，替代原来的白色径向渐变。
+   底色取自 --bg-3d（三处共享：本处、棱镜视口、prism.js 场景背景）。 */
 .canvas-3d { height: 460px; cursor: grab; background:
-  radial-gradient(circle at 50% 45%, #16202a 0%, #11161c 55%, #0d0d0d 100%); }
+  radial-gradient(circle at 50% 45%, #16202a 0%, #11161c 55%, var(--bg-3d) 100%); }
 .canvas-3d.dragging { cursor: grabbing; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 11.5px; color: var(--text-2); }
@@ -539,4 +545,144 @@ ul.tight li { margin-bottom: 5px; }
   .deriv code, .steps .f { background: #f5f5f5 !important; color: #000 !important; }
   .canvas-3d { background: #fff !important; }
   a { color: #000 !important; text-decoration: none !important; }
+}
+
+/* ============================================================
+ * styles.css —— 棱镜板设计（并入自 MLA_Prism.html）
+ *
+ * 并入原则：不引入新的语义色。原文件自带一套独立色板
+ * （--bg:#0e1116 / --accent:#4ea1ff 等），与本站 --bg:#0a0a0a /
+ * --primary:#14b8a6 不同源 —— 同一语义写两处必然漂移。
+ * 这里全部改用本站既有变量，仅在确实需要新语义时补 --c-* 并
+ * 在 tests/theme-check.js 中登记。
+ * ============================================================ */
+
+/* ---- 视图容器：与原 .solid-layout 同构，左参右视口 ---- */
+.prism-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 1080px) { .prism-layout { grid-template-columns: 1fr; } }
+
+/* ---- 模式切换（一维 / 二维）---- */
+.mode-switch { display: flex; gap: 6px; margin-bottom: 14px; }
+.mode-btn {
+  flex: 1; padding: 7px 4px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-2); font-size: 12.5px; cursor: pointer;
+  font-family: inherit; font-weight: 500;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.mode-btn:hover { border-color: var(--border-2); color: var(--text); }
+.mode-btn.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+/* ---- 3D 视口 ----
+   .prism-stage 必须有确定高度：原文件在容器尚未布局时初始化
+   WebGLRenderer，实测画布高度停在 20px（与本站历史上
+   "Canvas 停在 300×150" 同类）。给死高度 + resize 双保险。 */
+.prism-stage {
+  position: relative;
+  width: 100%;
+  height: 520px;
+  background: var(--bg);
+  overflow: hidden;
+}
+@media (max-width: 1080px) { .prism-stage { height: 420px; } }
+#gl { width: 100%; height: 100%; display: block; }
+
+.prism-overlay {
+  position: absolute; left: 14px; top: 12px;
+  color: var(--text-3); font-size: 11.5px;
+  background: var(--surface-2); opacity: .92;
+  padding: 5px 9px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+.prism-tools { position: absolute; right: 14px; top: 12px; display: flex; gap: 6px; }
+.prism-tools button {
+  background: var(--surface-3); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 11.5px; font-family: inherit;
+  transition: border-color .15s, color .15s;
+}
+.prism-tools button:hover { border-color: var(--primary); color: var(--primary-ink); }
+
+/* ---- 参数字段 ---- */
+.prism-layout .field {
+  display: grid; grid-template-columns: 1fr 96px;
+  align-items: center; gap: 8px; margin-bottom: 9px;
+}
+.prism-layout .field label { font-size: 12.5px; color: var(--text-2); }
+.prism-layout .field input {
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); padding: 6px 8px; border-radius: var(--radius-sm);
+  font-size: 12.5px; width: 100%; font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.prism-layout .field input:focus { outline: none; border-color: var(--primary); }
+
+/* ---- 几何量读数 ---- */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.stat-grid .kv {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 7px 9px;
+}
+.stat-grid .k { color: var(--text-3); font-size: 10.5px; line-height: 1.35; }
+.stat-grid .v {
+  font-size: 12.5px; font-weight: 600; color: var(--text);
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+}
+
+/* ---- 警告框 ---- */
+.warn-box {
+  background: var(--amber-soft); border: 1px solid var(--amber);
+  color: var(--amber-ink); padding: 8px 10px;
+  border-radius: var(--radius-sm); font-size: 11.5px;
+  margin-top: 10px; line-height: 1.5;
+}
+
+/* ---- 按钮 ---- */
+.prism-layout .btn { width: 100%; margin-top: 8px; }
+
+/* ---- 代码区 ---- */
+.prism-codebar { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.prism-codebar .head {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.prism-codebar .head .tab {
+  padding: 5px 11px; border-radius: var(--radius-sm);
+  cursor: pointer; color: var(--text-3); font-size: 12px;
+  font-family: var(--mono); border: 1px solid transparent;
+}
+.prism-codebar .head .tab.active {
+  background: var(--surface-3); color: var(--primary-ink);
+  border-color: var(--border);
+}
+.prism-codebar .head .sp { flex: 1; }
+.prism-codebar .head button {
+  background: transparent; border: 1px solid var(--border); color: var(--text-2);
+  padding: 4px 10px; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 11.5px; font-family: inherit;
+  transition: border-color .15s, color .15s;
+}
+.prism-codebar .head button:hover { border-color: var(--primary); color: var(--primary-ink); }
+.prism-codebar pre {
+  margin: 0; padding: 12px 14px; max-height: 320px; overflow: auto;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.6;
+  color: var(--text-2); background: var(--surface);
+  white-space: pre;
+}
+
+/* ---- 打印 ---- */
+@media print {
+  .prism-stage { height: 340px; }
+  .prism-codebar pre { max-height: none; }
 }

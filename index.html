@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>光学计算工具 · 照度计算与立体角可视化</title>
+<title>光学概念和光学设计 · 照度计算 / 立体角 / 棱镜板</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
@@ -15,14 +15,15 @@
   <div class="brand">
     <span class="logo">◐</span>
     <div>
-      <h1>光学计算工具</h1>
-      <p>照度推算 · 立体角可视化</p>
+      <h1>光学概念和光学设计</h1>
+      <p>照度推算 · 立体角 · 棱镜板参数化设计</p>
     </div>
   </div>
   <nav class="tabs">
     <button class="tab active" data-tab="calc">照度计算</button>
     <button class="tab" data-tab="solid">立体角可视化</button>
     <button class="tab" data-tab="theory">公式与推导</button>
+    <button class="tab" data-tab="prism">棱镜板设计</button>
   </nav>
   <span class="ver app-version">v—</span>
 </header>
@@ -749,16 +750,111 @@
     </div>
   </div>
 
+<!-- ============================================================
+     视图 4 —— 棱镜板设计
+     由 MLA_Prism.html 并入。Three.js 与 OrbitControls 已本地化到
+     js/vendor-*.js（原文件走 CDN，离线/被墙时白屏）。
+     画布高度约束在 .prism-stage，避免原文件"容器未布局就初始化
+     WebGL"导致画布停在 20px 高的问题。
+============================================================ -->
+<div class="view" id="view-prism">
+  <div class="prism-layout">
+
+    <!-- 左：参数 -->
+    <div>
+      <div class="card">
+        <div class="mode-switch">
+          <button class="mode-btn active" data-mode="1d">一维棱镜（肋）</button>
+          <button class="mode-btn" data-mode="2d">二维棱镜（金字塔）</button>
+        </div>
+
+        <h2><span class="num">1</span>阵列参数 <span class="unit">mm</span></h2>
+
+        <div id="params_1d">
+          <div class="field"><label>pitch 齿距</label><input id="p_pitch" type="number" step="0.01" value="1.0"></div>
+          <div class="field"><label>height 齿高</label><input id="p_height" type="number" step="0.01" value="0.25"></div>
+          <div class="field"><label>apex angle 顶角 <span class="unit">°</span></label><input id="p_angle" type="number" step="0.5" value="60"></div>
+          <div class="field"><label>base thickness 基底厚</label><input id="p_base" type="number" step="0.01" value="0.20"></div>
+          <div class="field"><label>radius 圆角</label><input id="p_radius" type="number" step="0.005" value="0.02"></div>
+          <div class="field"><label>teeth 齿数 N</label><input id="p_teeth" type="number" step="1" min="1" value="20"></div>
+          <div class="field"><label>length 板长 <span class="unit">拉伸向</span></label><input id="p_length" type="number" step="1" value="50"></div>
+        </div>
+
+        <div id="params_2d" style="display:none">
+          <div class="field"><label>pitch 齿距 <span class="unit">X/Y</span></label><input id="p2_pitch" type="number" step="0.01" value="1.0"></div>
+          <div class="field"><label>height 金字塔高</label><input id="p2_height" type="number" step="0.01" value="0.25"></div>
+          <div class="field"><label>apex angle 斜面倾角 <span class="unit">°</span></label><input id="p2_angle" type="number" step="0.5" value="45"></div>
+          <div class="field"><label>base thickness 基底厚</label><input id="p2_base" type="number" step="0.01" value="0.20"></div>
+          <div class="field"><label>columns X 列数</label><input id="p2_nx" type="number" step="1" min="1" value="20"></div>
+          <div class="field"><label>rows Y 行数</label><input id="p2_ny" type="number" step="1" min="1" value="20"></div>
+        </div>
+
+        <div class="warn-box" id="prism-warn" style="display:none"></div>
+
+        <h2><span class="num">2</span>几何量</h2>
+        <div class="stat-grid">
+          <div class="kv"><div class="k" id="s_k1">板宽 W = N·pitch</div><div class="v" id="s_w">-</div></div>
+          <div class="kv"><div class="k" id="s_k2">总高 H = t+h</div><div class="v" id="s_h">-</div></div>
+          <div class="kv"><div class="k" id="s_k3">半底宽 h/tan(α)</div><div class="v" id="s_half">-</div></div>
+          <div class="kv"><div class="k" id="s_k4">面/边数</div><div class="v" id="s_beta">-</div></div>
+          <div class="kv"><div class="k" id="s_k5">网格点</div><div class="v" id="s_v">-</div></div>
+          <div class="kv"><div class="k">体积 <span class="unit">mm³</span></div><div class="v" id="s_vol">-</div></div>
+        </div>
+
+        <h2><span class="num">3</span>导出</h2>
+        <button class="btn solid" id="btn_step">下载 STEP (.step)</button>
+        <button class="btn" id="btn_build123d">下载 build123d 脚本 (.py)</button>
+        <button class="btn" id="btn_cq">下载 CADQuery 脚本 (.py)</button>
+        <button class="btn" id="btn_stl">预览用 STL (.stl)</button>
+      </div>
+    </div>
+
+    <!-- 右：3D 视口 -->
+    <div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="prism-stage">
+          <canvas id="gl"></canvas>
+          <div class="prism-overlay">拖动旋转 · 滚轮缩放 · 右键平移</div>
+          <div class="prism-tools">
+            <button id="btn_reset">复位视角</button>
+            <button id="btn_defaults">重置参数</button>
+            <button id="btn_xray">半透明</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="num">§</span>生成脚本</h2>
+        <div class="prism-codebar">
+          <div class="head">
+            <span class="tab active" data-lang="build123d">build123d.py</span>
+            <span class="tab" data-lang="cq">cadquery.py</span>
+            <span class="sp"></span>
+            <button id="btn_copy">复制代码</button>
+          </div>
+          <pre id="codeview"></pre>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--text-3)">
+          脚本与 STEP 由同一套参数生成，可直接在 Python 环境（<code style="font-family:var(--mono)">pip install build123d</code>
+          或 <code style="font-family:var(--mono)">pip install cadquery</code>）中重跑以复现模型。
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 </div>
 
 <div class="footer">
   <div>
-    光学计算工具 <b class="app-version">v—</b> —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
+    光学概念和光学设计 <b class="app-version">v—</b> —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
     E = I·cosγ/d²），cosⁿ 配光为解析近似，非实测配光文件。
   </div>
   <div>
     计算核心见 <code>js/optics.js</code>，可脱离页面单独复核；
-    三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法，无外部依赖）。
+    立体角三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法）；
+    棱镜板三维预览见 <code>js/prism.js</code>（Three.js 已本地化到 <code>js/vendor-*.js</code>）。
   </div>
   <div>
     本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
@@ -771,6 +867,9 @@
 <script src="js/charts.js"></script>
 <script src="js/solidangle.js"></script>
 <script src="js/planar.js"></script>
+<script src="js/vendor-three.min.js"></script>
+<script src="js/vendor-orbitcontrols.js"></script>
+<script src="js/prism.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

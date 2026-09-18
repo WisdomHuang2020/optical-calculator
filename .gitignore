@@ -3,7 +3,10 @@ _site/
 
 # 本地诊断产物（无头浏览器探针、临时目录）
 __probe.html
+__probe*.js
+__index_probe.html
 .ck/
+.ck*/
 .tmpcheck/
 
 # 依赖

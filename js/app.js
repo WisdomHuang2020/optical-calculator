@@ -495,6 +495,13 @@
     t.classList.add('active');
     var v = $('view-' + name);
     if (v) v.classList.add('active');
+    if (name === 'prism' && window.Prism) {
+      // 棱镜视图的 WebGL 必须在容器可见且有尺寸后再初始化：
+      // 首次进入时 init()，之后只是 resize + 重绘。
+      // 原 MLA_Prism.html 在容器未布局时初始化，实测画布高度停在 20px。
+      window.Prism.init();
+      window.Prism.resize();
+    }
     if (name === 'solid' && viz) {
       // 同步重绘，不只依赖 rAF（rAF 在后台标签/无头环境会被节流，
       // 会出现切回立体角页却看到空白画布）
@@ -520,7 +527,7 @@
   /** 支持深链：#calc / #solid / #theory */
   function applyHash() {
     var h = String(location.hash || '').replace(/^#/, '');
-    if (h === 'calc' || h === 'solid' || h === 'theory') activateTab(h);
+    if (h === 'calc' || h === 'solid' || h === 'theory' || h === 'prism') activateTab(h);
   }
 
   /* =========================================================
@@ -547,6 +554,7 @@
       clearTimeout(rt);
       rt = setTimeout(function () {
         recompute();
+        if (window.Prism) window.Prism.resize();
       }, 160);
     });
     window.addEventListener('hashchange', applyHash);
