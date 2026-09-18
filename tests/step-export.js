@@ -189,6 +189,24 @@ const f2 = path.join(outDir, 'prism2d.step');
 fs.writeFileSync(f1, s1.replace(/\r\n/g, '\n'), 'utf8');
 fs.writeFileSync(f2, s2.replace(/\r\n/g, '\n'), 'utf8');
 
+/* 落盘后立刻回读确认字节数 —— 免得后面把"文件没写成功"误判成"内核读不进"。
+   同时打印头尾各一小段：若文件被截断或编码异常，一眼可见。 */
+for (const [lbl, fp] of [['1D', f1], ['2D', f2]]) {
+  const st = fs.statSync(fp);
+  const txt = fs.readFileSync(fp, 'utf8');
+  const headOk = txt.startsWith('ISO-10303-21;');
+  const tailOk = /END-ISO-10303-21;\s*$/.test(txt);
+  if (!headOk || !tailOk) {
+    console.error('✘ ' + lbl + ' STEP 落盘异常：' + st.size + ' 字节'
+      + '，首行合法=' + headOk + ' 尾行合法=' + tailOk);
+    console.error('   实际开头: ' + JSON.stringify(txt.slice(0, 60)));
+    console.error('   实际结尾: ' + JSON.stringify(txt.slice(-60)));
+    cleanup();
+    process.exit(1);
+  }
+  console.log('落盘 ' + lbl + ' STEP：' + st.size + ' 字节（首尾合法）');
+}
+
 /* ============================================================
  * ② 零依赖结构校验（Python）
  * ============================================================ */
@@ -242,46 +260,62 @@ if (!pyocp) {
   }
 } else {
   console.log('OCP    : ' + pyocp + '  （来源：' + ocpRes.source + '）');
+  /* 整个脚本体包在 try/except 里，**把完整 traceback 打到 stdout**。
+     理由：Node 侧捕获子进程失败时，stderr 的处理在各平台/各 Python 下
+     不完全一致（本项目实测 CI 上只拿到一行 "Traceback (most recent call last):"，
+     最关键的异常类型与行号全丢）。让脚本自己把 traceback 打到 stdout，
+     就绕开了这层不确定性 —— 异常信息一定跟 JSON 输出走同一条通道。 */
   const OCP_SCRIPT = `
-import sys, json, math
-from OCP.STEPControl import STEPControl_Reader
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID, TopAbs_EDGE, TopAbs_VERTEX
-from OCP.TopoDS import TopoDS
-from OCP.BRepAdaptor import BRepAdaptor_Surface
-from OCP.GeomAbs import GeomAbs_SurfaceType
-from OCP.BRepGProp import BRepGProp
-from OCP.GProp import GProp_GProps
-from OCP.BRepCheck import BRepCheck_Analyzer
+import sys, json, math, traceback
 
-r = STEPControl_Reader()
-st = r.ReadFile(sys.argv[1])
-tr = r.TransferRoots()
-n = r.NbShapes()
-sh = r.OneShape()
-def cnt(t):
-    e = TopExp_Explorer(sh, t); c = 0
-    while e.More(): c += 1; e.Next()
-    return c
-g = GProp_GProps()
-BRepGProp.VolumeProperties_s(sh, g)
-rad = {}
-acc = TopExp_Explorer(sh, TopAbs_FACE)
-while acc.More():
-    f = TopoDS.Face_s(acc.Current())
-    ad = BRepAdaptor_Surface(f)
-    if ad.GetType() == GeomAbs_SurfaceType.GeomAbs_Cylinder:
-        k = round(ad.Cylinder().Radius(), 6)
-        rad[k] = rad.get(k, 0) + 1
-    acc.Next()
-print(json.dumps({
-  'status': str(st), 'transfer': tr, 'nshapes': n,
-  'null': bool(sh.IsNull()),
-  'solid': cnt(TopAbs_SOLID), 'face': cnt(TopAbs_FACE),
-  'edge': cnt(TopAbs_EDGE), 'vertex': cnt(TopAbs_VERTEX),
-  'volume': g.Mass(), 'valid': bool(BRepCheck_Analyzer(sh).IsValid()),
-  'cyl': {str(k): v for k, v in rad.items()}
-}))
+try:
+    from OCP.STEPControl import STEPControl_Reader
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID, TopAbs_EDGE, TopAbs_VERTEX
+    from OCP.TopoDS import TopoDS
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    print('OCP_PY=' + sys.version.replace(chr(10), ' '))
+    print('OCP_ARGV=' + repr(sys.argv[1]))
+
+    r = STEPControl_Reader()
+    st = r.ReadFile(sys.argv[1])
+    tr = r.TransferRoots()
+    n = r.NbShapes()
+    sh = r.OneShape()
+
+    def cnt(t):
+        e = TopExp_Explorer(sh, t); c = 0
+        while e.More(): c += 1; e.Next()
+        return c
+
+    g = GProp_GProps()
+    BRepGProp.VolumeProperties_s(sh, g)
+    rad = {}
+    acc = TopExp_Explorer(sh, TopAbs_FACE)
+    while acc.More():
+        f = TopoDS.Face_s(acc.Current())
+        ad = BRepAdaptor_Surface(f)
+        if ad.GetType() == GeomAbs_SurfaceType.GeomAbs_Cylinder:
+            k = round(ad.Cylinder().Radius(), 6)
+            rad[k] = rad.get(k, 0) + 1
+        acc.Next()
+    print('OCP_JSON=' + json.dumps({
+      'status': str(st), 'transfer': tr, 'nshapes': n,
+      'null': bool(sh.IsNull()),
+      'solid': cnt(TopAbs_SOLID), 'face': cnt(TopAbs_FACE),
+      'edge': cnt(TopAbs_EDGE), 'vertex': cnt(TopAbs_VERTEX),
+      'volume': g.Mass(), 'valid': bool(BRepCheck_Analyzer(sh).IsValid()),
+      'cyl': {str(k): v for k, v in rad.items()}
+    }))
+except Exception:
+    traceback.print_exc()
+    print('OCP_EXC=' + json.dumps({'kind': 'PY_EXC', 'detail': traceback.format_exc()}))
+    sys.exit(3)
 `;
   const pyScript = path.join(outDir, 'occ.py');
   fs.writeFileSync(pyScript, OCP_SCRIPT);
@@ -292,35 +326,41 @@ print(json.dumps({
       out = execFileSync(pyocp, [pyScript, f],
         { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (e) {
-      /* OCP 解析失败时可能直接 abort（Windows 退出码 0xC0000409），
-         stdout 里会留下 "ERR StepFile" 行 —— 把它带出来，别吞掉。
-         行数放宽到 8：OCCT 的报错常常前几行只是环境警告，
-         真正的语法位置在后面。 */
+      /* 这里必须把子进程的报错**完整**带出来。
+         踩过两次教训：
+           ① 原来 stdio 的 stderr 是 'ignore'、catch 里只打 e.message，
+              真正的病因全被吞掉；
+           ② 改成只打前 8 行之后，Python 的 traceback 正文仍被截断，
+              只剩一行 "Traceback (most recent call last):" ——
+              最关键的异常类型与行号恰好丢在截断之后。
+         现在：非零退出时把 stdout+stderr 全文打印（上限 40 行，够放完 traceback），
+         并明确区分「Python 抛异常」（status 非 0、有 traceback）与
+         「进程直接崩」（无输出、signal 非空或 Windows 的 0xC0000409）。 */
       const so = String(e.stdout || '') + String(e.stderr || '');
-      const lines = so.split('\n').map(s => s.trim()).filter(Boolean);
+      const lines = so.split('\n').map(s => s.trimEnd()).filter(Boolean);
+      const isTraceback = /Traceback \(most recent call last\)/.test(so);
       console.log('  [OCP 异常] status=' + e.status + ' signal=' + e.signal
-        + ' 文件=' + path.basename(f) + ' 解释器=' + pyocp);
+        + ' 文件=' + path.basename(f) + ' 解释器=' + pyocp
+        + (isTraceback ? ' 类型=Python 异常（非崩溃）' : ' 类型=进程异常退出'));
       if (lines.length) {
-        console.log('    ' + lines.slice(0, 8).join('\n    '));
+        console.log('    ' + lines.slice(0, 40).join('\n    '));
       } else {
-        /* 无任何输出 + 非零退出 = 进程在 import/启动阶段就死了
-           （Linux 上是段错误，Windows 上是 0xC0000409 abort）。
-           把这一事实明确说出来，不要留一串 -1 让人猜。 */
         console.log('    （子进程无任何输出即退出 —— 内核绑定很可能在导入阶段就崩溃；'
           + '若为 cadquery-ocp 在较新 CPython 上的 ABI 不匹配，改用 3.11/3.12 重装可解）');
       }
       return { transfer: -1, nshapes: -1, solid: -1, valid: false, volume: NaN, cyl: {},
                _crash: true };
     }
-    const line = out.split('\n').filter(l => l.trim().startsWith('{')).pop();
+    const line = out.split('\n').map(l => l.trim())
+      .filter(l => l.startsWith('OCP_JSON=') || l.startsWith('{')).pop();
     if (!line) {
-      const lines = String(out).split('\n').map(s => s.trim()).filter(Boolean);
+      const lines = String(out).split('\n').map(s => s.trimEnd()).filter(Boolean);
       console.log('  [OCP 无输出] 文件=' + path.basename(f) + '，原始输出 ' + lines.length + ' 行');
-      if (lines.length) console.log('    ' + lines.slice(0, 8).join('\n    '));
+      if (lines.length) console.log('    ' + lines.slice(0, 20).join('\n    '));
       return { transfer: -1, nshapes: -1, solid: -1, valid: false, volume: NaN, cyl: {},
                _crash: true };
     }
-    return JSON.parse(line);
+    return JSON.parse(line.startsWith('OCP_JSON=') ? line.slice('OCP_JSON='.length) : line);
   }
 
   /* --- 1D --- */

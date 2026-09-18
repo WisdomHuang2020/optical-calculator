@@ -61,12 +61,19 @@ for (let i = 0; i < lines.length; i++) {
 
 /* 诊断上下文：这类行的信息量常常比 FAIL 本身更大 ——
    [OCP 异常] 会带出内核子进程的真实报错与退出码，
-   没有它就只能看到一串 -1 / NaN 哨兵值（本轮实际如此）。 */
+   没有它就只能看到一串 -1 / NaN 哨兵值（本轮实际如此）。
+   注意：必须把**紧随其后的缩进行**（Python traceback 的正文）一并收进来，
+   否则只留一行 "Traceback (most recent call last):"，
+   最关键的异常类型与行号全被丢掉 —— 本轮实际就丢过一次。 */
 const diag = [];
 for (let i = 0; i < lines.length; i++) {
-  if (/^\s*\[OCP/.test(lines[i]) || /^\s{4}/.test(lines[i]) && diag.length
-      && /^\s*\[OCP/.test(lines[Math.max(0, i - 1)] || '')) {
+  if (/^\s*\[OCP/.test(lines[i])) {
     diag.push(lines[i].trim());
+    /* 收拢后续的缩进续行（traceback 正文），最多 12 行 */
+    for (let j = i + 1; j < lines.length && j <= i + 12; j++) {
+      if (/^\s+\S/.test(lines[j])) diag.push(lines[j].trim());
+      else break;
+    }
   }
 }
 /* 套件标题也带上，便于判断失败落在哪个阶段 */
