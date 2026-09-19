@@ -24,6 +24,8 @@
     <button class="tab" data-tab="solid">立体角可视化</button>
     <button class="tab" data-tab="theory">公式与推导</button>
     <button class="tab" data-tab="prism">棱镜板设计</button>
+    <button class="tab" data-tab="know">棱镜原理</button>
+    <button class="tab" data-tab="mats">材料与参考</button>
   </nav>
   <span class="ver app-version">v—</span>
 </header>
@@ -921,6 +923,223 @@
     本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
     灯具 IES 文件复核。数值仅供参考，不构成设计依据。
   </div>
+<!-- ===== 第 5 个页面 · 棱镜原理（概览 + 光学原理）===== -->
+<div class="view kn" id="view-know">
+  <!-- ===== 页 0 · 概览（知识） ===== -->
+  <header class="hero">
+    <div class="wrap">
+      <div class="grid">
+        <div>
+          <div class="kicker">Prism Sheet Engineering<small> · 光学设计与参数化建模</small></div>
+          <h1>一维与二维<span class="thin">棱镜板</span><br>参数化设计与导出</h1>
+          <p class="sub">面向背光模组（BEF）与导光微结构设计：<strong>从光学原理到几何建模</strong>，覆盖棱柱阵列（一维）与金字塔阵列（二维），内置参数校验、三维预览与 <strong>STEP / build123d / CADQuery / STL</strong> 导出。</p>
+          <div class="stats">
+            <div class="statcard"><div class="v">90<small>°</small></div><div class="k">BEF 经典顶角（BEF II / III 90-50）<span class="num"> [2][3]</span></div></div>
+            <div class="statcard"><div class="v">50<small>μm</small></div><div class="k">BEF II 90/50 标称齿距<span class="num"> [3]</span></div></div>
+            <div class="statcard"><div class="v">20–50<small>μm</small></div><div class="k">微结构齿高常见范围<span class="num"> [2][5]</span></div></div>
+            <div class="statcard"><div class="v">≈46<small>%</small></div><div class="k">全反射回收光线占比（三维追迹）<span class="num"> [7]</span></div></div>
+          </div>
+          <p class="heronote">
+            <b>口径与来源说明：</b>规格数值取自公开论文与经销商页面，3M 官方一手数据表在本环境未能取得，故不作为权威值使用（详见「参考资料」页逐条核查标注）。<br>
+            <b>≈46% 的准确口径</b>：三维严格追迹（周期表面蒙特卡洛，30 万条光线）在 90° 顶角、n≈1.49、无谷最密排、朗伯输入下，首次入射即发生全反射的光线占比 ≈46.3%；文献 [7] 原文的 46.3% 语境为<b>两层正交棱镜膜</b>背光方案的整体原理描述，并非单层专属值。<b>本页下方「光线扇形图」是二维截面模型（面外分量为 0），其全反射占比只有约 0.5%</b>，不能用它来读这个 46%。
+          </p>
+        </div>
+        <div class="demo">
+          <div class="head">
+            <span class="dot"></span><span>准直原理演示 · 实时光线追迹</span><span class="sp"></span><span class="tag">α · n · 入射角</span>
+          </div>
+          <canvas id="heroCv" width="720" height="420" role="img" aria-label="准直原理演示：光线经棱镜斜面折射准直与全反射回收的实时光线追迹"></canvas>
+          <div class="ctrl">
+            <label>顶角 α <input type="range" id="hero_alpha" min="60" max="110" step="1" value="90"><output id="hero_alpha_v">90°</output></label>
+            <label>折射率 n <input type="range" id="hero_n" min="1.40" max="1.70" step="0.01" value="1.49"><output id="hero_n_v">1.49</output></label>
+            <label>入射角 θ_in <input type="range" id="hero_theta" min="-45" max="45" step="1" value="0"><output id="hero_theta_v">0°</output></label>
+          </div>
+          <div class="note">
+            <span class="legend"><span><i style="background:var(--c-ray-refract)"></i>折射出射（折向法线）</span><span><i style="background:var(--c-ray-tir)"></i>全反射 / 回收</span><span><i style="background:var(--c-ray-blocked)"></i>超出材料内可达域（灰色）</span></span>
+            <div style="margin-top:4px">θ_in 为<b>材料内部角</b>（相对板面法线 +z，图中朝上为出光侧），正值偏向右侧斜面；朗伯光从空气进入平板后内部角不可能超过 θ<sub>c</sub>=arcsin(1/n)，超出部分画成灰色虚线。滑块为中心角，演示按中心角 ±24° 展开成扇形。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== 页 1 · 光学原理（知识） ===== -->
+  <section id="s-principle">
+    <div class="wrap">
+      <div class="kicker"><span>01</span><span class="en">Optical Principles</span></div>
+      <h2 class="sec">增亮与准直：光线如何被棱镜板“收拢”</h2>
+      <p class="lead">背光模组中扩散片出射的是近似朗伯分布的漫射光。棱镜板用一排排微棱镜，通过<strong>折射</strong>把大角度光线折向法线方向（准直），通过<strong>全反射</strong>把无法出射的光线送回背光腔回收再利用——法线方向的亮度因此显著提升。</p>
+
+      <div class="cols">
+        <div>
+          <h3>两类工作方式</h3>
+          <ul class="pt-list">
+            <li><strong>折射型（棱向上）</strong>：光线自平面侧入射，在棱镜斜面发生折射后出射，出射方向被压向法线，形成“垂直增亮”。<span class="hint">（本页工具按棱向上建模。）</span></li>
+            <li><strong>棱向下布置</strong>：棱镜面朝向导光板时，斜面先对大角度光全反射改向再折回。<span class="hint">注：这不是背光行业的公认分类术语，公开资料中也无统一判据；实际产品以棱向上为主，本页不做该形态的建模。</span></li>
+            <li><strong>回收机制（light recycling）</strong>：超过临界角的光线在斜面全反射回背光腔，经底部反射片二次反射后重新入射，多次利用提高总效率。</li>
+            <li><strong>双层正交</strong>：两片棱镜膜以 90° 交叉叠放，分别收拢 X / Y 两个方向的光，增益进一步叠加。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>两个基本定律</h3>
+          <div class="formulas" style="grid-template-columns:1fr;margin:0">
+            <div class="formula">
+              <div class="f-name">斯涅尔定律（折射）</div>
+              <div class="f-expr">n₁ sin θ₁ = n₂ sin θ₂</div>
+              <div class="f-note">θ₁ / θ₂ 为光线与界面法线的夹角；由光密介质进入光疏介质时，出射角增大。注：本页滑块/坐标轴中的 θ_in 指光线与板面法线 +z 的夹角，与界面法线夹角不同。</div>
+            </div>
+            <div class="formula">
+              <div class="f-name">全反射临界角</div>
+              <div class="f-expr">θ<sub>c</sub> = arcsin(n₂ / n₁)&nbsp;&nbsp;（n₂ &lt; n₁）</div>
+              <div class="f-note">入射角 &gt; θ<sub>c</sub> 时界面发生全反射。PMMA(n≈1.49)：θ<sub>c</sub>≈42.2°；PC(n≈1.59)：θ<sub>c</sub>≈39.1°。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo2">
+        <div>
+          <div class="panel" style="padding:16px">
+            <div class="p-head"><h3>单棱镜光线追迹</h3><span class="sub">等腰三角形齿截面 · 光自下方背光腔射入 · θ_in 为<b>材料内部角</b>，相对板面法线 +z（图中朝上＝出光侧），正值为偏向右侧</span></div>
+            <canvas id="rayCv" width="520" height="360" role="img" aria-label="单棱镜光线追迹演示：等腰三角形齿截面上的矢量光线追迹"></canvas>
+            <div class="sliders" style="margin-top:12px">
+              <div class="sl"><label>顶角 α</label><input type="range" id="ray_alpha" min="40" max="160" step="1" value="90"><output id="ray_alpha_v">90°</output></div>
+              <div class="sl"><label>折射率 n</label><input type="range" id="ray_n" min="1.40" max="1.70" step="0.01" value="1.49"><output id="ray_n_v">1.49</output></div>
+              <div class="sl"><label>入射角 θ_in</label><input type="range" id="ray_theta" min="-60" max="60" step="1" value="-20"><output id="ray_theta_v">-20°</output></div>
+              <div class="sl"><label>入射位置</label><input type="range" id="ray_x" min="5" max="45" step="1" value="22"><output id="ray_x_v">22%</output></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="p-head"><h3>光线扇形图：一束光经过棱镜后去哪了</h3><span class="sub">每个方向入射一条光（材料内部角，物理可达范围 ±θ<sub>c</sub>），追踪它经过棱镜后的真实去向 · <b>二维截面模型</b></span></div>
+          <canvas id="fanCv" width="520" height="340" style="width:100%;height:340px;display:block;border-radius:10px" role="img" aria-label="光线扇形图：不同角度入射光经过棱镜后的折射出射与全反射回收去向"></canvas>
+          <div class="chartnote" style="margin:8px 4px 10px;font-size:11px;line-height:1.7">
+            <b style="color:var(--c-ray-refract)">青色</b>＝向上折射出射、贡献正面增亮；<b style="color:var(--c-ray-tir)">琥珀色</b>＝全反射后回到背光腔被回收（由底部反射片再次利用）；<b style="color:var(--c-ray-graze)">红色</b>＝<b>向下掠射出射（损失）</b>——它确实折射出了界面，但方向朝下，属于损失而非回收；<b style="color:var(--c-ray-active)">高亮白线</b>＝左侧滑块当前角度。<br>
+            <b style="color:var(--c-ray-tir)">重要口径</b>：本图是<b>二维截面模型</b>（强迫面外分量为 0）。二维下“首遇斜面即全反射”只取决于内部角 |θ| ≤ 45° − θ<sub>c</sub> ≈ 2.85°（n=1.49），因此该通道按通量权重仅约 <b>0.5%</b>——远低于真实三维的 ≈46%。<b>请不要用本图去读首屏的 46%。</b><br>
+            角度轴只画到 ±θ<sub>c</sub>：朗伯光从空气经平板折射进入材料后，内部角不可能超过临界角（θ<sub>c</sub>=arcsin(1/n)），超出部分物理上不存在。可见中等角度的光被压向法线方向出射（收拢准直），这就是棱镜板增亮的原理。本图入射点固定取齿斜面中点的典型位置，不随左侧「入射位置」滑块变化。
+          </div>
+          <div class="readout" id="ray_ro">
+            <div class="ro"><div class="k">临界角 θc</div><div class="v" id="ro_crit">—</div></div>
+            <div class="ro"><div class="k">首界面入射角 φ（相对斜面法线）</div><div class="v" id="ro_phi">—</div></div>
+            <div class="ro"><div class="k">首界面 n·sin φ</div><div class="v" id="ro_ns">—</div></div>
+            <div class="ro"><div class="k">出射角 θ_out（相对板面法线）</div><div class="v" id="ro_out">—</div></div>
+            <div class="ro"><div class="k">全反射次数</div><div class="v" id="ro_bnc">—</div></div>
+            <div class="ro"><div class="k">路径结论</div><div class="v" id="ro_status">—</div></div>
+          </div>
+          <div class="srcnote">读数口径：φ 与 n·sinφ 取<b>第一次命中斜面</b>时的值（决定该光线是否发生全反射）；此前的版本取的是最后一次界面，会把“先全反射、后折射出射”的光线误读成亚临界的直接出射。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ===== 第 6 个页面 · 材料与参考（设计要点与材料 + 参考资料）===== -->
+<div class="view kn" id="view-mats">
+  <!-- ===== 页 4 · 设计要点与材料（知识） ===== -->
+  <div>
+  <!-- ===== 04 设计校核 ===== -->
+  <section id="s-check">
+    <div class="wrap">
+      <div class="kicker"><span>04</span><span class="en">Design Verification</span></div>
+      <h2 class="sec">设计校核：自动检查当前参数</h2>
+      <p class="lead">校核结果随上方两个工具的参数实时更新。判据均来自几何约束，可在导出前拦截无效设计。</p>
+      <div class="check-grid">
+        <div class="check-card">
+          <h3>一维棱镜校核</h3>
+          <div class="c-sub">依据当前一维工具参数</div>
+          <div id="chk_1d"></div>
+        </div>
+        <div class="check-card">
+          <h3>二维棱镜校核</h3>
+          <div class="c-sub">依据当前二维工具参数</div>
+          <div id="chk_2d"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 05 材料与规格 ===== -->
+  <section id="s-material">
+    <div class="wrap">
+      <div class="kicker"><span>05</span><span class="en">Materials &amp; Specifications</span></div>
+      <h2 class="sec">材料、临界角与典型规格</h2>
+      <p class="lead">微结构层常用高透过率光学树脂，基材多用 PET。折射率决定临界角，进而决定全反射回收的入射角范围。</p>
+
+      <div class="table-scroll">
+      <table class="tbl" style="min-width:720px">
+        <caption>常用光学材料（折射率典型值，随牌号/工艺略有差异）</caption>
+        <colgroup><col style="width:16%"><col style="width:18%"><col style="width:18%"><col style="width:30%"><col style="width:18%"></colgroup>
+        <thead><tr><th>材料</th><th>折射率 n</th><th>临界角 θc</th><th>特点</th><th>典型用途</th></tr></thead>
+        <tbody>
+          <tr><td><b>PMMA</b></td><td class="n">≈1.491</td><td class="n">42.1°</td><td>高透过、耐候好、成本低</td><td>UV 固化棱镜层、导光板</td></tr>
+          <tr><td><b>PC</b></td><td class="n">≈1.586</td><td class="n">39.1°</td><td>耐热、机械强度高、双折射略大</td><td>车载/耐温背光膜</td></tr>
+          <tr><td><b>PS</b></td><td class="n">≈1.590</td><td class="n">39.0°</td><td>低吸水、易脆</td><td>一般光学膜层</td></tr>
+          <tr><td><b>PET 基材</b></td><td class="n">1.57–1.65</td><td class="n">39.6°–37.3°</td><td>尺寸稳定、耐弯折；折射率随取向度变化</td><td>棱镜膜/扩散膜基材</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="table-scroll" style="margin-top:28px">
+      <table class="tbl" style="min-width:720px">
+        <caption>显示背光棱镜膜典型规格（已逐条核查来源；无支撑的数字已撤下并注明）</caption>
+        <colgroup><col style="width:15%"><col style="width:15%"><col style="width:14%"><col style="width:44%"><col style="width:12%"></colgroup>
+        <thead><tr><th>项目</th><th>典型值</th><th>范围</th><th>说明 / 核查结论</th><th>来源</th></tr></thead>
+        <tbody>
+          <tr><td><b>顶角 α</b></td><td class="n">90°</td><td class="n">—</td>
+              <td>[2] 原文 “tip angle of 90˚”。<span class="q">原列的 [1] 在本环境无法读取、[6] 通篇未提顶角，已撤下；「80°–110°」无来源，同样撤下。</span></td><td class="src">[2][3]</td></tr>
+          <tr><td><b>齿距 p</b></td><td class="n">50 μm</td><td class="n">—</td>
+              <td>“90/50”是 3M BEF II 的标准版本名（3M 文档 [9]：<i>available in the standard 90/50 version, and a 90/24 version</i>），其中 50 指节距 50 μm。<span class="q">原列「20–100 μm」在可核查来源中找不到依据，已撤下。</span></td><td class="src">[3][9]</td></tr>
+          <tr><td><b>微结构层高</b></td><td class="n">≈23 μm</td><td class="n">20–50 μm</td>
+              <td>[2] 实测 BEF II 90/50 结构高 23 μm；而 <b>h = p/2 = 25 μm</b> 是“90° 顶角 + 无谷最密排”的理论关系。<span class="q">这是两件事，原表把 23 与 25 混写成一个区间，已分开陈述。</span></td><td class="src">[2][5]</td></tr>
+          <tr><td><b>单层增益</b></td><td class="n">+57–60%</td><td class="n">—</td>
+              <td>经销商页面标称值：[3] 该 SKU 59%，[4] 正文「高达 60%」而同页规格表写 57%。<span class="q">3M 一手数据表未取得，原表「50–60%」的 [1] 不可核实，已按可读到的实际数值改写。</span></td><td class="src">[3][4]</td></tr>
+          <tr><td><b>总膜厚</b></td><td class="n">约 0.06–0.22 mm</td><td class="n">—</td>
+              <td>第三方来源给出的棱镜膜总厚度跨度：薄型 TBEF 约 60–65 μm，常规含 PET 基材约 100–220 μm。<span class="q">原列「0.21 mm / 0.115–0.275 mm」出自 RINA TECH 自有产品线（该页通篇不提 3M），不是 BEF 的膜厚数据；3M 官方文档只给相对厚度（TBEF &lt; ½ BEF III），未给绝对值。</span></td><td class="src">[5][8]</td></tr>
+          <tr><td><b>出射视锥</b></td><td class="n">≤35°</td><td class="n">—</td>
+              <td>[6] 原文为 “fino a 35 gradi”（<b>至多</b> 35° 的视锥），未写 “±”、也未定义为半角。<span class="q">原表的「±35°」是本页此前的推演，已按原文口径改为 ≤35°。</span></td><td class="src">[6]</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="tblnote">
+        <b>关于这些数字的可信度：</b>本页所有规格均来自公开论文、经销商商品页与厂商博客，属<b>二手来源</b>；3M 官方产品数据表（<span class="num">multimedia.3m.com</span> 上的 TDS/PDF）在本环境无法取得。<br>
+        可核查的一手/半一手材料只有 3M《Application Guidelines》98-0440-0037-4（见 [9]），它给出了 BEF II / BEF III / TBEF 的代际与版本命名，但<b>没有</b>绝对膜厚与增益数值。<br>
+        <b>「BEF3」不是 3M 的正式写法</b>（官方为 BEF II / BEF III / TBEF），且 BEF III 采用 randomized prism pattern（随机化棱镜图案），把它与固定几何「90/50」绑定本身就有疑问。
+      </div>
+
+      <div class="cols" style="margin-top:30px">
+        <div>
+          <h3>制造工艺</h3>
+          <ul class="pt-list">
+            <li><strong>微复制（micro-replication）</strong>：钻石车削/激光雕刻母模 → 电铸镍模 → UV 树脂辊压复制到 PET 基材，显示膜主流工艺。</li>
+            <li><strong>注塑 / 挤出</strong>：用于较厚棱镜板或导光结构，材料多为 PMMA / PC。</li>
+            <li><strong>成型约束</strong>：圆角过小则模具寿命短；斜面角过陡则脱模困难，需结合拔模角评估。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>验证方法</h3>
+          <ul class="pt-list">
+            <li><strong>几何</strong>：本页校核清单 + 三维预览 + STEP 导入 CAD 测量。</li>
+            <li><strong>光学</strong>：光线追迹软件（LightTools / TracePro）建 BSDF 模型，测亮度计 0° 增益与视角曲线。</li>
+            <li><strong>外观</strong>：显微形貌（SEM / 白光干涉）核对齿形与圆角；莫尔纹目检。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  </div>
+
+  <!-- ===== 页 5 · 参考资料（知识） ===== -->
+  <div>
+  <!-- ===== 06 参考资料 ===== -->
+  <section id="s-refs">
+    <div class="wrap">
+      <div class="kicker"><span>06</span><span class="en">References</span></div>
+      <h2 class="sec">参考资料</h2>
+      <ol class="refs" id="kn_refs"></ol>
+    </div>
+  </section>
+  </div>
+</div>
 </div>
 
 <script src="js/version.js"></script>
@@ -931,6 +1150,7 @@
 <script src="js/vendor-three.min.js"></script>
 <script src="js/vendor-orbitcontrols.js"></script>
 <script src="js/prism.js"></script>
+<script src="js/prism-knowledge.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

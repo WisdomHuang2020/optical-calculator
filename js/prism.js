@@ -65,14 +65,37 @@
   /* ============================================================
    * 一维棱镜：截面几何
    * ============================================================ */
+  /* 计数类输入的显式钳位，并把钳位事实记进 inputNotes 供提示区回报。
+
+     原实现写作 Math.max(1, Math.round(x)) —— 超范围时**静默改值**：
+     输入框里仍显示用户填的数，几何却按另一个数算，页面没有任何提示。
+     用户「填了 600 个齿」却只得到 500 个齿的模型，且无从知道原因。
+     这正是本文件反复在修的一类缺陷（输入 ≠ 实际建模，且静默）。 */
+  var inputNotes = [];
+  function readCount(id, lo, hi, label) {
+    var raw = parseFloat($(id).value);
+    if (!isFinite(raw)) {
+      inputNotes.push(label + ' 不是有效数字，已按 ' + lo + ' 计算。');
+      return lo;
+    }
+    var rounded = Math.round(raw);
+    var v = Math.max(lo, Math.min(hi, rounded));
+    if (rounded < lo || rounded > hi) {
+      inputNotes.push(label + ' 超出 ' + lo + '–' + hi + '，已按 ' + v +
+        ' 计算（输入框仍显示 ' + rounded + '）。');
+    }
+    return v;
+  }
+
   function readParams() {
+    inputNotes = [];
     return {
       pitch: parseFloat($('p_pitch').value),
       height: parseFloat($('p_height').value),
       angle: parseFloat($('p_angle').value),
       base: parseFloat($('p_base').value),
       radius: parseFloat($('p_radius').value),
-      N: Math.max(1, Math.round(parseFloat($('p_teeth').value))),
+      N: readCount('p_teeth', 1, 500, '齿数 N'),
       L: parseFloat($('p_length').value)
     };
   }
@@ -94,6 +117,35 @@
     var want = p.height * Math.tan(p.angle / 2 * RAD);
     var max = p.pitch / 2;
     return { want: want, use: Math.min(want, max), clamped: want > max + 1e-9 };
+  }
+
+  /* 折线去重：跳过与上一点重合的点，并检查首尾是否重复。
+
+     为什么必须有这一步：2b = pitch 是**物理上完全合法**的最密排
+     （齿底恰好相接、没有平谷），此时相邻两齿的齿根点落在同一个位置，
+     轮廓里出现重合的相邻点 —— 实测 pitch=1 / h=0.25 / α=126.87° 时
+     有 21 个重合点（索引 2,5,8,…）。
+
+     后果不只是"多几个点"：零长边围出的面面积为 0，面法线经 nrm() 的
+     `|| 1` 兜底变成**零向量**，于是 STEP 里写出
+     `DIRECTION('',(0.000000,0.000000,0.000000))` —— 而 DIRECTION 按
+     定义必须是单位向量。实测该参数下 108 个侧面里有 **63 个**轴系非法，
+     内核读入会失败或得到垃圾几何。正常参数（α=60°）下是 0 个。
+
+     注意：这里刻意只去掉**相邻**重合点，不做全局去重 —— 轮廓允许
+     自交之外的其它形态，全局去重会误删合法的重复顶点。 */
+  function dedupePts(pts, eps) {
+    eps = eps || 1e-9;
+    var out = [];
+    for (var i = 0; i < pts.length; i++) {
+      var q = pts[i], r = out[out.length - 1];
+      if (!r || Math.hypot(q[0] - r[0], q[1] - r[1]) > eps) out.push(q);
+    }
+    if (out.length > 1) {
+      var a = out[0], z = out[out.length - 1];
+      if (Math.hypot(a[0] - z[0], a[1] - z[1]) <= eps) out.pop();
+    }
+    return out;
   }
 
   /* 无圆角原始截面点（X-Z 平面，逆时针）
@@ -122,7 +174,8 @@
       pts.push([xc - b, t]);        // 齿根（入射侧）
     }
     pts.push([0, t]);
-    return { pts: pts, W: W, half: b };
+    /* 去重见 dedupePts 的说明：2b = pitch（最密排，合法）时齿根点会重合 */
+    return { pts: dedupePts(pts), W: W, half: b };
   }
 
   /* 每个顶点的圆角半径与切线长：**唯一定义点**。
@@ -316,9 +369,16 @@
     var H = p.base + p.height;
     var fill = 2 * half / p.pitch;                     // 填充率 η = 2b/pitch
     var ok = true, msg = '';
-    var warns = [];
-    if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.L > 0) || !(p.N >= 1)) {
-      warns.push('存在非法参数，请检查。'); ok = false;
+    /* 先并入计数类输入的钳位提示（readParams 读参数时已记录） */
+    var warns = inputNotes.slice();
+    if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.L > 0) || !(p.N >= 1) ||
+        !(p.angle > 0) || !(p.angle < 180)) {
+      /* 顶角的定义域是开区间 (0°, 180°)：0° 时齿退化成零宽、180° 时
+         tan(α/2)→∞ 会让半底宽发散。原先只查 pitch/height/base/L/N，
+         **没有查顶角**，等于把定义域外的值放进了 tan()。 */
+      warns.push('存在非法参数，请检查：pitch / height / length 需 > 0，base / radius ≥ 0，' +
+                 '顶角需落在 (0°, 180°) 开区间内，齿数 ≥ 1。');
+      ok = false;
     }
     if (hb.clamped) {
       warns.push('齿半底宽 h·tan(α/2) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
@@ -412,13 +472,14 @@
    * 二维棱镜：金字塔阵列
    * ============================================================ */
   function readParams2D() {
+    inputNotes = [];
     return {
       pitch: parseFloat($('p2_pitch').value),
       height: parseFloat($('p2_height').value),
       angle: parseFloat($('p2_angle').value),
       base: parseFloat($('p2_base').value),
-      nx: Math.max(1, Math.round(parseFloat($('p2_nx').value))),
-      ny: Math.max(1, Math.round(parseFloat($('p2_ny').value)))
+      nx: readCount('p2_nx', 1, 500, '列数 Nx'),
+      ny: readCount('p2_ny', 1, 500, '行数 Ny')
     };
   }
 
@@ -469,17 +530,23 @@
     var side = 2 * half;                     // 金字塔底面边长
     var fill = (side / p.pitch) * (side / p.pitch);   // 面积填充率 η = (2b/p)²
     var ok = true, msg = '';
+    var warns = inputNotes.slice();
 
-    if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.nx >= 1) || !(p.ny >= 1)) {
-      msg = '存在非法参数，请检查。'; ok = false;
-    } else if (hb.clamped) {
-      msg = '金字塔半底宽 h/tan(α) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
-            (p.pitch / 2).toFixed(3) + ' mm，金字塔会重叠。底面已按齿距封顶' +
-            '（相邻金字塔恰好相接，填充率 1.000）。要得到真实的稀疏金字塔阵列' +
-            '请增大 pitch，或减小 height / 倾角。';
+    if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.nx >= 1) || !(p.ny >= 1) ||
+        !(p.angle > 0) || !(p.angle < 180)) {
+      /* 与一维同理：倾角的定义域是 (0°, 180°) 开区间，原先没查 */
+      warns.push('存在非法参数，请检查：pitch / height 需 > 0，base ≥ 0，' +
+                 '斜面倾角需落在 (0°, 180°) 开区间内，列数 / 行数 ≥ 1。');
       ok = false;
     }
-    showWarn(msg);
+    if (hb.clamped) {
+      warns.push('金字塔半底宽 h/tan(α) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
+            (p.pitch / 2).toFixed(3) + ' mm，金字塔会重叠。底面已按齿距封顶' +
+            '（相邻金字塔恰好相接，填充率 1.000）。要得到真实的稀疏金字塔阵列' +
+            '请增大 pitch，或减小 height / 倾角。');
+      ok = false;
+    }
+    showWarn(warns.join('\n'));
 
     var baseVol = Wx * Wy * p.base;
     var pyrVol = p.nx * p.ny * side * side * p.height / 3;
@@ -1435,6 +1502,62 @@
   }
 
   /* STL 导出（预览用，纯前端，二进制 STL） */
+  /* ---- 导出前置检查与剪贴板降级 ---- */
+
+  function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  /* 导出前的体积闸门。
+     实测 2D 的 STEP 在 Nx=Ny=20 时已 3.1 MB、Nx=Ny=40 时约 12 MB；
+     再大则生成与下载都会明显卡顿，多数 CAD 也打不开。
+     关键是**先估再确认、再生成** —— 若先生成后确认，用户要多等十几秒
+     才看到一个「要不要继续」的对话框，白等。 */
+  function confirmExportSize(bytes, what) {
+    if (bytes <= 12 * 1048576) return true;
+    return window.confirm(what + ' 预计约 ' + fmtSize(bytes) +
+      '，文件很大（生成与下载都会明显卡顿，多数 CAD 也难以打开）。\n\n仍要继续吗？');
+  }
+
+  /* 复制到剪贴板。
+     navigator.clipboard **只在安全上下文**（https / localhost）可用 ——
+     本项目是纯静态站，完全可能被直接以 file:// 打开，此时该 API 不存在
+     或调用后 reject。原实现是 `navigator.clipboard.writeText(...).then(提示成功)`，
+     既没有 else 分支也没有 catch，于是点「复制」**静默失败**：
+     按钮文字都不变，用户不知道是没复制还是没点中。
+     这里补 execCommand 降级，并把失败明确显示出来。 */
+  function copyText(text, btn) {
+    var orig = btn.textContent;
+    var done = function () {
+      btn.textContent = '已复制';
+      setTimeout(function () { btn.textContent = orig; }, 1200);
+    };
+    var fallback = function () {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var ok = document.execCommand('copy');
+        ta.remove();
+        if (ok) { done(); return; }
+      } catch (e) { /* 落到下面的失败分支 */ }
+      btn.textContent = '复制失败';
+      setTimeout(function () { btn.textContent = orig; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
   function exportSTL(meshObj) {
     var g = meshObj.geometry;
     var pos = g.attributes.position;
@@ -1569,19 +1692,33 @@
     }
 
     $('btn_step').onclick = function () {
-      if (!currentGeo) return;
-      var step = (mode === '1d') ? buildSTEP(currentGeo) : buildSTEP2D(currentGeo);
-      download(mode === '1d' ? 'prism_sheet.step' : 'pyramid_array.step', step, 'application/step');
+      /* 按 valid 门控：参数非法时 currentGeo 是上一版的有效几何，
+         直接导出会得到「与当前参数不符」的文件。原先没这道闸。 */
+      if (!currentGeo || !currentGeo.valid) return;
+      var is1d = (mode === '1d');
+      /* 先估体积再生成：STEP 是 ASCII，字符数即字节数 */
+      var est = is1d ? currentGeo.prof.length * 900
+                     : (currentGeo.nTris || 0) * 800;
+      if (!confirmExportSize(est, is1d ? '一维 STEP' : '二维 STEP')) return;
+      var step = is1d ? buildSTEP(currentGeo) : buildSTEP2D(currentGeo);
+      download(is1d ? 'prism_sheet.step' : 'pyramid_array.step', step, 'application/step');
     };
     $('btn_build123d').onclick = function () {
+      if (!currentGeo || !currentGeo.valid) return;
       var sc = (mode === '1d') ? buildScripts(currentGeo) : buildScripts2D(currentGeo);
       download(mode === '1d' ? 'prism_sheet_build123d.py' : 'pyramid_array_build123d.py', sc.b123d, 'text/x-python');
     };
     $('btn_cq').onclick = function () {
+      if (!currentGeo || !currentGeo.valid) return;
       var sc = (mode === '1d') ? buildScripts(currentGeo) : buildScripts2D(currentGeo);
       download(mode === '1d' ? 'prism_sheet_cadquery.py' : 'pyramid_array_cadquery.py', sc.cq, 'text/x-python');
     };
-    $('btn_stl').onclick = function () { if (mesh) exportSTL(mesh); };
+    $('btn_stl').onclick = function () {
+      /* 原先只判 mesh 是否存在 —— 参数变非法后仍会导出**上一版旧网格**，
+         与 STEP 按钮（按 currentGeo 生成）的行为不一致。现按 valid 门控。 */
+      if (!currentGeo || !currentGeo.valid || !mesh) return;
+      exportSTL(mesh);
+    };
 
     $('btn_reset').onclick = function () {
       /* 回到标准视角，并恢复"允许自动取景" */
@@ -1637,12 +1774,7 @@
     $('btn_copy').onclick = function () {
       var cv = $('codeview');
       if (!cv) return;
-      navigator.clipboard.writeText(cv.textContent).then(function () {
-        var btn = $('btn_copy');
-        var o = btn.textContent;
-        btn.textContent = '已复制';
-        setTimeout(function () { btn.textContent = o; }, 1200);
-      });
+      copyText(cv.textContent, $('btn_copy'));
     };
   }
 
@@ -1887,8 +2019,37 @@
     },
     /* 供无头验证读取的内部状态：把模型包围盒 8 角点投到屏幕，
        直接量出屏占比与居中偏移，避免靠截图目测/像素近似判断。 */
-    probe: function () {
-      if (!camera || !renderer || !currentGeo) return null;
+    /* ---------- 供「材料与参考」页的设计校核读取 ----------
+       刻意让校核清单复用本页的计算，而不是在校核侧另写一套判据：
+       两边的圆角判据本来就不一致（本页是 filletRadii 的「0.45×边长」+
+       「同边两切点不互越」两条钳位，另写一套常见的只有前者），
+       各算各的必然给出互相矛盾的结论。 */
+    params: function () {
+      var a = readParams(), b = readParams2D();
+      return {
+        mode: mode,
+        p1: { pitch: a.pitch, height: a.height, angle: a.angle, base: a.base,
+              radius: a.radius, N: a.N, L: a.L },
+        p2: { pitch: b.pitch, height: b.height, angle: b.angle, base: b.base,
+              nx: b.nx, ny: b.ny }
+      };
+    },
+    /* 纯计算、无副作用：给定一维参数，返回半底宽与**实际生效**的圆角半径 */
+    fillet: function (p1) {
+      var p = p1;
+      var hb = halfBase(p);
+      var fr = filletRadii(rawProfile(p).pts, p.radius);
+      var list = [];
+      for (var i = 0; i < fr.rr.length; i++) {
+        if (fr.rr[i] > 1e-12) list.push(fr.rr[i]);
+      }
+      return {
+        half: hb.use, want: hb.want, halfClamped: hb.clamped,
+        rMin: list.length ? Math.min.apply(null, list) : 0,
+        rMax: list.length ? Math.max.apply(null, list) : 0
+      };
+    },
+    probe: function () {      if (!camera || !renderer || !currentGeo) return null;
       var el = document.querySelector('.prism-stage');
       if (!el) return null;
       var r = el.getBoundingClientRect();

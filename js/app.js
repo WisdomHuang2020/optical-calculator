@@ -510,6 +510,14 @@
       planarKey = null;          // 平面图在隐藏时尺寸为 0，切回来强制重画
       updateSolidReadout(viz);
     }
+    /* 棱镜知识页（第 5 / 6 个 tab）：三个光线追迹演示都是 2D canvas。
+       同样必须在容器可见后再绘制 —— 隐藏时量到的画布尺寸是 0，
+       画出来的内容会全部错位。首次进入时初始化，之后每次进入重绘
+       （「材料与参考」的校核清单要读棱镜工具的最新参数）。 */
+    if ((name === 'know' || name === 'mats') && window.PrismKnowledge) {
+      window.PrismKnowledge.init();
+      window.PrismKnowledge.resize();
+    }
     return true;
   }
 
@@ -524,10 +532,11 @@
     });
   }
 
-  /** 支持深链：#calc / #solid / #theory */
+  /** 支持深链：#calc / #solid / #theory / #prism / #know / #mats */
   function applyHash() {
     var h = String(location.hash || '').replace(/^#/, '');
-    if (h === 'calc' || h === 'solid' || h === 'theory' || h === 'prism') activateTab(h);
+    if (h === 'calc' || h === 'solid' || h === 'theory' || h === 'prism' ||
+        h === 'know' || h === 'mats') activateTab(h);
   }
 
   /* =========================================================

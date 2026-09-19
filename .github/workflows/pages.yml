@@ -36,12 +36,12 @@ jobs:
           touch _site/.nojekyll
           echo "--- 发布内容 ---"
           find _site -type f | sort
-          # 棱镜板页依赖这些文件，缺任一个会导致该页静默失效或白屏。
+          # 棱镜板页与棱镜知识页依赖这些文件，缺任一个会导致该页静默失效或白屏。
           # 上一版工作流用固定清单 cp，新增文件不会自动进站 —— 这里显式校验。
-          for f in js/vendor-three.min.js js/vendor-orbitcontrols.js js/prism.js; do
+          for f in js/vendor-three.min.js js/vendor-orbitcontrols.js js/prism.js js/prism-knowledge.js; do
             test -f "_site/$f" || { echo "✘ 缺失发布文件：$f"; exit 1; }
           done
-          echo "✔ 棱镜板页依赖文件齐备"
+          echo "✔ 棱镜板页 / 知识页依赖文件齐备"
 
       - uses: actions/configure-pages@v5
 

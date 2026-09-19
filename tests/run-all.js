@@ -33,6 +33,10 @@ const SUITES = [
   { name: '版本一致性 · 单一来源与 CHANGELOG', file: 'version-check.js' },
   { name: '主题一致性 · 语义色与图例对齐', file: 'theme-check.js' },
   { name: '棱镜板页 · 依赖/选择器/命名一致性', file: 'prism-check.js' },
+  /* 棱镜知识页（第 5 / 6 个 tab）：合并时最容易出的是「演示画布全空、
+     页面照常显示、控制台不响」这类静默失效，故单列一个套件，
+     既有静态（零外部依赖、样式作用域、颜色走变量）也有运行时（画布像素）。 */
+  { name: '棱镜知识页 · 演示与校核', file: 'knowledge-check.js' },
   { name: '计算内核 · 光度学数值断言', file: 'verify.js' },
   { name: '参考算例 · 外部文件复核', file: 'verify-user-file.js' },
   { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' },
