@@ -255,6 +255,7 @@ const INTERACTION_PROBE = [
   '              // ⑤ 切模式必须重新取景（换的是完全不同的模型）',
   '              if (b2) b2.click();',
   '              r.cam2D = camSnap();',
+  '              r.probe2D = window.Prism.probe();',
   '              r.modeReframed = (r.camAfterUserParam !== r.cam2D);',
   '              // ⑥ 「重置视角」回到标准视角',
   '              if (b1x) b1x.click();',
@@ -263,11 +264,45 @@ const INTERACTION_PROBE = [
   '              if (rst) rst.click();',
   '              r.camAfterReset = camSnap();',
   '              r.probe1D = window.Prism.probe();',
-  '              var calcTab = document.querySelector(\'.tab[data-tab="calc"]\');',
-  '              if (calcTab) calcTab.click();',
-  '              var p = document.createElement("pre"); p.id = "__interact";',
-  '              p.textContent = "INTERACT:" + JSON.stringify(r);',
-  '              document.body.appendChild(p);',
+  '              r.frameAspect = r.probe1D ? r.probe1D.frameAspect : null;',
+  '              r.stageAspect = r.probe1D ? +(r.probe1D.stageW / r.probe1D.stageH).toFixed(4) : null;',
+  '              // ⑦ 顶角必须真正参与建模（原实现顶角被完全忽略）',
+  '              function geoSnap() {',
+  '                var g = window.Prism.geo;',
+  '                if (!g) return null;',
+  '                // 签名取截面**中段**的点：轮廓前几个点是板角（与顶角无关），',
+  '                // 只看它们会得出「改顶角没变化」的假结论。',
+  '                var m = Math.floor(g.prof.length / 2);',
+  '                return { half: g.half, H: g.H, W: g.W, sig: g.prof.slice(m, m + 6).map(function (q) {',
+  '                  return q[0].toFixed(6) + "," + q[1].toFixed(6); }).join(";") };',
+  '              }',
+  '              var angEl = gi("p_angle");',
+  '              r.angleBefore = angEl.value;',
+  '              angEl.value = "30";',
+  '              angEl.dispatchEvent(new Event("input", { bubbles: true }));',
+  '              setTimeout(function () {',
+  '                r.g30 = geoSnap();',
+  '                r.half30 = gi("s_half").textContent;',
+  '                r.vol30 = gi("s_vol").textContent;',
+  '                angEl.value = "90";',
+  '                angEl.dispatchEvent(new Event("input", { bubbles: true }));',
+  '                setTimeout(function () {',
+  '                  r.g90 = geoSnap();',
+  '                  r.half90 = gi("s_half").textContent;',
+  '                  r.vol90 = gi("s_vol").textContent;',
+  '                  angEl.value = r.angleBefore;',
+  '                  angEl.dispatchEvent(new Event("input", { bubbles: true }));',
+  '                  setTimeout(function () {',
+  '                    r.gBack = geoSnap();',
+  '                    r.halfBack = gi("s_half").textContent;',
+  '                    var calcTab = document.querySelector(\'.tab[data-tab="calc"]\');',
+  '                    if (calcTab) calcTab.click();',
+  '                    var p = document.createElement("pre"); p.id = "__interact";',
+  '                    p.textContent = "INTERACT:" + JSON.stringify(r);',
+  '                    document.body.appendChild(p);',
+  '                  }, 400);',
+  '                }, 400);',
+  '              }, 400);',
   '            }, 400);',
   '          }, 400);',
   '        }, 400);',
@@ -398,11 +433,15 @@ if (!im) {
   ok('window.Prism 接口已暴露', R.prismApi, 'object');
   // 默认参数：pitch=1, h=0.25, apex=60, t=0.20, r=0.02, N=20, L=50
   ok('一维板宽 W = N·pitch = 20', R.prismW1D, '20.000 mm');
-  /* 圆角后截面积 6.499762 mm² × L=50 = 324.988 mm³，显示取 1 位小数 = 325.0。
-     半径 0.02 mm 在 1.0 mm 齿距上只削掉 0.0037% 的面积 —— 这正是
-     「圆角是真实圆弧」的正确量级；旧值 319.9（对应面积 6.3974）来自
-     10 段折线近似，既高估了圆角的削料量，又与 STEP 导出件口径不一。 */
-  ok('一维体积（真实圆弧圆角，无圆角理论值 325.0）', R.prismVol1D, '325.0 mm³');
+  /* 截面积 = 基底 W·t + N 个三角形齿，齿底宽 2b = 2h·tan(α/2)：
+       无圆角 = 20×0.20 + 20×(2×0.144338)×0.25/2 = 4.721688 mm²
+       radius 0.02 的圆角只削掉 0.1051%（0.004962 mm²）—— 这是「圆角是
+       真实圆弧」该有的量级；若某次结果偏离这个量级，就说明圆角又变成了
+       折线近似或发生了溢出（见 filletRadii 的按边约束）。
+       4.716726 mm² × L=50 = 235.8363 mm³，显示取 1 位小数 = 235.8。
+     旧值 325.0 对应「齿底宽 = 一个整齿距、顶角不参与建模」的旧几何，
+     那个几何下顶角从 20° 扫到 150° 生成的截面逐点相同。 */
+  ok('一维体积（真实圆弧圆角，无圆角理论值 235.8）', R.prismVol1D, '235.8 mm³');
   okTrue('生成脚本已渲染', R.prismCodeLen > 500, 'codeview 长度 = ' + R.prismCodeLen);
   /* 画布必须贴合宿主。原文件在未布局时初始化，实测停在 20px 高；
      本站历史同类缺陷是停在默认 300×150。两者都要拦住。 */
@@ -419,11 +458,19 @@ if (!im) {
   okTrue('二维模式按钮可被选中', R.mode2BtnFound === true,
     '选择器 #view-prism .mode-btn[data-mode="2d"]');
   ok('二维板宽（X × Y）', R.prismW2D, '20.000 × 20.000 mm');
-  ok('二维指标标签已切换', R.prismK4_2D, '三角形面数');
-  ok('二维体积 = 基底 80 + 金字塔 33.33', R.prismVol2D, '113.3 mm³');
+  /* 二维的面板把 α 标为「斜面倾角」（与水平面的夹角），故 b = h/tan(α)：
+       默认倾角 45°、h=0.25 → b = 0.25、底面边长 2b = 0.5、填充率 0.25。
+       原文案是「三角形面数」，那一格放的是几何量里最该被核对的一项 ——
+       即「参数算出来的填充率」是否真等于「几何实际占的比例」。
+       旧几何下金字塔底面恒为整齿距（填充率 1.000），倾角完全不参与建模。 */
+  ok('二维指标标签已切换', R.prismK4_2D, '填充率 η = (2b/p)²');
+  /* 体积 = 基底 Wx·Wy·t + Nx·Ny·(2b)²·h/3
+          = 20×20×0.20 + 400×0.5²×0.25/3 = 80 + 8.3333 = 88.3333 → 88.3。
+     旧值 113.3 对应底面按整齿距算（金字塔体积 33.33，是真实值的 4 倍）。 */
+  ok('二维体积 = 基底 80 + 金字塔 8.33', R.prismVol2D, '88.3 mm³');
   okTrue('切二维后 2D 参数组显示', R.params2DShown === true);
   okTrue('切二维后 1D 参数组隐藏', R.params1DHidden === true);
-  ok('切回一维后体积复原', R.prismVolBack, '325.0 mm³');
+  ok('切回一维后体积复原', R.prismVolBack, '235.8 mm³');
   okTrue('STEP 生成未抛错且内容完整', R.stepLen > 1000,
     R.stepErr ? '异常：' + R.stepErr : 'ISO-10303-21 长度 = ' + R.stepLen);
 
@@ -442,21 +489,23 @@ if (!im) {
   okTrue('2D STEP 无 #undefined 悬空引用', cnt(s2, /#undefined/g) === 0,
     '#undefined 出现 ' + cnt(s2, /#undefined/g) + ' 次');
 
-  /* ① 真圆角：43 个齿顶/齿根圆角 × 2 个端环 = 86 条圆弧曲线，
-        侧面 = 43 个圆柱面。半径必须是输入的 radius（非钳位时）。 */
+  /* ① 真圆角：64 个角点（20 齿顶 + 40 齿根 + 4 板角）× 2 个端环
+        = 128 条圆弧曲线，侧面 = 64 个圆柱面。
+        半径必须是输入的 radius（非钳位时）。 */
   var nArc = cnt(s1, /\bRATIONAL_B_SPLINE_CURVE\s*\(/g);
   var nCyl = cnt(s1, /=\s*CYLINDRICAL_SURFACE\s*\(/g);
-  okTrue('1D 圆角为真实圆弧（有理 B 样条）', nArc === 86, 'RATIONAL_B_SPLINE_CURVE = ' + nArc);
-  okTrue('1D 圆角侧面为圆柱面', nCyl === 43, 'CYLINDRICAL_SURFACE = ' + nCyl);
+  okTrue('1D 圆角为真实圆弧（有理 B 样条）', nArc === 128, 'RATIONAL_B_SPLINE_CURVE = ' + nArc);
+  okTrue('1D 圆角侧面为圆柱面', nCyl === 64, 'CYLINDRICAL_SURFACE = ' + nCyl);
   okTrue('1D 不再用直线段折面冒充圆角',
     cnt(s1, /=\s*CIRCLE\s*\(/g) === 0, 'CIRCLE = ' + cnt(s1, /=\s*CIRCLE\s*\(/g));
 
-  /* ② 端盖闭合：轮廓 473 点 → 拓扑压缩为 129 条边（43 弧 + 86 直线），
-        加 2 个端盖环共 131 个 EDGE_LOOP；顶点数 = 2×129 = 258。 */
+  /* ② 端盖闭合：轮廓 64 点 → 圆角后 704 个采样点 → 拓扑压缩为
+        192 条边（64 弧 + 128 直线），加 2 个端盖环共 194 个 EDGE_LOOP；
+        顶点数 = 2×192 = 384。 */
   var loops = cnt(s1, /=\s*EDGE_LOOP\s*\(/g);
   var vtx = cnt(s1, /=\s*VERTEX_POINT\s*\(/g);
-  okTrue('1D EDGE_LOOP 数 = 129 侧面 + 2 端盖', loops === 131, 'EDGE_LOOP = ' + loops);
-  okTrue('1D 顶点数 = 2 × 129（底环 + 顶环）', vtx === 258, 'VERTEX_POINT = ' + vtx);
+  okTrue('1D EDGE_LOOP 数 = 192 侧面 + 2 端盖', loops === 194, 'EDGE_LOOP = ' + loops);
+  okTrue('1D 顶点数 = 2 × 192（底环 + 顶环）', vtx === 384, 'VERTEX_POINT = ' + vtx);
 
   /* ③ 产品结构 + 单位：缺任何一项都可能导致内核静默不转移几何。 */
   ['APPLICATION_CONTEXT', 'PRODUCT', 'PRODUCT_CONTEXT',
@@ -523,6 +572,78 @@ if (!im) {
   okTrue('取景后垂直占比合理（≥ 50%，不缩成一小条）',
     R.probe1D && R.probe1D.fillV >= 0.5,
     R.probe1D ? `fillV=${(R.probe1D.fillV * 100).toFixed(1)}%` : 'probe 不可用');
+  /* 取景所依据的宽高比必须就是真实视口的宽高比。
+     相机 up 与世界 Z 不一致时（默认 Y-up），板子的长边会被投影成竖向、
+     板子渲染成「一堵竖墙」，且取景算出的距离与真实视锥不符 ——
+     实测模型只占画面宽 13.6%（正确值 ≈ 61%）。这一条把该失效钉死。 */
+  okTrue('取景所用宽高比 = 真实视口宽高比（相机 up 为世界 Z）',
+    R.frameAspect !== null && R.stageAspect !== null &&
+    Math.abs(R.frameAspect - R.stageAspect) / R.stageAspect < 0.02,
+    `frameAspect=${R.frameAspect} stageAspect=${R.stageAspect}`);
+  okTrue('取景后模型横向占比合理（≥ 45%，不缩成一条竖缝）',
+    R.probe1D && R.probe1D.fillH >= 0.45,
+    R.probe1D ? `fillH=${(R.probe1D.fillH * 100).toFixed(1)}%` : 'probe 不可用');
+
+  console.log('\n=== 10. 顶角/倾角必须真正参与建模（参数↔几何一致性）===');
+  /* 这组断言针对一类最隐蔽的失效：参数能填、读数会变、页面照常显示，
+     但**几何根本不使用该参数** —— 原实现里顶角就是如此，实测把顶角从
+     20° 扫到 150°，生成的 408 个截面点逐点完全相同，实际齿顶角恒为
+     126.87°（由 pitch 与 height 反推），与输入的 60° 无关。
+     半底宽也是错的：写的是 h/tan(α/2)（= 正确值的倒数），页面显示
+     0.433 mm，而按顶角的定义应为 h·tan(α/2) = 0.144 mm。
+
+     判据必须同时查「读数」和「真实几何」两处，只查读数挡不住
+     「读数对了、几何没动」这一类。 */
+  const hExp = (deg) => 0.25 * Math.tan(deg / 2 * Math.PI / 180);
+  okTrue('① 顶角 30°：几何半底宽 = h·tan(α/2)',
+    R.g30 && Math.abs(R.g30.half - hExp(30)) < 1e-9,
+    R.g30 ? `geo.half=${R.g30.half}（期望 ${hExp(30).toFixed(6)}）` : 'geo 不可用');
+  okTrue('① 顶角 90°：几何半底宽 = h·tan(α/2)',
+    R.g90 && Math.abs(R.g90.half - hExp(90)) < 1e-9,
+    R.g90 ? `geo.half=${R.g90.half}（期望 ${hExp(90).toFixed(6)}）` : 'geo 不可用');
+  okTrue('② 改顶角后截面点确实变了（不是只改了读数）',
+    R.g30 && R.g90 && R.g30.sig !== R.g90.sig,
+    R.g30 && R.g90 ? (R.g30.sig === R.g90.sig ? '30° 与 90° 截面相同 ✘' : '截面已改变') : 'geo 不可用');
+  okTrue('③ 页面「半底宽」读数与几何一致（30°）',
+    R.half30 === R.g30.half.toFixed(3) + ' mm',
+    `读数 ${R.half30} / 几何 ${R.g30 ? R.g30.half.toFixed(3) : '?'} mm`);
+  okTrue('③ 页面「半底宽」读数与几何一致（90°）',
+    R.half90 === R.g90.half.toFixed(3) + ' mm',
+    `读数 ${R.half90} / 几何 ${R.g90 ? R.g90.half.toFixed(3) : '?'} mm`);
+  okTrue('④ 体积随顶角变化（30° 与 90° 不同）', R.vol30 !== R.vol90,
+    `30° → ${R.vol30}，90° → ${R.vol90}`);
+  okTrue('⑤ 顶角复原后几何回到原值',
+    R.gBack && R.g30 && Math.abs(R.gBack.half - hExp(60)) < 1e-9,
+    R.gBack ? `geo.half=${R.gBack.half}（期望 ${hExp(60).toFixed(6)}）` : 'geo 不可用');
+
+  console.log('\n=== 11. 三维预览材质：哑光不透明，让棱面结构可读 ===');
+  /* 这一组守的是"看得见结构"。原材质是高光玻璃感
+     （roughness 0.18 + clearcoat 1.0 + opacity 0.82 半透明）：
+     二维金字塔阵列是大量朝向各异的小平面，高光会在每个面各打一块高亮、
+     相邻面一起过曝成白，明暗差异被抹平；半透明又透出背面。
+     改法是压低高光、去清漆、改不透明，并给二维开平面着色
+     （否则共享顶点的法线被平均，塔尖圆滑过渡、棱边消失）。 */
+  var m1 = R.probe1D ? R.probe1D.mat : null;
+  var m2 = R.probe2D ? R.probe2D.mat : null;
+  okTrue('一维材质为哑光（roughness ≥ 0.8）', m1 && m1.roughness >= 0.8,
+    m1 ? `roughness=${m1.roughness}` : 'probe.mat 不可用');
+  okTrue('一维材质已去清漆层（clearcoat 为 0 / 未设）', m1 && !(m1.clearcoat > 0),
+    m1 ? `clearcoat=${m1.clearcoat}` : 'probe.mat 不可用');
+  okTrue('一维材质不透明（transparent=false, opacity=1）',
+    m1 && m1.transparent === false && m1.opacity === 1,
+    m1 ? `transparent=${m1.transparent} opacity=${m1.opacity}` : 'probe.mat 不可用');
+  okTrue('一维不开平面着色（圆角是 10 段折线，开了会显折面）',
+    m1 && m1.flatShading === false, m1 ? `flatShading=${m1.flatShading}` : 'probe.mat 不可用');
+  okTrue('二维开平面着色（否则塔尖法线被平均、棱边消失）',
+    m2 && m2.flatShading === true, m2 ? `flatShading=${m2.flatShading}` : 'probe.mat 不可用');
+  okTrue('二维材质同为哑光不透明',
+    m2 && m2.roughness >= 0.8 && m2.transparent === false && !(m2.clearcoat > 0),
+    m2 ? `roughness=${m2.roughness} transparent=${m2.transparent} clearcoat=${m2.clearcoat}` : 'probe.mat 不可用');
+  /* 表面基色必须走 CSS 变量（--c-prism），不能硬编码在 js 里 ——
+     否则改主题时 3D 视图会与其它 canvas 配色漂移。 */
+  okTrue('表面基色取自 --c-prism（非硬编码）',
+    m1 && /^#[0-9a-f]{6}$/.test(m1.color) && m1.color === (m2 ? m2.color : m1.color),
+    m1 ? `color=${m1.color}` : 'probe.mat 不可用');
 }
 
 console.log(`\n浏览器冒烟：通过 ${pass} 项，失败 ${fail} 项`);

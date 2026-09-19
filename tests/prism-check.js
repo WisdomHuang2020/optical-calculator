@@ -198,5 +198,69 @@ okTrue('几何量读数元素存在', missingStats.length === 0,
   missingStats.length ? '缺少 ' + missingStats.join(', ') : STAT_IDS.length + ' 个读数齐全');
 okTrue('prism.js 暴露 window.Prism 接口', /window\.Prism\s*=\s*\{/.test(prism));
 
+/* ---------- 7. 参数↔几何的一致性结构 ----------
+   这一组守的是「参数必须真的参与建模」与「同一语义只有一处实现」。
+   前者历史缺陷：顶角算进了一个从未被使用的 half 变量，几何恒按整齿距
+   生成，实测顶角 20°~150° 截面逐点相同；后者历史缺陷：圆角半径在
+   filletDetailed 与 exactArea 里各算一遍，靠注释约束一致。
+   运行时的行为断言在 smoke-render.js 第 10 组，这里补静态结构门禁。 */
+console.log('\n=== 7. 参数↔几何一致性（静态结构）===');
+okTrue('半底宽有唯一定义点 halfBase()', /function halfBase\s*\(/.test(prism));
+okTrue('rawProfile 经由 halfBase 取半底宽（不再自算）',
+  /function rawProfile[\s\S]*?halfBase\s*\(p\)/.test(prism));
+okTrue('rawProfile 不再出现 h/tan(α/2) 的倒式',
+  !/Math\.tan\(alpha\s*\/\s*2\s*\*\s*RAD\)\s*;\s*\n\s*var half/.test(prism));
+okTrue('齿根落在齿距中央 ± b（不再是 i·pitch）',
+  /xc\s*\+\s*b,\s*t/.test(prism) && /xc\s*-\s*b,\s*t/.test(prism));
+okTrue('二维半底宽有唯一定义点 halfBase2D()', /function halfBase2D\s*\(/.test(prism));
+okTrue('二维三角形计数有唯一定义点 triCount2D()', /function triCount2D\s*\(/.test(prism));
+okTrue('二维体积按 (2b)² 而非 pitch² 算',
+  /pyrVol\s*=\s*p\.nx\s*\*\s*p\.ny\s*\*\s*side\s*\*\s*side/.test(prism));
+okTrue('圆角半径有唯一定义点 filletRadii()', /function filletRadii\s*\(/.test(prism));
+okTrue('filletDetailed 与 exactArea 共用 filletRadii()',
+  (prism.match(/filletRadii\s*\(pts,\s*r\)/g) || []).length >= 2);
+okTrue('圆角按边约束切线长（T_u + T_v ≤ 边长）',
+  /T\[i\]\s*\+\s*T\[j\]/.test(prism));
+okTrue('相机 up 显式设为世界 Z（否则板子渲染成竖墙）',
+  /camera\.up\.set\(\s*0\s*,\s*0\s*,\s*1\s*\)/.test(prism));
+okTrue('取景迭代的 need 以 −Infinity 起手（否则只能推远不能拉近）',
+  /var need\s*=\s*-Infinity/.test(prism));
+okTrue('取景含投影包围盒居中修正',
+  /把投影包围盒的中心对到画面中心/.test(prism));
+
+/* ---------- 8. 三维预览材质 ----------
+   守「看得见结构」。原材质是高光玻璃感（roughness 0.18 + clearcoat 1.0
+   + opacity 0.82 半透明），会把二维金字塔阵列的棱面明暗差异糊掉。
+   运行时的材质断言在 smoke-render.js 第 11 组，这里补静态门禁。 */
+console.log('\n=== 8. 三维预览材质（哑光不透明）===');
+const cssAll = read('styles.css');
+okTrue('styles.css 定义 --c-prism（表面基色单一来源）',
+  /--c-prism:\s*#[0-9a-fA-F]{6}/.test(cssAll));
+okTrue('styles.css 定义三盏灯的颜色变量',
+  /--c-prism-key:\s*#[0-9a-fA-F]{6}/.test(cssAll) &&
+  /--c-prism-rim:\s*#[0-9a-fA-F]{6}/.test(cssAll) &&
+  /--c-prism-fill:\s*#[0-9a-fA-F]{6}/.test(cssAll));
+okTrue('prism.js 从 --c-prism* 取色',
+  /cssVar\('--c-prism'/.test(prism) && /cssVar\('--c-prism-key'/.test(prism) &&
+  /cssVar\('--c-prism-rim'/.test(prism) && /cssVar\('--c-prism-fill'/.test(prism));
+/* 断言必须排除注释：旧值的十六进制写在说明性注释里（记录改了什么），
+   直接全文搜会把它当成"仍然硬编码"。prismCode 已在第 2 组剥过注释，直接复用。 */
+const hardcoded = (prismCode.match(/0x[0-9a-fA-F]{6}/g) || []);
+okTrue('材质不再硬编码表面色（0x9ecbff 已移除）', !/0x9ecbff/i.test(prismCode));
+okTrue('光源不再硬编码颜色（仅剩环境光的白，可接受）',
+  hardcoded.every((h) => h.toLowerCase() === '0xffffff'),
+  hardcoded.length ? '代码中剩余：' + hardcoded.join(', ') : '无');
+okTrue('材质为哑光（roughness ≥ 0.8）',
+  /roughness:\s*0\.(8|9)\d*/.test(prism));
+okTrue('材质已去清漆层（不含 clearcoat: 1.0）', !/clearcoat:\s*1\.0/.test(prismCode));
+okTrue('材质不透明（opacity 恒为 1，透视模式才降）',
+  /opacity:\s*xrayMode\s*\?\s*0\.35\s*:\s*1\.0/.test(prism));
+okTrue('透视切换同时改 transparent 与 opacity 并置 needsUpdate',
+  /m\.transparent\s*=\s*xrayMode/.test(prism) && /m\.needsUpdate\s*=\s*true/.test(prism));
+okTrue('二维网格使用平面着色（makeMaterial(true)）',
+  /Mesh\(g2,\s*makeMaterial\(true\)\)/.test(prism));
+okTrue('一维网格不开平面着色（makeMaterial() 无参）',
+  /Mesh\(g,\s*makeMaterial\(\)\)/.test(prism));
+
 console.log(`\n棱镜板页一致性：通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail === 0 ? 0 : 1);

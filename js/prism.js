@@ -42,6 +42,10 @@
     COL.accent     = cssVar('--primary', '#14b8a6');
     COL.accent2    = cssVar('--primary-2', '#2dd4bf');
     COL.bg3d       = cssVar('--bg-3d', '#0a0a0a');
+    COL.prism      = cssVar('--c-prism', '#5f6d7e');
+    COL.prismKey   = cssVar('--c-prism-key', '#ffffff');
+    COL.prismRim   = cssVar('--c-prism-rim', '#88bbff');
+    COL.prismFill  = cssVar('--c-prism-fill', '#ffffff');
   }
 
   /* ============================================================
@@ -73,10 +77,39 @@
     };
   }
 
-  /* 无圆角原始截面点（X-Z 平面，逆时针） */
+  /* 齿半底宽的**唯一定义点**。rawProfile 与 buildGeometry 必须共用它，
+     否则「页面显示的几何量」与「真实生成的截面」会各说各话 ——
+     本文件历史上反复出现的正是这一类缺陷。
+
+     顶角 α 是**齿顶处的夹角**，故等腰三角形齿的半底宽
+         b = h·tan(α/2)      （h = 齿高）
+     原文写的是 h/tan(α/2)，那是它的**倒数**：顶角 60°、齿高 0.25 时
+     给出 0.433 mm，而正确值是 0.144 mm，且与真实截面（半底宽 0.5 mm）
+     三者互不相等。
+
+     want = 参数意图值；use = 实际可用于建模的值。
+     齿底宽 2b 超过齿距 pitch 时相邻齿必然重叠，此处按半齿距封顶，
+     保证截面不自交；调用方须就此给出可见告警，不能静默封顶。 */
+  function halfBase(p) {
+    var want = p.height * Math.tan(p.angle / 2 * RAD);
+    var max = p.pitch / 2;
+    return { want: want, use: Math.min(want, max), clamped: want > max + 1e-9 };
+  }
+
+  /* 无圆角原始截面点（X-Z 平面，逆时针）
+
+     齿形由**顶角**决定，不是白占满一个齿距：
+       · 齿底宽 2b = 2h·tan(α/2)，居于所属齿距中央；
+       · 齿间保留宽度 (pitch − 2b) 的平台 —— 相邻齿不接触。
+     这正是棱镜膜的实物形态，也是「填充率 η = 2b/pitch」的由来。
+
+     原实现把齿根直接落在 i·pitch 上，即齿底宽恒等于一个整 pitch，
+     于是**顶角参数完全不参与建模**：实测顶角 20°→150° 生成的截面
+     逐点相同，实际齿顶角恒为 2·atan(pitch/2h)（默认参数下 126.87°），
+     与输入的 60° 无关。 */
   function rawProfile(p) {
-    var pitch = p.pitch, hh = p.height, alpha = p.angle, t = p.base, N = p.N;
-    var half = hh / Math.tan(alpha / 2 * RAD);
+    var pitch = p.pitch, hh = p.height, t = p.base, N = p.N;
+    var b = halfBase(p).use;
     var W = N * pitch;
     var pts = [];
     pts.push([0, 0]);
@@ -84,10 +117,73 @@
     pts.push([W, t]);
     for (var i = N - 1; i >= 0; i--) {
       var xc = (i + 0.5) * pitch;
-      pts.push([xc, t + hh]);
-      pts.push([i * pitch, t]);
+      pts.push([xc + b, t]);        // 齿根（出射侧）
+      pts.push([xc, t + hh]);       // 齿顶
+      pts.push([xc - b, t]);        // 齿根（入射侧）
     }
-    return { pts: pts, W: W, half: half };
+    pts.push([0, t]);
+    return { pts: pts, W: W, half: b };
+  }
+
+  /* 每个顶点的圆角半径与切线长：**唯一定义点**。
+     filletDetailed（生成轮廓）与 exactArea（解析算面积）都必须用它 ——
+     原实现两处各写一遍 min(r, 0.45·l1, 0.45·l2)，只能靠注释约束一致，
+     而注释挡不住漂移。
+
+     为什么只钳到 0.45·l 不够：
+       切线长 T = rr / tan(θ/2)（θ = 内角）。尖角处 tan(θ/2) 很小，
+       T 远大于 rr —— 齿顶 60° 时 T = 1.73·rr。于是同一条边上相邻两个
+       圆角的切点会互相越过（T_u + T_v > 边长），采样弧随之翻向，
+       轮廓自交、面积与体积一起失真。
+       齿变小之后这一条特别容易踩到：radius 0.2 配 60° 齿顶时
+       1.73×0.2 = 0.35 > 单边斜长 0.29（本版把齿底宽从整齿距收窄到
+       2b 之后才暴露出来）。
+
+     故补第二步：按边施加 T_u + T_v ≤ 边长。逐顶点取其两条邻边约束的
+     最小缩放系数、一次性施加。施加后每条边仍满足约束，因为
+       k_u·T_u + k_v·T_v ≤ f·(T_u + T_v) = 边长   （f = 该边算出的系数）。
+
+     返回与 pts 等长的 rr / T / turn；退化顶点（可直接用原顶点）为 0。 */
+  function filletRadii(pts, r) {
+    var n = pts.length, i;
+    var rr = new Array(n), T = new Array(n), turn = new Array(n);
+    for (i = 0; i < n; i++) {
+      rr[i] = 0; T[i] = 0; turn[i] = 0;
+      if (!(r > 0)) continue;
+      var P = pts[i], Pr = pts[(i - 1 + n) % n], Pn = pts[(i + 1) % n];
+      var v1 = [P[0] - Pr[0], P[1] - Pr[1]];
+      var v2 = [Pn[0] - P[0], Pn[1] - P[1]];
+      var l1 = Math.hypot(v1[0], v1[1]);
+      var l2 = Math.hypot(v2[0], v2[1]);
+      if (l1 < 1e-9 || l2 < 1e-9) continue;
+      var cross = (v1[0] * v2[1] - v1[1] * v2[0]) / (l1 * l2);
+      var dot = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2);
+      /* 有符号转向 → 有符号外角 turn，归一到 (−π,π)；(0,π) 为凸角 */
+      var t = Math.atan2(cross, dot);
+      if (Math.abs(t) < 1e-12) continue;
+      var theta = Math.PI - Math.abs(t);          // 内角
+      var tanHalf = Math.tan(theta / 2);
+      if (!(Math.abs(tanHalf) > 1e-12)) continue;
+      var cand = Math.min(r, l1 * 0.45, l2 * 0.45);
+      if (!(cand > 1e-12)) continue;
+      turn[i] = t;
+      rr[i] = cand;
+      T[i] = cand / tanHalf;
+    }
+    var k = new Array(n);
+    for (i = 0; i < n; i++) k[i] = 1;
+    for (i = 0; i < n; i++) {
+      var j = (i + 1) % n;
+      var L = Math.hypot(pts[j][0] - pts[i][0], pts[j][1] - pts[i][1]);
+      var sum = T[i] + T[j];
+      if (sum > L && sum > 1e-12) {
+        var f = L / sum;
+        if (f < k[i]) k[i] = f;
+        if (f < k[j]) k[j] = f;
+      }
+    }
+    for (i = 0; i < n; i++) { rr[i] *= k[i]; T[i] *= k[i]; }
+    return { rr: rr, T: T, turn: turn };
   }
 
   /* 精确截面积：无圆角多边形面积 + 每个角按「圆角替换」的解析增减量。
@@ -117,27 +213,14 @@
     a = Math.abs(a) / 2;
     if (!(r > 0)) return a;
 
+    /* 半径与切线长一律取自 filletRadii（唯一定义点），
+       绝不在本函数里另算一遍 —— 两处各写一遍正是「显示值 ≠ 导出件」的根因。 */
+    var fr = filletRadii(pts, r);
     var dA = 0;
     for (var k = 0; k < n; k++) {
-      var P = pts[k];
-      var Pr = pts[(k - 1 + n) % n];
-      var Pn = pts[(k + 1) % n];
-      var v1 = [P[0] - Pr[0], P[1] - Pr[1]];
-      var v2 = [Pn[0] - P[0], Pn[1] - P[1]];
-      var l1 = Math.hypot(v1[0], v1[1]);
-      var l2 = Math.hypot(v2[0], v2[1]);
-      var rr = Math.min(r, l1 * 0.45, l2 * 0.45);
-      if (rr < 1e-9 || l1 < 1e-9 || l2 < 1e-9) continue;
-
-      var cross = (v1[0] * v2[1] - v1[1] * v2[0]) / (l1 * l2);
-      var dot = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2);
-      var turn = Math.atan2(cross, dot);        // 有符号外角，(0,π)=凸
-      if (Math.abs(turn) < 1e-12) continue;
+      var rr = fr.rr[k], T = fr.T[k], turn = fr.turn[k];
+      if (!(rr > 1e-12) || !(T > 1e-12)) continue;
       var absTurn = Math.abs(turn);
-      var theta = Math.PI - absTurn;            // 内角
-      var tanHalf = Math.tan(theta / 2);
-      if (!(Math.abs(tanHalf) > 1e-12)) continue;
-      var T = rr / tanHalf;                     // 切线长
       var sector = rr * rr * absTurn / 2;       // 扇形圆心角 = 外角 |turn|
       var tri = rr * T;                         // 顶点侧两直角三角形
       /* 凸角：切线三角形被削去、扇形补回 → 净削 (sector−tri)，为负。
@@ -166,35 +249,23 @@
     var out = [];
     var arcs = [];
     var segArc = [];
+    /* 半径/切线长取自 filletRadii（唯一定义点），与 exactArea 必然同源 */
+    var fr = filletRadii(pts, r);
     for (var i = 0; i < n; i++) {
       var P = pts[i];
+      var rr = fr.rr[i], T = fr.T[i], turn = fr.turn[i];
+      if (!(rr > 1e-12) || !(T > 1e-12) || Math.abs(turn) < 1e-12) {
+        out.push(P.slice()); arcs.push(null); segArc.push(null);
+        continue;
+      }
       var Pr = pts[(i - 1 + n) % n];
       var Pn = pts[(i + 1) % n];
       var v1 = [P[0] - Pr[0], P[1] - Pr[1]];
       var v2 = [Pn[0] - P[0], Pn[1] - P[1]];
       var l1 = Math.hypot(v1[0], v1[1]);
       var l2 = Math.hypot(v2[0], v2[1]);
-      var rr = Math.min(r, l1 * 0.45, l2 * 0.45);
-      if (rr < 1e-9 || l1 < 1e-9 || l2 < 1e-9) {
-        out.push(P.slice()); arcs.push(null); segArc.push(null);
-        continue;
-      }
       var d1 = [v1[0] / l1, v1[1] / l1];
       var d2 = [v2[0] / l2, v2[1] / l2];
-      /* 有符号转向：cross>0 为左转（凸角），cross<0 为右转（凹角）。
-         atan2(cross,dot) 归一到 (−π,π)，是「外角」turn。 */
-      var crossN = (v1[0] * v2[1] - v1[1] * v2[0]) / (l1 * l2);
-      var dotN = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2);
-      var turn = Math.atan2(crossN, dotN);
-      var absTurn = Math.abs(turn);
-      /* 内角 θ = π − |turn|；切线长 T = rr·tan(|turn|/2) 的等价式。 */
-      var cosHalf = Math.cos((Math.PI - absTurn) / 2);
-      var tanHalf = Math.tan((Math.PI - absTurn) / 2);
-      if (!(cosHalf > 1e-9) || !(Math.abs(tanHalf) > 1e-9)) {
-        out.push(P.slice()); arcs.push(null); segArc.push(null);
-        continue;
-      }
-      var T = rr / tanHalf;                       // 切点距顶点的长度
       var a = [P[0] - d1[0] * T, P[1] - d1[1] * T];   // 入射边上的切点
       var b = [P[0] + d2[0] * T, P[1] + d2[1] * T];   // 出射边上的切点
 
@@ -238,17 +309,22 @@
 
   function buildGeometry() {
     var p = readParams();
-    var half = p.height / Math.tan(p.angle / 2 * RAD);
-    var beta = (180 - p.angle) / 2;
+    var hb = halfBase(p);
+    var half = hb.use;                                 // 实际用于建模的半底宽 b
+    var beta = (180 - p.angle) / 2;                    // 底角（折射面与底面的夹角）
     var W = p.N * p.pitch;
     var H = p.base + p.height;
+    var fill = 2 * half / p.pitch;                     // 填充率 η = 2b/pitch
     var ok = true, msg = '';
 
     if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.L > 0) || !(p.N >= 1)) {
       msg = '存在非法参数，请检查。'; ok = false;
-    } else if (half > p.pitch / 2 + 1e-6) {
-      msg = '齿半底宽 ' + half.toFixed(3) + ' mm 超过半齿距 ' + (p.pitch / 2).toFixed(3) +
-            ' mm，相邻齿将重叠。请增大 pitch 或减小 height / 减小顶角。';
+    } else if (hb.clamped) {
+      msg = '齿半底宽 h·tan(α/2) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
+            (p.pitch / 2).toFixed(3) + ' mm，相邻齿会重叠。截面已按半齿距封顶' +
+            '（齿底恰好相接，填充率 1.000）。要得到真实齿形请增大 pitch，' +
+            '或减小 height / 顶角。';
+      ok = false;
     }
     showWarn(msg);
 
@@ -274,15 +350,22 @@
     var area = areaExact;
     var vol = area * p.L;
 
+    /* 标签随模式切换（1D 原先是 index.html 的静态文字，且与写入的值错位：
+       「面/边数」那一格实际写的是底角 β）。现由 LABELS_1D 单点定义。 */
+    setText('s_k1', LABELS_1D[0]);
+    setText('s_k2', LABELS_1D[1]);
+    setText('s_k3', LABELS_1D[2]);
+    setText('s_k4', LABELS_1D[3]);
+    setText('s_k5', LABELS_1D[4]);
     setText('s_w', W.toFixed(3) + ' mm');
     setText('s_h', H.toFixed(3) + ' mm');
     setText('s_half', half.toFixed(3) + ' mm');
-    setText('s_beta', beta.toFixed(2) + ' °');
+    setText('s_beta', fill.toFixed(3));
     setText('s_v', prof.length);
     setText('s_vol', vol.toFixed(1) + ' mm³');
 
     return {
-      p: p, prof: prof, arcs: arcs, W: W, H: H, half: half,
+      p: p, prof: prof, arcs: arcs, W: W, H: H, half: half, beta: beta, fill: fill,
       area: area, areaPoly: areaPoly, vol: vol, valid: ok
     };
   }
@@ -301,29 +384,68 @@
     };
   }
 
-  var LABELS_1D = ['板宽 W = N·pitch', '总高 H = t+h', '半底宽 h/tan(α)', '面/边数', '网格点'];
-  var LABELS_2D = ['板宽 Wx = Nx·pitch', '总高 H = t+h', '半底宽 h/tan(α)', '三角形面数', '金字塔数'];
+  /* 几何量的标签：两个模式各自单点定义。
+     原实现的 1D 标签写在 index.html 里、且与代码写入的值错位
+     （「面/边数」那一格实际写的是底角 β = (180−α)/2），
+     LABELS_1D 则声明了却从未被调用 —— 属死代码加错位，一并修正。 */
+  var LABELS_1D = ['板宽 W = N·p', '总高 H = t+h', '半底宽 b = h·tan(α/2)', '填充率 η = 2b/p', '网格点'];
+  var LABELS_2D = ['板宽 Wx = Nx·p', '总高 H = t+h', '半底宽 b = h/tan(α)', '填充率 η = (2b/p)²', '金字塔数'];
+
+  /* 二维金字塔的半底宽（唯一定义点）。
+
+     面板把 α 标为「apex angle 斜面倾角」，即**斜面与水平面的夹角**，
+     故 b = h/tan(α)。这与一维的 b = h·tan(α/2) 不是同一个式子 ——
+     因为两个模式对 α 的定义本就不同（一维 = 齿顶夹角，二维 = 斜面倾角）。
+
+     原实现算了 half 却只用于读数与告警，网格点固定落在 (i·pitch, j·pitch)、
+     金字塔顶点固定落在格心 —— 于是金字塔底面恒为 pitch×pitch 满铺、
+     四周没有平台，**倾角完全不参与建模**，体积也按 pitch² 而非 (2b)² 算。
+     默认参数下两者相差 12 倍。 */
+  function halfBase2D(p) {
+    var want = p.height / Math.tan(p.angle * RAD);
+    var max = p.pitch / 2;
+    return { want: want, use: Math.min(want, max), clamped: want > max + 1e-9 };
+  }
+
+  /* 二维网格的三角形计数（唯一定义点）。
+     读数的 nTris 必须与 rebuildMesh2D 实际压入的三角形数一致，
+     否则又是一处「显示 ≠ 实际」——本文件反复踩的就是这一类。
+       每格：金字塔侧面 4 个 + 平台环 4 个四边形（= 8 个三角形）
+     b → 0 时金字塔退化成针尖（无侧面）；b = pitch/2 时平台宽度为 0
+     （齿底相接，环面四边形面积为 0）—— 两种情况都要如实扣掉。 */
+  function triCount2D(b, pitch, nx, ny) {
+    var hasPyr = b > 1e-9;
+    var hasLand = (pitch - 2 * b) > 1e-9;
+    return nx * ny * ((hasPyr ? 4 : 0) + (hasLand ? 8 : 0));
+  }
 
   function buildGeometry2D() {
     var p = readParams2D();
-    var half = p.height / Math.tan(p.angle * RAD);
+    var hb = halfBase2D(p);
+    var half = hb.use;                       // 实际用于建模的半底宽 b
     var Wx = p.nx * p.pitch;
     var Wy = p.ny * p.pitch;
     var H = p.base + p.height;
+    var side = 2 * half;                     // 金字塔底面边长
+    var fill = (side / p.pitch) * (side / p.pitch);   // 面积填充率 η = (2b/p)²
     var ok = true, msg = '';
 
     if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.nx >= 1) || !(p.ny >= 1)) {
       msg = '存在非法参数，请检查。'; ok = false;
-    } else if (half > p.pitch / 2 + 1e-6) {
-      msg = '半底宽 ' + half.toFixed(3) + ' mm 超过半齿距 ' + (p.pitch / 2).toFixed(3) +
-            ' mm，金字塔将重叠。请增大 pitch 或减小 height / 减小倾角。';
+    } else if (hb.clamped) {
+      msg = '金字塔半底宽 h/tan(α) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
+            (p.pitch / 2).toFixed(3) + ' mm，金字塔会重叠。底面已按齿距封顶' +
+            '（相邻金字塔恰好相接，填充率 1.000）。要得到真实的稀疏金字塔阵列' +
+            '请增大 pitch，或减小 height / 倾角。';
+      ok = false;
     }
     showWarn(msg);
 
     var baseVol = Wx * Wy * p.base;
-    var pyrVol = p.nx * p.ny * p.pitch * p.pitch * p.height / 3;
+    var pyrVol = p.nx * p.ny * side * side * p.height / 3;
     var vol = baseVol + pyrVol;
-    var nTris = 4 * p.nx * p.ny;
+    /* 每个齿距格：金字塔侧面 4 个三角形 + 四周平台环 4 个四边形（拆成 8 个三角形） */
+    var nTris = triCount2D(half, p.pitch, p.nx, p.ny);
 
     setText('s_k1', LABELS_2D[0]);
     setText('s_k2', LABELS_2D[1]);
@@ -333,11 +455,14 @@
     setText('s_w', Wx.toFixed(3) + ' × ' + Wy.toFixed(3) + ' mm');
     setText('s_h', H.toFixed(3) + ' mm');
     setText('s_half', half.toFixed(3) + ' mm');
-    setText('s_beta', nTris);
+    setText('s_beta', fill.toFixed(3));
     setText('s_v', p.nx * p.ny);
     setText('s_vol', vol.toFixed(1) + ' mm³');
 
-    return { p: p, Wx: Wx, Wy: Wy, H: H, half: half, vol: vol, nTris: nTris, valid: ok, msg: msg };
+    return {
+      p: p, Wx: Wx, Wy: Wy, H: H, half: half, side: side, fill: fill,
+      vol: vol, baseVol: baseVol, pyrVol: pyrVol, nTris: nTris, valid: ok, msg: msg
+    };
   }
 
   /* ============================================================
@@ -359,6 +484,20 @@
     scene.background = new window.THREE.Color(COL.bg3d);
 
     camera = new window.THREE.PerspectiveCamera(42, 1, 0.1, 5000);
+    /* 相机 up 必须显式设成世界 Z（光学件以 Z 为高度/光轴方向）。
+       frameObject 的取景数学本来就是 Z-up 约定 —— 它按
+       right = fwd × Z、up = right × fwd 构造屏幕基；
+       而相机默认 up = 世界 Y，两者不一致时：
+
+         · 板子的长边（世界 Y）被永远投影成竖向 —— 20×50 的板子
+           渲染成「一堵竖墙」，实测投影仅 124×381 px；
+         · 取景是按 Z-up 的屏幕基算的距离，与真实视锥不符 ——
+           实测模型只占画面宽 13.6%（正确值 ≈ 88%）。
+
+       必须在构造 OrbitControls **之前**设好：它内部就按 object.up
+       一次性算出轨道坐标系的四元数（见 vendor-orbitcontrols.js 中
+       setFromUnitVectors(object.up, (0,1,0))），之后再改不会重新计算。 */
+    camera.up.set(0, 0, 1);
     camera.position.set(60, 40, 70);
 
     if (window.THREE.OrbitControls) {
@@ -369,14 +508,20 @@
       controls.minDistance = 5;
     }
 
-    scene.add(new window.THREE.AmbientLight(0xffffff, 0.35));
-    var key = new window.THREE.DirectionalLight(0xffffff, 1.1);
+    /* 灯光：为「哑光面 + 平面着色」配的。
+       棱面结构靠**面朝向差异**读出，故压低各处无方向的补光、让方向光主导：
+       环境光过高会把所有朝向的面一起抬亮，棱面之间就没有明暗差；
+       侧面补光（fill）保留少量即可，否则背光面会黑成一片看不清轮廓。
+       原先这套强度是为「高光玻璃感」调的 —— 那时亮度主要来自高光，
+       环境光高低不敏感。 */
+    scene.add(new window.THREE.AmbientLight(0xffffff, 0.22));
+    var key = new window.THREE.DirectionalLight(COL.prismKey, 1.25);
     key.position.set(80, 120, 60);
     scene.add(key);
-    var rim = new window.THREE.DirectionalLight(0x88bbff, 0.5);
+    var rim = new window.THREE.DirectionalLight(COL.prismRim, 0.42);
     rim.position.set(-60, 30, -80);
     scene.add(rim);
-    var fill = new window.THREE.DirectionalLight(0xffffff, 0.3);
+    var fill = new window.THREE.DirectionalLight(COL.prismFill, 0.22);
     fill.position.set(0, -40, 40);
     scene.add(fill);
 
@@ -402,8 +547,22 @@
     var w = el.clientWidth, h = el.clientHeight;
     if (!(w > 0) || !(h > 0)) return;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
+    var aspect = w / h;
+    camera.aspect = aspect;
     camera.updateProjectionMatrix();
+
+    /* 首帧取景常常发生在 .prism-stage 还没拿到最终尺寸的时候（切到本视图
+       之前它是隐藏的），此时量到的宽高比与真实视口不符 —— 实测取景按
+       aspect 0.90 算，而真实视口是 1.754，于是模型只占画面宽 13.6%、
+       且几乎正侧视。这里在宽高比明显变化时补一次重新取景。
+
+       **只在相机仍停在我们上次取景留下的位置上时才补** —— 用户手动转过
+       视角就绝不覆盖，这是 v3.3.0 定下的取景规则。 */
+    if (lastFrameMode && probeHalf && frameAspect > 0) {
+      if (Math.abs(aspect - frameAspect) / aspect > 0.02 && cameraUntouched()) {
+        doFrame(probeCenter[0], probeCenter[1], probeCenter[2], probeHalf, aspect);
+      }
+    }
   }
 
   /* 渲染一帧。不依赖 rAF —— rAF 在后台标签/无头环境被节流，
@@ -419,11 +578,31 @@
     drawOnce();
   }
 
-  function makeMaterial() {
+  /* 棱镜板表面材质。
+
+     原材质是「高光 + 半透明 + 清漆层」的玻璃感：
+       color 0x9ecbff / roughness 0.18 / clearcoat 1.0 /
+       clearcoatRoughness 0.08 / opacity 0.82
+     对一维的连续肋面尚可，但二维金字塔阵列是**大量朝向各异的小平面** ——
+     高光与清漆会在每个面上各打一块高亮，相邻面一起过曝成白，
+     明暗差异被抹平、结构细节看不见；半透明还会透出背面，进一步糊掉层次。
+
+     现改为哑光不透明：roughness 0.9、去掉清漆层、opacity 1。
+     这样每个棱面的亮度只由「面法线 · 光向」决定，棱面朝向的差异直接
+     变成可读的明暗层次。基色收到 --c-prism（语义色单一来源）。
+
+     flat：二维用平面着色，让每个三角形用自己的面法线。
+     否则共享顶点的法线会被平均，金字塔尖呈圆滑过渡、棱边消失。
+     一维**不开** —— 它的圆角是 10 段折线拟合的，平面着色会把圆角
+     显成 10 个折面，反而更假。 */
+  function makeMaterial(flat) {
     return new window.THREE.MeshPhysicalMaterial({
-      color: 0x9ecbff, metalness: 0.0, roughness: 0.18,
-      transparent: true, opacity: xrayMode ? 0.35 : 0.82,
-      clearcoat: 1.0, clearcoatRoughness: 0.08,
+      color: COL.prism,
+      metalness: 0.0,
+      roughness: 0.9,
+      flatShading: !!flat,
+      transparent: xrayMode,
+      opacity: xrayMode ? 0.35 : 1.0,
       side: window.THREE.DoubleSide
     });
   }
@@ -471,7 +650,14 @@
     }
 
     /* 迭代收敛：相机沿 u 方向后退，距离为 dist。
-       相机朝原点看，故前向 = -u。构造相机的 up/right 基。 */
+       相机朝原点看，故前向 = -u。构造相机的 up/right 基。
+
+       need 必须以 −Infinity 起手，不能以 0 起手：本式与 Math.max 配合，
+       含义是「当前距离还差多少才装得下」，装得下时它是负数。
+       写成 0 就等于给收敛加了一条「只能推远、不能拉近」的下限 ——
+       而初值 3×包围盒对角线本来就偏远，实测该写法下循环第一轮
+       need = 0 直接 break，相机被钉死在 1.8 倍于所需的距离上，
+       模型只占画面宽 13.6%、几乎正侧视。 */
     for (var it = 0; it < 6; it++) {
       var fwd = [-u[0], -u[1], -u[2]];
       var right = cross3(fwd, [0, 0, 1]);
@@ -479,7 +665,7 @@
       if (rl < 1e-6) right = [1, 0, 0]; else right = scale3(right, 1 / rl);
       var camUp = cross3(right, fwd);
 
-      var need = 0;
+      var need = -Infinity;
       for (var i = 0; i < pts.length; i++) {
         var q = pts[i];
         var depth = dot3(q, fwd) + dist;             // 沿视线方向的距离
@@ -499,6 +685,41 @@
     camera.updateProjectionMatrix();
     camera.lookAt(controls.target);
     controls.update();
+
+    /* 把投影包围盒的中心对到画面中心。
+       透视下「包围盒中心的投影」并不等于「投影的中心」—— 近端角点被放大、
+       远端被压缩，直接对准中心会留下偏移（实测垂直方向 41 px，恰好在
+       居中判据 40 px 之外）。这里把 8 个角点投到 NDC 量出偏移，
+       再沿屏幕平面平移注视点与相机。
+
+       注意 acc：平移之后角点相对注视点的位置会变，第二轮必须用**扣掉累计
+       平移量**后的相对位置再算 —— 否则第二轮会看到与第一轮相同的偏移量，
+       再修一次，正好过头一倍（实测 offX 从 +29 px 翻成 −29 px）。
+       平移不改变相机朝向，故 right/camUp/fwd/dist 全程有效。 */
+    var acc = [0, 0, 0];
+    for (var pass = 0; pass < 3; pass++) {
+      var lo = [1e9, 1e9], hi = [-1e9, -1e9];
+      for (var m = 0; m < pts.length; m++) {
+        var q2 = [pts[m][0] - acc[0], pts[m][1] - acc[1], pts[m][2] - acc[2]];
+        var d2 = dot3(q2, fwd) + dist;
+        if (d2 < 1e-3) d2 = 1e-3;
+        var nx = (dot3(q2, right) / d2) / tanH;
+        var ny = (dot3(q2, camUp) / d2) / tanV;
+        lo[0] = Math.min(lo[0], nx); hi[0] = Math.max(hi[0], nx);
+        lo[1] = Math.min(lo[1], ny); hi[1] = Math.max(hi[1], ny);
+      }
+      var sx = (lo[0] + hi[0]) / 2, sy = (lo[1] + hi[1]) / 2;
+      if (Math.abs(sx) < 1e-4 && Math.abs(sy) < 1e-4) break;
+      var dx = sx * dist * tanH, dy = sy * dist * tanV;
+      for (var ax = 0; ax < 3; ax++) {
+        var shift = right[ax] * dx + camUp[ax] * dy;
+        controls.target.setComponent(ax, controls.target.getComponent(ax) + shift);
+        camera.position.setComponent(ax, camera.position.getComponent(ax) + shift);
+        acc[ax] += shift;
+      }
+      camera.lookAt(controls.target);
+      controls.update();
+    }
   }
 
   function cross3(a, b) {
@@ -528,14 +749,39 @@
    * 从而显式触发一次重新取景。
    * ============================================================ */
   var lastFrameMode = '';    // 上一次自动取景时的模式（'' = 尚未取景 / 已请求重置）
+  var frameAspect = 0;       // 上一次取景所用的视口宽高比
+  var frameCamPos = null;    // 上一次取景后留下的相机位置（判断用户是否动过）
+  var frameTarget = null;    // 上一次取景后留下的注视点
 
   function maybeFrame(m, cx, cy, cz, half, aspect) {
     probeCenter = [cx, cy, cz];
     probeHalf = [half[0], half[1], half[2]];
     if (m === lastFrameMode) return false;   // 同模式：绝不自动取景
     lastFrameMode = m;
-    frameObject(cx, cy, cz, half, aspect);
+    doFrame(cx, cy, cz, half, aspect);
     return true;
+  }
+
+  function doFrame(cx, cy, cz, half, aspect) {
+    frameObject(cx, cy, cz, half, aspect);
+    if (!camera || !controls) return;
+    frameAspect = aspect;
+    frameCamPos = [camera.position.x, camera.position.y, camera.position.z];
+    frameTarget = [controls.target.x, controls.target.y, controls.target.z];
+  }
+
+  /* 用户有没有动过相机？直接与我们上次取景后留下的位置逐分量比较。
+     比监听拖拽事件可靠：不需要区分「点一下但没拖动」这类情形，
+     也不依赖任何额外标志位（v3.3.0 就是因为标志位难判才改成按模式取景的）。 */
+  function cameraUntouched() {
+    if (!frameCamPos || !frameTarget || !camera || !controls) return false;
+    var e = 1e-3, p = camera.position, t = controls.target;
+    return Math.abs(p.x - frameCamPos[0]) < e &&
+           Math.abs(p.y - frameCamPos[1]) < e &&
+           Math.abs(p.z - frameCamPos[2]) < e &&
+           Math.abs(t.x - frameTarget[0]) < e &&
+           Math.abs(t.y - frameTarget[1]) < e &&
+           Math.abs(t.z - frameTarget[2]) < e;
   }
 
   /* 回到标准视角，并恢复"允许自动取景" */
@@ -585,6 +831,9 @@
 
     var p = geo.p, Wx = geo.Wx, Wy = geo.Wy, H = geo.H;
     var t = p.base, h = p.height, pitch = p.pitch, nx = p.nx, ny = p.ny;
+    var b = geo.half;                 // 半底宽 b —— 与几何量读数同源
+    var hasPyr = b > 1e-9;            // b → 0：金字塔退化成针尖
+    var hasLand = (pitch - 2 * b) > 1e-9;   // 2b = pitch：齿底相接，无平台
 
     var verts = [], faces = [];
     var b0 = 0; verts.push(0, 0, 0);
@@ -597,12 +846,34 @@
       g[i] = [];
       for (j = 0; j <= ny; j++) { g[i][j] = verts.length / 3; verts.push(i * pitch, j * pitch, t); }
     }
-    var v = [];
+
+    /* 每格：底面 4 个角点 + 顶点。
+       格内划分为「四周平台环 + 金字塔侧面」：
+         平台环 = 4 个四边形（格角 → 底面角），拆成 8 个三角形
+         金字塔 = 4 个侧面三角形
+       合计 12 个三角形/格，与 triCount2D() 一致。
+
+       原实现把底面角点直接取成格角、顶点取格心 —— 金字塔底面恒为
+       pitch×pitch 满铺、四周没有平台，**倾角参数完全不参与建模**
+       （体积也按 pitch² 算，默认参数下比真实值大 12 倍）。 */
+    var base4 = [], apex = [];
+    var shareBase = !hasLand;    // 无平台 → 底面角点即格角，直接共用（避免接缝）
     for (i = 0; i < nx; i++) {
-      v[i] = [];
+      base4[i] = []; apex[i] = [];
       for (j = 0; j < ny; j++) {
-        v[i][j] = verts.length / 3;
-        verts.push((i + 0.5) * pitch, (j + 0.5) * pitch, t + h);
+        if (shareBase) {
+          base4[i][j] = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
+        } else {
+          var cx = (i + 0.5) * pitch, cy = (j + 0.5) * pitch;
+          var o = [];
+          /* 逆时针：左下 → 右下 → 右上 → 左上 */
+          o.push(verts.length / 3); verts.push(cx - b, cy - b, t);
+          o.push(verts.length / 3); verts.push(cx + b, cy - b, t);
+          o.push(verts.length / 3); verts.push(cx + b, cy + b, t);
+          o.push(verts.length / 3); verts.push(cx - b, cy + b, t);
+          base4[i][j] = o;
+        }
+        apex[i][j] = verts.length / 3; verts.push((i + 0.5) * pitch, (j + 0.5) * pitch, t + h);
       }
     }
 
@@ -611,12 +882,18 @@
     faces.push([b1, b2, g[nx][ny], g[nx][0]]);
     faces.push([b2, b3, g[0][ny], g[nx][ny]]);
     faces.push([b3, b0, g[0][0], g[0][ny]]);
+
     for (i = 0; i < nx; i++) {
       for (j = 0; j < ny; j++) {
-        faces.push([g[i][j], g[i + 1][j], v[i][j]]);
-        faces.push([g[i + 1][j], g[i + 1][j + 1], v[i][j]]);
-        faces.push([g[i + 1][j + 1], g[i][j + 1], v[i][j]]);
-        faces.push([g[i][j + 1], g[i][j], v[i][j]]);
+        /* 格角（逆时针）与底面角（逆时针）序号一一对应 */
+        var O = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
+        var I = base4[i][j];
+        var A = apex[i][j];
+        for (var k = 0; k < 4; k++) {
+          var k2 = (k + 1) % 4;
+          if (hasLand) faces.push([O[k], O[k2], I[k2], I[k]]);   // 平台环
+          if (hasPyr) faces.push([I[k], I[k2], A]);              // 金字塔侧面
+        }
       }
     }
 
@@ -633,7 +910,7 @@
     g2.computeVertexNormals();
     g2.translate(-Wx / 2, -Wy / 2, 0);
 
-    mesh = new window.THREE.Mesh(g2, makeMaterial());
+    mesh = new window.THREE.Mesh(g2, makeMaterial(true));
     scene.add(mesh);
 
     var wg = new window.THREE.WireframeGeometry(g2);
@@ -973,10 +1250,14 @@
 'from build123d import *\n' +
 '\n' +
 '# 原始截面点（XZ 平面，逆时针）\n' +
+'# 齿底宽 = 2·HALF_B，齿间保留 (PITCH − 2·HALF_B) 的平台\n' +
 'pts = [(0,0.0),(PITCH*N,0.0),(PITCH*N,BASE_T)]\n' +
 'for i in range(N-1,-1,-1):\n' +
-'    pts.append(((i+0.5)*PITCH, BASE_T+HEIGHT))\n' +
-'    pts.append((i*PITCH, BASE_T))\n' +
+'    cx = (i+0.5)*PITCH\n' +
+'    pts.append((cx+HALF_B, BASE_T))\n' +
+'    pts.append((cx, BASE_T+HEIGHT))\n' +
+'    pts.append((cx-HALF_B, BASE_T))\n' +
+'pts.append((0.0, BASE_T))\n' +
 '\n' +
 'with BuildPart() as bp:\n' +
 '    with BuildSketch(Plane.XZ) as sk:\n' +
@@ -998,10 +1279,14 @@
 'from math import tan, radians\n' +
 '\n' +
 '# 原始截面点（XZ 平面，逆时针）\n' +
+'# 齿底宽 = 2·HALF_B，齿间保留 (PITCH − 2·HALF_B) 的平台\n' +
 'pts = [(0,0.0),(PITCH*N,0.0),(PITCH*N,BASE_T)]\n' +
 'for i in range(N-1,-1,-1):\n' +
-'    pts.append(((i+0.5)*PITCH, BASE_T+HEIGHT))\n' +
-'    pts.append((i*PITCH, BASE_T))\n' +
+'    cx = (i+0.5)*PITCH\n' +
+'    pts.append((cx+HALF_B, BASE_T))\n' +
+'    pts.append((cx, BASE_T+HEIGHT))\n' +
+'    pts.append((cx-HALF_B, BASE_T))\n' +
+'pts.append((0.0, BASE_T))\n' +
 '\n' +
 '# 在 XZ 平面画截面，沿 Y 拉伸\n' +
 'wp = cq.Workplane("XZ")\n' +
@@ -1034,7 +1319,8 @@
       'APEX    = ' + p.angle + '      # 斜面倾角 (deg，与水平面夹角)\n' +
       'BASE_T  = ' + v(p.base) + '    # 基底厚\n' +
       'NX      = ' + p.nx + '         # X 方向列数\n' +
-      'NY      = ' + p.ny + '         # Y 方向行数\n';
+      'NY      = ' + p.ny + '         # Y 方向行数\n' +
+      'HALF_B  = ' + v(geo.half) + '  # 自动：半底宽 b = h/tan(倾角)\n';
 
     var b123d = params + '\n' +
 'from math import tan, radians\n' +
@@ -1043,7 +1329,7 @@
 '# 基底\n' +
 'base = Box(NX*PITCH, NY*PITCH, BASE_T, centered=(False,False,False))\n' +
 '\n' +
-'# 金字塔阵列\n' +
+'# 金字塔阵列：底面 2·HALF_B 见方，四周留 (PITCH − 2·HALF_B) 平台\n' +
 'pyramids = []\n' +
 'for i in range(NX):\n' +
 '    for j in range(NY):\n' +
@@ -1051,7 +1337,8 @@
 '        cy = (j+0.5)*PITCH\n' +
 '        with BuildPart() as pyr:\n' +
 '            with BuildSketch(Plane.XY.offset(BASE_T)):\n' +
-'                Rectangle(PITCH, PITCH)\n' +
+'                with Locations((cx, cy)):\n' +
+'                    Rectangle(2*HALF_B, 2*HALF_B)\n' +
 '            with BuildSketch(Plane.XY.offset(BASE_T+HEIGHT)):\n' +
 '                Point(cx, cy)\n' +
 '            loft()\n' +
@@ -1070,18 +1357,18 @@
 '# 基底\n' +
 'result = cq.Workplane("XY").box(NX*PITCH, NY*PITCH, BASE_T, centered=(False,False,False))\n' +
 '\n' +
-'# 金字塔阵列（底面矩形 loft 到顶点）\n' +
+'# 金字塔阵列：底面 2·HALF_B 见方，四周留 (PITCH − 2·HALF_B) 平台\n' +
 'for i in range(NX):\n' +
 '    for j in range(NY):\n' +
 '        cx = (i+0.5)*PITCH\n' +
 '        cy = (j+0.5)*PITCH\n' +
 '        pyr = (cq.Workplane("XY")\n' +
 '               .workplane(offset=BASE_T)\n' +
-'               .rect(PITCH, PITCH)\n' +
+'               .rect(2*HALF_B, 2*HALF_B)\n' +
 '               .workplane(offset=HEIGHT)\n' +
 '               .rect(0.001, 0.001)\n' +
 '               .loft())\n' +
-'        pyr = pyr.translate((cx-PITCH/2, cy-PITCH/2, 0))\n' +
+'        pyr = pyr.translate((cx-HALF_B, cy-HALF_B, 0))\n' +
 '        result = result.union(pyr)\n' +
 '\n' +
 'cq.exporters.export(result, "pyramid_array.step")\n' +
@@ -1276,7 +1563,15 @@
     };
     $('btn_xray').onclick = function () {
       xrayMode = !xrayMode;
-      if (mesh) mesh.material.opacity = xrayMode ? 0.35 : 0.82;
+      if (mesh) {
+        var m = mesh.material;
+        /* transparent 与 opacity 必须一起改：常态是**不透明**（transparent=false
+           时 opacity 被忽略），透视模式才开混合。改 transparent 属材质结构性
+           变更，需置 needsUpdate 让 three.js 重编着色器，否则不生效。 */
+        m.transparent = xrayMode;
+        m.opacity = xrayMode ? 0.35 : 1.0;
+        m.needsUpdate = true;
+      }
       drawOnce();
     };
 
@@ -1307,10 +1602,20 @@
     };
   }
 
-  /* buildSTEP2D 与上面的 buildSTEP 同构，只是顶点来自金字塔网格 */
+  /* buildSTEP2D 与上面的 buildSTEP 同构，只是顶点来自金字塔网格。
+
+     网格结构与 rebuildMesh2D 严格一致（否则预览与导出件对不上）：
+       每格 = 四周平台环（4 个四边形）+ 金字塔侧面（4 个三角形）
+     2b = pitch 时平台宽度为 0，此时金字塔底面角点与格角重合，
+     直接共用网格点 —— 这样底面棱边由相邻两格共享，壳仍闭合。
+     若给它们另起一套顶点，底面棱边会只被一个面引用，壳就不水密了。 */
   function buildSTEP2D(geo) {
     var p = geo.p, Wx = geo.Wx, Wy = geo.Wy;
     var t = p.base, h = p.height, pitch = p.pitch, nx = p.nx, ny = p.ny;
+    var b = geo.half;
+    var hasPyr = b > 1e-9;
+    var hasLand = (pitch - 2 * b) > 1e-9;
+    var shareBase = !hasLand;         // 无平台 → 底面角点即格角
 
     var pts = [];
     var b0 = 0, b1 = 1, b2 = 2, b3 = 3;
@@ -1318,8 +1623,25 @@
 
     var g = [], i, j;
     for (i = 0; i <= nx; i++) { g[i] = []; for (j = 0; j <= ny; j++) { g[i][j] = pts.length; pts.push([i * pitch, j * pitch, t]); } }
-    var v = [];
-    for (i = 0; i < nx; i++) { v[i] = []; for (j = 0; j < ny; j++) { v[i][j] = pts.length; pts.push([(i + 0.5) * pitch, (j + 0.5) * pitch, t + h]); } }
+
+    var base4 = [], apex = [];
+    for (i = 0; i < nx; i++) {
+      base4[i] = []; apex[i] = [];
+      for (j = 0; j < ny; j++) {
+        if (shareBase) {
+          base4[i][j] = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
+        } else {
+          var cx = (i + 0.5) * pitch, cy = (j + 0.5) * pitch;
+          var o = [];
+          o.push(pts.length); pts.push([cx - b, cy - b, t]);
+          o.push(pts.length); pts.push([cx + b, cy - b, t]);
+          o.push(pts.length); pts.push([cx + b, cy + b, t]);
+          o.push(pts.length); pts.push([cx - b, cy + b, t]);
+          base4[i][j] = o;
+        }
+        apex[i][j] = pts.length; pts.push([(i + 0.5) * pitch, (j + 0.5) * pitch, t + h]);
+      }
+    }
 
     var edges = [];
     function E(a, b) {
@@ -1335,8 +1657,13 @@
     for (i = 0; i < nx; i++) for (j = 0; j <= ny; j++) E(g[i][j], g[i + 1][j]);
     for (i = 0; i <= nx; i++) for (j = 0; j < ny; j++) E(g[i][j], g[i][j + 1]);
     for (i = 0; i < nx; i++) for (j = 0; j < ny; j++) {
-      E(g[i][j], v[i][j]); E(g[i + 1][j], v[i][j]);
-      E(g[i + 1][j + 1], v[i][j]); E(g[i][j + 1], v[i][j]);
+      var I = base4[i][j], A = apex[i][j];
+      var O = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
+      if (!shareBase) {
+        for (var k = 0; k < 4; k++) E(O[k], I[k]);                 // 平台环辐条
+        for (var k2 = 0; k2 < 4; k2++) E(I[k2], I[(k2 + 1) % 4]);  // 金字塔底棱
+      }
+      if (hasPyr) for (var k3 = 0; k3 < 4; k3++) E(I[k3], A);      // 金字塔侧棱
     }
 
     function cross(a, b) {
@@ -1379,10 +1706,13 @@
     for (j = 0; j <= ny; j++) sideX0.push(g[0][j]);
     facePlanes.push(faceFromVerts(sideX0));
     for (i = 0; i < nx; i++) for (j = 0; j < ny; j++) {
-      facePlanes.push(faceFromVerts([g[i][j], g[i + 1][j], v[i][j]]));
-      facePlanes.push(faceFromVerts([g[i + 1][j], g[i + 1][j + 1], v[i][j]]));
-      facePlanes.push(faceFromVerts([g[i + 1][j + 1], g[i][j + 1], v[i][j]]));
-      facePlanes.push(faceFromVerts([g[i][j + 1], g[i][j], v[i][j]]));
+      var O2 = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
+      var I2 = base4[i][j], A2 = apex[i][j];
+      for (var kk = 0; kk < 4; kk++) {
+        var kk2 = (kk + 1) % 4;
+        if (!shareBase) facePlanes.push(faceFromVerts([O2[kk], O2[kk2], I2[kk2], I2[kk]]));  // 平台环
+        if (hasPyr) facePlanes.push(faceFromVerts([I2[kk], I2[kk2], A2]));                   // 金字塔侧面
+      }
     }
 
     var id = 0;
@@ -1550,7 +1880,24 @@
            这三个数是判断相机有没有被动的唯一直接依据。 */
         camPos: [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
         camTarget: [+controls.target.x.toFixed(4), +controls.target.y.toFixed(4), +controls.target.z.toFixed(4)],
-        frameMode: lastFrameMode
+        frameMode: lastFrameMode,
+        /* 取景所依据的视口宽高比，以及「相机是否仍停在取景留下的位置」。
+           这两项让「取景是否与真实视口一致」成为可直接断言的量 ——
+           原先只能靠截图目测，而取景用错宽高比时画面是"模型缩在一角"，
+           极易被当成模型尺寸问题。 */
+        frameAspect: +frameAspect.toFixed(4),
+        camUntouched: cameraUntouched(),
+        /* 材质参数：让「哑光不透明、二维平面着色」成为可断言的量。
+           这几项曾是高光玻璃感（roughness 0.18 + 清漆层 + 半透明），
+           会把二维金字塔阵列的棱面明暗差异糊掉。 */
+        mat: (mesh && mesh.material) ? {
+          roughness: +mesh.material.roughness.toFixed(3),
+          clearcoat: mesh.material.clearcoat === undefined ? null : +mesh.material.clearcoat.toFixed(3),
+          opacity: +mesh.material.opacity.toFixed(3),
+          transparent: !!mesh.material.transparent,
+          flatShading: !!mesh.material.flatShading,
+          color: '#' + mesh.material.color.getHexString()
+        } : null
       };
     }
   };
