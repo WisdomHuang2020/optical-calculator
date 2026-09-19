@@ -10,8 +10,6 @@ annotated tag，并在本文件记录变更。
 
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
-- 腾讯云 CloudBase（国内镜像，v3.11.0 起）：
-  <https://wisdom-workbuddy-d5es3ga3966da98-1434855486.tcloudbaseapp.com/>
 
 ## [v3.11.0] - 2026-09-19
 
