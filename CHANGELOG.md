@@ -8,6 +8,15 @@ annotated tag，并在本文件记录变更。
 
 对应站点：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v3.10.3] - 2026-09-19
+
+### 文案 · 去掉两处栏目标题的编号前缀
+
+- 最优设计方法页栏目标题 `05 Optimal Design Method` → `Optimal Design Method`；
+- 设计校核栏目 `04 Design Verification` → `Design Verification`。
+
+其余栏目的编号（01 / 02 / 05 / 06）保持不变。
+
 ## [v3.10.2] - 2026-09-19
 
 ### 全站审核与修复
