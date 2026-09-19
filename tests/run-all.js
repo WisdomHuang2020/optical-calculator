@@ -41,6 +41,10 @@ const SUITES = [
      单调性在 Node vm 里直接断言（不起 Chrome，套件保持快）；
      页脚断言守住「备注不照搬前 3 页」这一本版修复的缺陷本身。 */
   { name: '棱镜性能预估 · 内核物理与页脚', file: 'prism-perf-check.js' },
+  /* 二维六种形状内核（v3.8.0）：解析体积/填充率 vs 数值积分、整板壳水密性
+     （V−E+F=2 且每条边恰好两个面）、定向体积朝外、晶格归约自洽。
+     前三条都是"不报错、只有导进 CAD 才露馅"的静默缺陷，必须显式断言。 */
+  { name: '二维形状内核 · 六形状几何与壳闭合', file: 'prism-shapes-check.js' },
   { name: '计算内核 · 光度学数值断言', file: 'verify.js' },
   { name: '参考算例 · 外部文件复核', file: 'verify-user-file.js' },
   { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' },

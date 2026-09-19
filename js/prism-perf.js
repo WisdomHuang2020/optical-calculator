@@ -217,45 +217,38 @@
        底面边长 2b，塔尖高 h ⇒ z = t + h·(1 − max(|dx|,|dy|)/b)
      二维模式没有圆角输入，面全是平面，故用步进 + 二分求交即可
      （一维有圆角，才必须精确求交）。 */
-  function makeCell2D(p, b, t, h) {
-    var half = p / 2;
-    function f(x, y) {
-      var rx = x - Math.floor(x / p) * p - half, ry = y - Math.floor(y / p) * p - half;
-      var ax = Math.abs(rx), ay = Math.abs(ry);
-      if (b <= 1e-9 || ax > b || ay > b) return t;
-      return t + h * (1 - Math.max(ax, ay) / b);
-    }
+  /* 二维单元胞：形状无关。
+     高度场与法线来自 prism-shapes.js 的 makeSurface（六种形状共用同一套
+     范数 + 剖面模型），晶格归约来自同一个文件的 reduce —— 追迹用的曲面
+     与预览网格、STEP 用的是同一份公式，不再是三处各写一遍。 */
+  function makeCell2D(K, p, b, t, h, topRatio) {
+    var S = window.PrismShapes;
+    var surf = S.makeSurface(K, { pitch: p, height: h, angle: 45, topRatio: topRatio || 0 }, b, t, h);
     var zMax = t + h;
-    /* 最小横向特征：金字塔底边长 2b 与平台宽 (pitch−2b) 里的小者。
-       步长必须小于足迹边长之半，否则可能整个跨过一个很窄的足迹
-       （两点都落在足迹外、g 都为正）→ 漏掉真正的首次命中。 */
-    /* 横向步长：只需分辨最小横向特征 = min(金字塔底边 2b, 平台宽 pitch−2b)。
+    function f(x, y) {
+      var loc = S.reduce(K, p, x, y);
+      return surf(loc[0], loc[1]).z;
+    }
+    /* 横向步长：只需分辨最小横向特征 = min(足迹跨度, 平台宽)。
        步长取它的 1/6，再用 pitch/80 兜住「平台极窄」的极端（否则步数会爆）；
        步长过大会整个跨过很窄的足迹（两端 g 都为正）→ 漏掉真正的首次命中。 */
-    var stepLat = Math.max(Math.min(2 * b, p - 2 * b) / 6, p / 80, 1e-6);
+    var stepLat = Math.max(S.lateralFeature(K, b, p) / 6, p / 80, 1e-6);
 
     function out(s, x0, y0, z0, dx, dy, dz) {
       var hx = x0 + s * dx, hy = y0 + s * dy;
-      var nx = 0, ny = 0, nz = 1;
-      var rx = hx - Math.floor(hx / p) * p - half, ry = hy - Math.floor(hy / p) * p - half;
-      if (b > 1e-9 && Math.abs(rx) <= b && Math.abs(ry) <= b) {
-        var k = h / b;
-        if (Math.abs(rx) >= Math.abs(ry)) { nx = k * (rx >= 0 ? 1 : -1); ny = 0; }
-        else { nx = 0; ny = k * (ry >= 0 ? 1 : -1); }
-        var L = Math.sqrt(nx * nx + ny * ny + 1);
-        nx /= L; ny /= L; nz = 1 / L;
-      }
-      return { x: hx, y: hy, z: z0 + s * dz, s: s, nx: nx, ny: ny, nz: nz };
+      var loc = S.reduce(K, p, hx, hy);
+      var q = surf(loc[0], loc[1]);
+      return { x: hx, y: hy, z: z0 + s * dz, s: s, nx: q.nx, ny: q.ny, nz: q.nz };
     }
 
     /* 步进 + 二分。搜索范围按同一套「命中点必在足迹附近」的判据收窄：
        朝上且起点在基准面之下时锚在跨过 z = t 的点 (xₜ,yₜ)，其余情形锚在起点；
-       命中点必在以锚点为心、足迹直径 2b√2 的范围内（朝下时同理，表面要降到
-       射线的高度才能相遇，横向走不出一个足迹）。近水平光线的行程再长
-       也不影响成本。 */
+       命中点必在以锚点为心、足迹外接圆直径 2·rFoot 的范围内（朝下时同理，
+       表面要降到射线的高度才能相遇，横向走不出一个足迹）。近水平光线的
+       行程再长也不影响成本。 */
     function hit(x0, y0, z0, dx, dy, dz) {
       var lat = Math.sqrt(dx * dx + dy * dy);   /* 热路径：避开 Math.hypot */
-      var reach = 2 * b * Math.SQRT2 * 1.5 + 1e-9;
+      var reach = 2 * S.footRadius(K, b) * 1.5 + 1e-9;
       var sMax;
       if (dz > 1e-12) {
         sMax = (zMax - z0) / dz;
@@ -626,16 +619,18 @@
       design = traceCell(cell, o, RAYS_1D, SEED);
       note = '一维肋按挤出几何作严格二维追迹（面外波矢分量在界面处守恒）';
     } else {
+      var K2 = window.Prism.shapeOf(P.p2.shape);
       var hb = window.Prism.half2D(P.p2);
       if (!hb || !(hb.half > 0) || !(P.p2.height > 0)) {
-        return { ok: false, why: '二维几何无效（金字塔高或半底宽为 0），当前参数等同平板。' };
+        return { ok: false, why: '二维几何无效（结构高或半底宽为 0），当前参数等同平板。' };
       }
-      cell = makeCell2D(P.p2.pitch, hb.half, P.p2.base, P.p2.height);
+      cell = makeCell2D(K2, P.p2.pitch, hb.half, P.p2.base, P.p2.height, P.p2.topRatio);
       makeCell = function (k) {
-        return makeCell2D(P.p2.pitch, hb.half * k, P.p2.base, P.p2.height * k);
+        return makeCell2D(K2, P.p2.pitch, hb.half * k, P.p2.base, P.p2.height * k, P.p2.topRatio);
       };
       design = traceCell(cell, o, RAYS_2D, SEED);
-      note = '金字塔阵列在单元胞内作真三维追迹（横向按周期回卷）';
+      note = K2.label + '阵列在单元胞内作真三维追迹（横向按' +
+             (K2.lattice === 'hex' ? '蜂窝晶格' : '方形晶格') + '回卷）';
     }
 
     var Ud = uniformity(design.bins, o.thetaV);

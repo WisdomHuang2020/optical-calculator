@@ -214,8 +214,13 @@ okTrue('齿根落在齿距中央 ± b（不再是 i·pitch）',
   /xc\s*\+\s*b,\s*t/.test(prism) && /xc\s*-\s*b,\s*t/.test(prism));
 okTrue('二维半底宽有唯一定义点 halfBase2D()', /function halfBase2D\s*\(/.test(prism));
 okTrue('二维三角形计数有唯一定义点 triCount2D()', /function triCount2D\s*\(/.test(prism));
-okTrue('二维体积按 (2b)² 而非 pitch² 算',
-  /pyrVol\s*=\s*p\.nx\s*\*\s*p\.ny\s*\*\s*side\s*\*\s*side/.test(prism));
+/* v3.8.0：二维体积改由形状内核的 volumeOf() 给出（六种形状各有解析式），
+   prism.js 里再出现 `side*side*p.height/3` 这种金字塔专属式子，就说明
+   公式又被人抄了一份回来 —— 这正是当初"显示 ≠ 实际"的根源。 */
+okTrue('二维体积来自形状内核 volumeOf（本文件不再抄公式）',
+  /volumeOf\(K,\s*half/.test(prism) && !/side\s*\*\s*side\s*\*\s*p\.height\s*\/\s*3/.test(prism));
+okTrue('二维半底宽来自形状内核 halfBase（本文件不再抄公式）',
+  /S\.halfBase\(K,\s*p\)/.test(prism) && !/p\.height\s*\/\s*Math\.tan\(p\.angle/.test(prism));
 okTrue('圆角半径有唯一定义点 filletRadii()', /function filletRadii\s*\(/.test(prism));
 okTrue('filletDetailed 与 exactArea 共用 filletRadii()',
   (prism.match(/filletRadii\s*\(pts,\s*r\)/g) || []).length >= 2);
@@ -268,8 +273,13 @@ okTrue('一维网格不开平面着色（makeMaterial() 无参）',
    （圆弧半径 R）很容易被误读成角度/弧度。这里把「标注」本身作为门禁。 */
 console.log('\n=== 9. 参数单位与物理定义标注 ===');
 const hintCount = (html.match(/class="param-hint"/g) || []).length;
-okTrue('每个一维参数都带定义说明（7 条 param-hint）', hintCount === 13,
-  `param-hint 共 ${hintCount} 条（一维 7 + 二维 6）`);
+/* v3.8.0：二维新增「形状」与「顶面占比 k」两个输入，各带一条说明 → 8 条 */
+okTrue('每个参数都带定义说明（7 条一维 + 8 条二维）', hintCount === 15,
+  `param-hint 共 ${hintCount} 条（一维 7 + 二维 8）`);
+okTrue('二维面板有形状下拉（六种形状）',
+  (html.match(/<option value="(pyramid|frustum|cone|sphere|parabola|hexpyr)"/g) || []).length === 6);
+okTrue('形状下拉只有台锥时才显示顶面占比 k',
+  /id="p2_top_field"/.test(html) && /usesTop/.test(prism));
 okTrue('圆角的定义写明「是长度、不是角度/弧度」',
   /不是角度、不是弧度/.test(html));
 okTrue('圆角定义含实际生效值的去向指引',

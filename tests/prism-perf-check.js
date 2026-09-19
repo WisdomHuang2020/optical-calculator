@@ -165,6 +165,7 @@ const sandbox = {
 };
 win.document = fakeDoc; win.setTimeout = setTimeout; sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
+vm.runInContext(read('js/prism-shapes.js'), sandbox, { filename: 'prism-shapes.js' });
 vm.runInContext(read('js/prism.js'), sandbox, { filename: 'prism.js' });
 vm.runInContext(read('js/prism-perf.js'), sandbox, { filename: 'prism-perf.js' });
 
@@ -173,7 +174,8 @@ const P = win.Prism;
 const SEED = 20260919;
 const g1 = P.profile1D({ pitch: 1, height: 0.25, angle: 60, base: 0.20, radius: 0.02, N: 20, L: 50 });
 const cell1 = I.makeCell1D(g1);
-const cell2 = I.makeCell2D(1, 0.25, 0.20, 0.25);
+/* 二维单元胞按形状内核构造（v3.8.0）：四棱锥默认 */
+const cell2 = I.makeCell2D(win.PrismShapes.get('pyramid'), 1, 0.25, 0.20, 0.25, 0);
 const baseOpt = { n: 1.49, rho: 0.85, coupling: 'coupled', thetaV: 60 };
 
 /* 3.1 能量账：η + 腔损 + 未逸出 + 孤儿 = 100%。

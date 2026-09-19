@@ -818,36 +818,56 @@
 
         <div id="params_2d" style="display:none">
           <div class="field">
-            <label>pitch 齿距 <span class="unit">mm · X/Y</span></label>
+            <label>shape 微结构形状</label>
+            <select id="p2_shape">
+              <option value="pyramid" selected>四棱锥（正方形底）</option>
+              <option value="frustum">台锥（截头四棱锥）</option>
+              <option value="cone">圆锥（回转对称）</option>
+              <option value="sphere">球冠 / 微透镜</option>
+              <option value="parabola">抛物面帽</option>
+              <option value="hexpyr">六棱锥（蜂窝密排）</option>
+            </select>
+            <p class="param-hint" id="p2_shape_hint"></p>
+          </div>
+          <div class="field" id="p2_top_field" style="display:none">
+            <label>top ratio 顶面半宽占比 k <span class="unit">0–0.95</span></label>
+            <input id="p2_top" type="number" step="0.05" min="0" max="0.95" value="0.35">
+            <p class="param-hint">平顶半宽 = k·b，b = h/(tanα·(1−k))。k = 0 即普通
+              四棱锥；k 越大越接近平板（平顶不参与角度变换，只增加脱模余量）。</p>
+          </div>
+          <div class="field">
+            <label>pitch 中心间距 <span class="unit">mm</span></label>
             <input id="p2_pitch" type="number" step="0.01" value="1.0">
-            <p class="param-hint">相邻两金字塔中心线的间距（X、Y 相同）。</p>
+            <p class="param-hint">相邻两个结构<b>中心线</b>的间距（方形晶格 X/Y 相同；
+              蜂窝晶格为相邻中心距离，行距 = √3/2·pitch）。</p>
           </div>
           <div class="field">
-            <label>height 金字塔高 <span class="unit">mm</span></label>
+            <label>height 结构高 <span class="unit">mm</span></label>
             <input id="p2_height" type="number" step="0.01" value="0.25">
-            <p class="param-hint">塔尖相对底面的高度 h。</p>
+            <p class="param-hint">顶点相对底面的高度 h。</p>
           </div>
           <div class="field">
-            <label>apex angle 斜面倾角 <span class="unit">°</span></label>
+            <label>angle 倾角 α <span class="unit">°</span></label>
             <input id="p2_angle" type="number" step="0.5" value="45">
-            <p class="param-hint">金字塔斜面与<b>水平底面</b>的夹角——注意与一维
-              的「顶角」不是同一个量（一维是齿顶两条齿面的夹角）。金字塔半底宽
-              <b>b = h / tan(α)</b>，底面边长 2b。</p>
+            <p class="param-hint">与<b>水平底面</b>的夹角——注意与一维的「顶角」
+              不是同一个量（一维是齿顶两条齿面的夹角）。平面面型的 α 就是面倾角；
+              球冠 / 抛物面是<b>底面边缘处的切线倾角</b>（曲面斜率逐点变化）。
+              半底宽公式见下方「几何量」一栏，随形状切换。</p>
           </div>
           <div class="field">
             <label>base thickness 基底厚 <span class="unit">mm</span></label>
             <input id="p2_base" type="number" step="0.01" value="0.20">
-            <p class="param-hint">塔底以下的平板厚度 t。</p>
+            <p class="param-hint">结构底面以下的平板厚度 t。</p>
           </div>
           <div class="field">
             <label>columns X 列数 <span class="unit">个</span></label>
             <input id="p2_nx" type="number" step="1" min="1" value="20">
-            <p class="param-hint">板宽 <b>Wx = Nx · pitch</b>。</p>
+            <p class="param-hint">板宽 <b>Wx = Nx · pitch</b>（蜂窝晶格含半齿距偏移）。</p>
           </div>
           <div class="field">
             <label>rows Y 行数 <span class="unit">个</span></label>
             <input id="p2_ny" type="number" step="1" min="1" value="20">
-            <p class="param-hint">板宽 <b>Wy = Ny · pitch</b>。</p>
+            <p class="param-hint">板宽 <b>Wy = Ny · pitch</b>（蜂窝晶格为 Ny·√3/2·pitch）。</p>
           </div>
         </div>
 
@@ -861,6 +881,7 @@
           <div class="kv"><div class="k" id="s_k4">填充率 η = 2b/p</div><div class="v" id="s_beta">-</div></div>
           <div class="kv"><div class="k" id="s_k5">网格点</div><div class="v" id="s_v">-</div></div>
           <div class="kv"><div class="k">体积 <span class="unit">mm³</span></div><div class="v" id="s_vol">-</div></div>
+          <div class="kv" id="kv_tess"><div class="k">网格离散度</div><div class="v" id="s_tess">-</div></div>
           <div class="kv" id="kv_radius"><div class="k" id="s_k6">圆角 R（实际生效）</div><div class="v" id="s_r">-</div></div>
         </div>
 
@@ -984,8 +1005,14 @@
   <div class="fset" data-for="prism">
     <div>
       棱镜板设计 <b class="app-version">v—</b> —— 几何按参数化解析式生成：一维齿半底宽
-      <code>b = h·tan(α/2)</code>、二维金字塔 <code>b = h/tan(α)</code>，2b ≤ 齿距为最密排；
-      三维预览与 STEP / STL 导出共用同一套轮廓点，圆角按真实圆弧写入。
+      <code>b = h·tan(α/2)</code>；二维提供<b>六种面阵微结构</b>（四棱锥 / 台锥 / 圆锥 /
+      球冠 / 抛物面帽 / 六棱锥蜂窝密排），各自的半底宽公式与足迹面积见
+      <code>js/prism-shapes.js</code>，b 超过晶格上限时自动封顶并告警。
+    </div>
+    <div>
+      二维的预览网格、STL、STEP 共用<b>同一份顶点与面</b>（焊接后顶点去重，保证
+      STEP 的壳闭合）；圆锥 / 球冠 / 抛物面帽的<b>导出件</b>是按「网格离散度」一格
+      给出的方位角 × 环数离散的多面体近似，而性能预估走的是连续曲面，不受影响。
     </div>
     <div>
       设计核心见 <code>js/prism.js</code>（Three.js 已本地化到 <code>js/vendor-*.js</code>）；
@@ -1254,6 +1281,7 @@
 <script src="js/planar.js"></script>
 <script src="js/vendor-three.min.js"></script>
 <script src="js/vendor-orbitcontrols.js"></script>
+<script src="js/prism-shapes.js"></script>
 <script src="js/prism.js"></script>
 <script src="js/prism-perf.js"></script>
 <script src="js/prism-knowledge.js"></script>

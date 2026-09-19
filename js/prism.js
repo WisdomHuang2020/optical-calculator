@@ -460,6 +460,9 @@
       : rMin.toFixed(3) + ' ~ ' + rMax.toFixed(3) + ' mm');
     var kvR = $('kv_radius');
     if (kvR) kvR.hidden = false;
+    /* 「网格离散度」是二维曲面形状专属的读数（一维是挤出截面，无此概念） */
+    var kvT = $('kv_tess');
+    if (kvT) kvT.hidden = true;
 
     return {
       p: p, prof: prof, arcs: arcs, W: W, H: H, half: half, beta: beta, fill: fill,
@@ -469,11 +472,26 @@
   }
 
   /* ============================================================
-   * 二维棱镜：金字塔阵列
+   * 二维面阵微结构：六种形状
+   *
+   * 形状相关的全部公式（范数、剖面、半底宽、足迹面积、体积、网格、晶格）
+   * 集中在 js/prism-shapes.js。本文件只做「取内核 → 组装整板 → 出网格 /
+   * STEP / 脚本」。原先金字塔的公式在本文件里被写了四遍（几何量、预览网格、
+   * STEP、性能预估），加形状时若照此复制必然六份互相漂移 —— 这是把公式
+   * 抽出去的唯一理由。
    * ============================================================ */
+  function Sh() { return window.PrismShapes; }
+
   function readParams2D() {
     inputNotes = [];
+    var topEl = $('p2_top');
+    var top = topEl ? parseFloat(topEl.value) : 0;
+    if (!isFinite(top)) top = 0;
+    if (top < 0) { top = 0; inputNotes.push('顶面半宽占比 k 不能为负，已按 0 处理。'); }
+    if (top > 0.95) { top = 0.95; inputNotes.push('顶面半宽占比 k 超过 0.95 时台锥退化成平板，已按 0.95 处理。'); }
     return {
+      shape: ($('p2_shape') && $('p2_shape').value) || 'pyramid',
+      topRatio: top,
       pitch: parseFloat($('p2_pitch').value),
       height: parseFloat($('p2_height').value),
       angle: parseFloat($('p2_angle').value),
@@ -486,94 +504,139 @@
   /* 几何量的标签：两个模式各自单点定义。
      原实现的 1D 标签写在 index.html 里、且与代码写入的值错位
      （「面/边数」那一格实际写的是底角 β = (180−α)/2），
-     LABELS_1D 则声明了却从未被调用 —— 属死代码加错位，一并修正。 */
+     LABELS_1D 则声明了却从未被调用 —— 属死代码加错位，一并修正。
+     二维的「半底宽」那一格在不同形状下公式不同，故由内核的 bExpr 提供，
+     不再写死成 h/tan(α)。 */
   var LABELS_1D = ['板宽 W = N·p', '总高 H = t+h', '半底宽 b = h·tan(α/2)', '填充率 η = 2b/p', '网格点',
     '圆角 R（实际生效）'];
-  var LABELS_2D = ['板宽 Wx = Nx·p', '总高 H = t+h', '半底宽 b = h/tan(α)', '填充率 η = (2b/p)²', '金字塔数',
+  /* 二维的「填充率」标签不能写死成 (2b/p)² —— 那是正方形足迹才成立的式子，
+     圆形足迹是 πb²/p²、六边形是 2√3b²/(√3/2·p²)。写成形状无关的面积比，
+     具体数字由内核按形状给出。 */
+  var LABELS_2D_BASE = ['板宽 Wx × Wy', '总高 H = t+h', '半底宽 b', '填充率 η = 足迹/胞', '结构单元数',
     '圆角 R（实际生效）'];
 
-  /* 二维金字塔的半底宽（唯一定义点）。
-
-     面板把 α 标为「apex angle 斜面倾角」，即**斜面与水平面的夹角**，
-     故 b = h/tan(α)。这与一维的 b = h·tan(α/2) 不是同一个式子 ——
-     因为两个模式对 α 的定义本就不同（一维 = 齿顶夹角，二维 = 斜面倾角）。
-
-     原实现算了 half 却只用于读数与告警，网格点固定落在 (i·pitch, j·pitch)、
-     金字塔顶点固定落在格心 —— 于是金字塔底面恒为 pitch×pitch 满铺、
-     四周没有平台，**倾角完全不参与建模**，体积也按 pitch² 而非 (2b)² 算。
-     默认参数下两者相差 12 倍。 */
+  /* 二维的半底宽：唯一定义点即内核的 halfBase()。
+     这里只保留一个薄封装 —— 面板上的「半底宽」读数与建模用的 b 必须是
+     同一个数，历史上正是因为各算各的才出现"参数改了、模型没变"。 */
   function halfBase2D(p) {
-    var want = p.height / Math.tan(p.angle * RAD);
-    var max = p.pitch / 2;
-    return { want: want, use: Math.min(want, max), clamped: want > max + 1e-9 };
+    return Sh().halfBase(Sh().get(p.shape), p);
+  }
+  function triCount2D(b, pitch, nx, ny, shape, topRatio, h) {
+    var K = Sh().get(shape);
+    var t = tessOf(K, nx * ny);
+    var m = Sh().meshCell(K, b, h, pitch,
+      { azimuth: t.azimuth, rings: t.rings, topRatio: topRatio });
+    return Sh().polysToTriCount(m.polys) * nx * ny;
   }
 
-  /* 二维网格的三角形计数（唯一定义点）。
-     读数的 nTris 必须与 rebuildMesh2D 实际压入的三角形数一致，
-     否则又是一处「显示 ≠ 实际」——本文件反复踩的就是这一类。
-       每格：金字塔侧面 4 个 + 平台环 4 个四边形（= 8 个三角形）
-     b → 0 时金字塔退化成针尖（无侧面）；b = pitch/2 时平台宽度为 0
-     （齿底相接，环面四边形面积为 0）—— 两种情况都要如实扣掉。 */
-  function triCount2D(b, pitch, nx, ny) {
-    var hasPyr = b > 1e-9;
-    var hasLand = (pitch - 2 * b) > 1e-9;
-    return nx * ny * ((hasPyr ? 4 : 0) + (hasLand ? 8 : 0));
+  /* 离散度：预览、STL、STEP 共用同一套，保证「看到的就是导出的」。
+     预算按整板面数给；平面侧面（棱锥/台锥/圆锥/六棱锥）不分环也精确，
+     曲面（球冠/抛物面）按预算降方位角与环数，并在读数里如实显示。 */
+  /* 曲面形状在 20×20 = 400 个胞上、按方位角下限 8 段 × 最少 2 环铺开，
+     最少也要 400 × 36 = 14400 面；预算给 15000 才能选到"最细的那一档"，
+     否则会一路退化到下限。STEP 体积由 confirmExportSize 兜底。 */
+  var TESS_BUDGET = 10000;
+  function tessOf(K, nCells) {
+    return Sh().tessFor(K, nCells, TESS_BUDGET);
+  }
+
+  /* 整板组装本身在内核里（assemblePlate）—— 它与 DOM 无关，
+     测试要能不启动浏览器就校验整板壳的水密性。本文件只负责把参数喂进去。 */
+  function buildPlate2D(geo) {
+    return Sh().assemblePlate(geo.K, {
+      b: geo.half, h: geo.p.height, pitch: geo.p.pitch,
+      nx: geo.p.nx, ny: geo.p.ny, base: geo.p.base,
+      tess: geo.tess, topRatio: geo.p.topRatio
+    });
   }
 
   function buildGeometry2D() {
+    var S = Sh();
     var p = readParams2D();
-    var hb = halfBase2D(p);
+    var K = S.get(p.shape);
+    var hb = S.halfBase(K, p);
     var half = hb.use;                       // 实际用于建模的半底宽 b
-    var Wx = p.nx * p.pitch;
-    var Wy = p.ny * p.pitch;
+    var bd = S.boundsOf(K, p.pitch, p.nx, p.ny);
+    var Wx = bd.Wx, Wy = bd.Wy;
     var H = p.base + p.height;
-    var side = 2 * half;                     // 金字塔底面边长
-    var fill = (side / p.pitch) * (side / p.pitch);   // 面积填充率 η = (2b/p)²
-    var ok = true, msg = '';
+    var nCells = p.nx * p.ny;
+    var fill = S.fillOf(K, half, p.pitch);
+    var cellArea = S.cellArea(K, p.pitch);
+    var ok = true;
     var warns = inputNotes.slice();
 
     if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.nx >= 1) || !(p.ny >= 1) ||
         !(p.angle > 0) || !(p.angle < 180)) {
       /* 与一维同理：倾角的定义域是 (0°, 180°) 开区间，原先没查 */
       warns.push('存在非法参数，请检查：pitch / height 需 > 0，base ≥ 0，' +
-                 '斜面倾角需落在 (0°, 180°) 开区间内，列数 / 行数 ≥ 1。');
+                 '倾角需落在 (0°, 180°) 开区间内，列数 / 行数 ≥ 1。');
       ok = false;
     }
     if (hb.clamped) {
-      warns.push('金字塔半底宽 h/tan(α) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
-            (p.pitch / 2).toFixed(3) + ' mm，金字塔会重叠。底面已按齿距封顶' +
-            '（相邻金字塔恰好相接，填充率 1.000）。要得到真实的稀疏金字塔阵列' +
-            '请增大 pitch，或减小 height / 倾角。');
-      ok = false;
+      /* 钳位**不判为无效**：封顶后的几何是完全良定义的（相邻结构恰好相接），
+         原实现把它设成 invalid，于是换到球冠这类容易超限的形状时预览直接
+         不刷新、只剩一句警告 —— 比"参数非法"还难排查。 */
+      warns.push(K.label + '的半底宽 ' + K.bExpr + ' = ' + hb.want.toFixed(3) + ' mm 超过' +
+            '晶格上限 ' + hb.max.toFixed(3) + ' mm，相邻结构会重叠。已按上限封顶' +
+            '（恰好相接，填充率 ' + S.fillOf(K, hb.max, p.pitch).toFixed(3) + '）。' +
+            '要得到真实的稀疏阵列请增大 pitch，或减小 height / 倾角。');
+    }
+    if (K.usesTop && p.topRatio > 1e-9) {
+      warns.push('台锥顶面占比 k = ' + p.topRatio.toFixed(2) + '：平顶区域走的是"平板直通"' +
+            '光学路径，不参与角度变换，占比越大越接近一块纯平板。');
+      ok = true;                              // 这是提示，不是错误
     }
     showWarn(warns.join('\n'));
 
-    var baseVol = Wx * Wy * p.base;
-    var pyrVol = p.nx * p.ny * side * side * p.height / 3;
-    var vol = baseVol + pyrVol;
-    /* 每个齿距格：金字塔侧面 4 个三角形 + 四周平台环 4 个四边形（拆成 8 个三角形） */
-    var nTris = triCount2D(half, p.pitch, p.nx, p.ny);
+    var baseVol = nCells * cellArea * p.base;
+    var capVol = nCells * S.volumeOf(K, half, p.height, p.topRatio);
+    var vol = baseVol + capVol;
 
-    setText('s_k1', LABELS_2D[0]);
-    setText('s_k2', LABELS_2D[1]);
-    setText('s_k3', LABELS_2D[2]);
-    setText('s_k4', LABELS_2D[3]);
-    setText('s_k5', LABELS_2D[4]);
+    var tess = tessOf(K, nCells);
+    var geo = {
+      p: p, K: K, Wx: Wx, Wy: Wy, H: H, half: half, fill: fill, tess: tess,
+      vol: vol, baseVol: baseVol, capVol: capVol, nCells: nCells, valid: ok
+    };
+    if (ok) {
+      var plate = buildPlate2D(geo);
+      geo.plate = plate;
+      geo.nTris = Sh().polysToTriCount(plate.polys);
+      geo.nPolys = plate.polys.length;
+    } else {
+      geo.plate = null;
+      geo.nTris = 0;
+      geo.nPolys = 0;
+    }
+
+    setText('s_k1', LABELS_2D_BASE[0]);
+    setText('s_k2', LABELS_2D_BASE[1]);
+    setText('s_k3', '半底宽 ' + K.bExpr);
+    setText('s_k4', LABELS_2D_BASE[3]);
+    setText('s_k5', LABELS_2D_BASE[4]);
     setText('s_w', Wx.toFixed(3) + ' × ' + Wy.toFixed(3) + ' mm');
     setText('s_h', H.toFixed(3) + ' mm');
     setText('s_half', half.toFixed(3) + ' mm');
     setText('s_beta', fill.toFixed(3));
-    setText('s_v', p.nx * p.ny);
+    setText('s_v', nCells);
     setText('s_vol', vol.toFixed(1) + ' mm³');
-    /* 二维金字塔阵列没有圆角（面板也没有该输入），整行隐藏 —— 留一个 "—"
+    /* 二维阵列没有圆角（面板也没有该输入），整行隐藏 —— 留一个 "—"
        在那里反而会让人以为"二维的圆角是 0"。 */
     var kvR2 = $('kv_radius');
     if (kvR2) kvR2.hidden = true;
+    var kvT2 = $('kv_tess');
+    if (kvT2) kvT2.hidden = false;
+    /* 离散度：曲面形状必须让用户知道导出去的是多少边的近似 */
+    var tn = $('s_tess');
+    if (tn) {
+        /* 曲面形状必须写明"这是近似"：光线追迹走的是连续曲面（内核的
+         makeSurface），所以预估的光学量不受离散度影响；但**导出件**
+         是这个离散度的多面体，不看这一格就会误以为导出去的是精确回转面。 */
+      tn.textContent = K.norm === 'circle'
+        ? ('方位 ' + tess.azimuth + ' 段 × ' + tess.rings + ' 环（近似面型）· 整板 ' + geo.nPolys + ' 面')
+        : ('精确面型 · 整板 ' + geo.nPolys + ' 面');
+    }
 
-    return {
-      p: p, Wx: Wx, Wy: Wy, H: H, half: half, side: side, fill: fill,
-      vol: vol, baseVol: baseVol, pyrVol: pyrVol, nTris: nTris, valid: ok, msg: msg
-    };
+    return geo;
   }
 
   /* ============================================================
@@ -940,79 +1003,32 @@
     if (!scene) return;
     disposeMeshes();
 
-    var p = geo.p, Wx = geo.Wx, Wy = geo.Wy, H = geo.H;
-    var t = p.base, h = p.height, pitch = p.pitch, nx = p.nx, ny = p.ny;
-    var b = geo.half;                 // 半底宽 b —— 与几何量读数同源
-    var hasPyr = b > 1e-9;            // b → 0：金字塔退化成针尖
-    var hasLand = (pitch - 2 * b) > 1e-9;   // 2b = pitch：齿底相接，无平台
+    var Wx = geo.Wx, Wy = geo.Wy, H = geo.H;
+    var plate = geo.plate;
+    if (!plate) return;
 
-    var verts = [], faces = [];
-    var b0 = 0; verts.push(0, 0, 0);
-    var b1 = 1; verts.push(Wx, 0, 0);
-    var b2 = 2; verts.push(Wx, Wy, 0);
-    var b3 = 3; verts.push(0, Wy, 0);
-
-    var g = [], i, j;
-    for (i = 0; i <= nx; i++) {
-      g[i] = [];
-      for (j = 0; j <= ny; j++) { g[i][j] = verts.length / 3; verts.push(i * pitch, j * pitch, t); }
+    /* 顶点/面直接来自 buildPlate2D —— 与 STEP、STL 同一份数据。
+       四边形按 [0,1,2],[0,2,3] 拆；n 边形（底面可能是非凸的蜂窝轮廓）
+       用内核的耳切法三角化，不能用扇形（会画到板外去）。 */
+    var verts = [], indices = [], i, q;
+    for (i = 0; i < plate.verts.length; i++) {
+      var v = plate.verts[i];
+      verts.push(v[0], v[1], v[2]);
     }
-
-    /* 每格：底面 4 个角点 + 顶点。
-       格内划分为「四周平台环 + 金字塔侧面」：
-         平台环 = 4 个四边形（格角 → 底面角），拆成 8 个三角形
-         金字塔 = 4 个侧面三角形
-       合计 12 个三角形/格，与 triCount2D() 一致。
-
-       原实现把底面角点直接取成格角、顶点取格心 —— 金字塔底面恒为
-       pitch×pitch 满铺、四周没有平台，**倾角参数完全不参与建模**
-       （体积也按 pitch² 算，默认参数下比真实值大 12 倍）。 */
-    var base4 = [], apex = [];
-    var shareBase = !hasLand;    // 无平台 → 底面角点即格角，直接共用（避免接缝）
-    for (i = 0; i < nx; i++) {
-      base4[i] = []; apex[i] = [];
-      for (j = 0; j < ny; j++) {
-        if (shareBase) {
-          base4[i][j] = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
-        } else {
-          var cx = (i + 0.5) * pitch, cy = (j + 0.5) * pitch;
-          var o = [];
-          /* 逆时针：左下 → 右下 → 右上 → 左上 */
-          o.push(verts.length / 3); verts.push(cx - b, cy - b, t);
-          o.push(verts.length / 3); verts.push(cx + b, cy - b, t);
-          o.push(verts.length / 3); verts.push(cx + b, cy + b, t);
-          o.push(verts.length / 3); verts.push(cx - b, cy + b, t);
-          base4[i][j] = o;
-        }
-        apex[i][j] = verts.length / 3; verts.push((i + 0.5) * pitch, (j + 0.5) * pitch, t + h);
-      }
-    }
-
-    faces.push([b0, b3, b2, b1]);
-    faces.push([b0, b1, g[nx][0], g[0][0]]);
-    faces.push([b1, b2, g[nx][ny], g[nx][0]]);
-    faces.push([b2, b3, g[0][ny], g[nx][ny]]);
-    faces.push([b3, b0, g[0][0], g[0][ny]]);
-
-    for (i = 0; i < nx; i++) {
-      for (j = 0; j < ny; j++) {
-        /* 格角（逆时针）与底面角（逆时针）序号一一对应 */
-        var O = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
-        var I = base4[i][j];
-        var A = apex[i][j];
-        for (var k = 0; k < 4; k++) {
-          var k2 = (k + 1) % 4;
-          if (hasLand) faces.push([O[k], O[k2], I[k2], I[k]]);   // 平台环
-          if (hasPyr) faces.push([I[k], I[k2], A]);              // 金字塔侧面
+    for (i = 0; i < plate.polys.length; i++) {
+      var poly = plate.polys[i];
+      if (poly.length === 3) {
+        indices.push(poly[0], poly[1], poly[2]);
+      } else if (poly.length === 4) {
+        indices.push(poly[0], poly[1], poly[2], poly[0], poly[2], poly[3]);
+      } else {
+        var pts2 = [];
+        for (q = 0; q < poly.length; q++) pts2.push([plate.verts[poly[q]][0], plate.verts[poly[q]][1]]);
+        var tris = Sh().triangulate(pts2);
+        for (q = 0; q < tris.length; q++) {
+          indices.push(poly[tris[q][0]], poly[tris[q][1]], poly[tris[q][2]]);
         }
       }
-    }
-
-    var indices = [];
-    for (var fi = 0; fi < faces.length; fi++) {
-      var f = faces[fi];
-      if (f.length === 3) indices.push(f[0], f[1], f[2]);
-      else { indices.push(f[0], f[1], f[2]); indices.push(f[0], f[2], f[3]); }
     }
 
     var g2 = new window.THREE.BufferGeometry();
@@ -1421,69 +1437,213 @@
     return { b123d: b123d, cq: cq };
   }
 
+  /* 二维的 Python 建模脚本（build123d / CadQuery）。
+
+     按形状分派而不是只按金字塔写一份 —— 六种形状的构造方式本就不同
+     （放样 / 球柱相交 / 旋转成型 / 多边形草图），写成一份就必然对其中
+     五种是错的。每种形状只写自己需要的那几行，公共部分（基底、阵列循环、
+     导出）共用。 */
   function buildScripts2D(geo) {
-    var p = geo.p;
+    var p = geo.p, K = geo.K;
     var v = function (x) { return Number(x).toFixed(6); };
+    var b = geo.half, t = p.base, h = p.height, pitch = p.pitch;
+    var k = K.usesTop ? p.topRatio : 0;
+    var R = (K.profile === 'sphere') ? Sh().sphereGeom(b, h).R : 0;
+    var id = K.id;
+
     var params = '# 参数（单位 mm）\n' +
-      'PITCH   = ' + v(p.pitch) + '   # 齿距（X/Y 相同）\n' +
-      'HEIGHT  = ' + v(p.height) + '  # 金字塔高度\n' +
-      'APEX    = ' + p.angle + '      # 斜面倾角 (deg，与水平面夹角)\n' +
-      'BASE_T  = ' + v(p.base) + '    # 基底厚\n' +
-      'NX      = ' + p.nx + '         # X 方向列数\n' +
-      'NY      = ' + p.ny + '         # Y 方向行数\n' +
-      'HALF_B  = ' + v(geo.half) + '  # 自动：半底宽 b = h/tan(倾角)\n';
+      'SHAPE    = "' + id + '"       # ' + K.label + '\n' +
+      'PITCH    = ' + v(pitch) + '   # 中心间距\n' +
+      'HEIGHT   = ' + v(h) + '  # 结构高度\n' +
+      'ALPHA    = ' + p.angle + '      # 倾角 / 边缘切线倾角 (deg)\n' +
+      'BASE_T   = ' + v(t) + '    # 基底厚\n' +
+      'NX       = ' + p.nx + '         # X 方向列数\n' +
+      'NY       = ' + p.ny + '         # Y 方向行数\n' +
+      'HALF_B   = ' + v(b) + '  # 自动：半底宽（' + K.bExpr + '）\n' +
+      (K.usesTop ? 'TOP_K    = ' + v(k) + '   # 顶面半宽占比\n' : '') +
+      (K.profile === 'sphere' ? 'R_SPHERE = ' + v(R) + '  # 自动：球半径 (b²+h²)/(2h)\n' : '') +
+      '# 晶格：' + (K.lattice === 'hex' ? '蜂窝（行距 √3/2·PITCH，奇数行偏移 PITCH/2）'
+                                       : '方形（X/Y 同间距）') + '\n' +
+      '# 足迹：' + (K.norm === 'square' ? '正方形，半边长 HALF_B'
+                  : K.norm === 'hex' ? '正六边形，内切圆半径 HALF_B'
+                  : '圆，半径 HALF_B') + '\n';
 
+    function latticeLoop(indent, body) {
+      var s = '';
+      s += indent + 'for i in range(NX):\n';
+      s += indent + '    for j in range(NY):\n';
+      s += indent + '        cx = (i+0.5)*PITCH' +
+           (K.lattice === 'hex' ? ' + (0.5 if j%2 else 0)*PITCH\n' : '\n');
+      s += indent + '        cy = (j+0.5)*' +
+           (K.lattice === 'hex' ? 'ROW_H\n' : 'PITCH\n');
+      s += body(indent + '        ');
+      return s;
+    }
+
+    /* ---- build123d ---- */
     var b123d = params + '\n' +
-'from math import tan, radians\n' +
-'from build123d import *\n' +
-'\n' +
-'# 基底\n' +
-'base = Box(NX*PITCH, NY*PITCH, BASE_T, centered=(False,False,False))\n' +
-'\n' +
-'# 金字塔阵列：底面 2·HALF_B 见方，四周留 (PITCH − 2·HALF_B) 平台\n' +
-'pyramids = []\n' +
-'for i in range(NX):\n' +
-'    for j in range(NY):\n' +
-'        cx = (i+0.5)*PITCH\n' +
-'        cy = (j+0.5)*PITCH\n' +
-'        with BuildPart() as pyr:\n' +
-'            with BuildSketch(Plane.XY.offset(BASE_T)):\n' +
-'                with Locations((cx, cy)):\n' +
-'                    Rectangle(2*HALF_B, 2*HALF_B)\n' +
-'            with BuildSketch(Plane.XY.offset(BASE_T+HEIGHT)):\n' +
-'                Point(cx, cy)\n' +
-'            loft()\n' +
-'        pyramids.append(pyr.part)\n' +
-'\n' +
-'result = base\n' +
-'for pyr in pyramids:\n' +
-'    result = result.union(pyr)\n' +
-'\n' +
-'export_step(result, "pyramid_array.step")\n' +
-'print("OK -> pyramid_array.step")\n';
+      'from math import tan, radians, sqrt\n' +
+      'from build123d import *\n\n' +
+      (K.lattice === 'hex' ? 'ROW_H = sqrt(3)/2*PITCH\n\n' : '') +
+      '# 基底\n' +
+      (K.lattice === 'hex'
+        ? 'HEX_R = PITCH/sqrt(3)\n' +
+          'with BuildPart() as base:\n' +
+          '    with BuildSketch() as sk:\n' +
+          '        with Locations([( (i+0.5)*PITCH + (0.5 if j%2 else 0)*PITCH, (j+0.5)*ROW_H )\n' +
+          '                        for i in range(NX) for j in range(NY)]):\n' +
+          '            RegularPolygon(HEX_R, 6, major_radius=False)\n' +
+          '    extrude(amount=BASE_T)\n'
+        : 'base = Box(NX*PITCH, NY*PITCH, BASE_T, centered=(False,False,False))\n') +
+      '\n# 微结构阵列\n' +
+      'caps = []\n';
 
+    b123d += latticeLoop('', function (ind) {
+      var s = '';
+      var body;
+      if (id === 'pyramid' || id === 'hexpyr') {
+        var sides = id === 'hexpyr' ? 6 : 4;
+        var rad = id === 'hexpyr' ? 'HALF_B' : 'HALF_B';
+        body =
+          ind + 'with BuildPart() as cap:\n' +
+          ind + '    with BuildSketch(Plane.XY.offset(BASE_T)):\n' +
+          ind + '        with Locations((cx, cy)):\n' +
+          ind + '            RegularPolygon(' + rad + ', ' + sides + ', major_radius=False)\n' +
+          ind + '    with BuildSketch(Plane.XY.offset(BASE_T+HEIGHT)):\n' +
+          ind + '        Point(cx, cy)\n' +
+          ind + '    loft()\n' +
+          ind + 'caps.append(cap.part)\n';
+      } else if (id === 'frustum') {
+        body =
+          ind + 'with BuildPart() as cap:\n' +
+          ind + '    with BuildSketch(Plane.XY.offset(BASE_T)):\n' +
+          ind + '        with Locations((cx, cy)):\n' +
+          ind + '            Rectangle(2*HALF_B, 2*HALF_B)\n' +
+          ind + '    with BuildSketch(Plane.XY.offset(BASE_T+HEIGHT)):\n' +
+          ind + '        with Locations((cx, cy)):\n' +
+          ind + '            Rectangle(2*HALF_B*TOP_K, 2*HALF_B*TOP_K)\n' +
+          ind + '    loft()\n' +
+          ind + 'caps.append(cap.part)\n';
+      } else if (id === 'cone') {
+        body =
+          ind + 'with BuildPart() as cap:\n' +
+          ind + '    with BuildSketch(Plane.XY.offset(BASE_T)):\n' +
+          ind + '        with Locations((cx, cy)):\n' +
+          ind + '            Circle(HALF_B)\n' +
+          ind + '    with BuildSketch(Plane.XY.offset(BASE_T+HEIGHT)):\n' +
+          ind + '        Point(cx, cy)\n' +
+          ind + '    loft()\n' +
+          ind + 'caps.append(cap.part)\n';
+      } else if (id === 'sphere') {
+        body =
+          ind + '# 球冠 = 球 ∩ 圆柱（半径 HALF_B、高 HEIGHT），球心在底面下 R−HEIGHT\n' +
+          ind + 'sph = Sphere(R_SPHERE)\n' +
+          ind + 'sph = sph.translate((cx, cy, BASE_T+HEIGHT-R_SPHERE))\n' +
+          ind + 'cyl = Cylinder(HALF_B, HEIGHT)\n' +
+          ind + 'cyl = cyl.translate((cx, cy, BASE_T+HEIGHT/2))\n' +
+          ind + 'caps.append(sph & cyl)\n';
+      } else { /* parabola */
+        body =
+          ind + '# 抛物面帽：把 z = H(1−(r/b)²) 的母线按 NRING 段折线旋转成型\n' +
+          ind + 'pts = [(HALF_B*(1-j/NRING), HEIGHT*(1-(1-j/NRING)**2)) for j in range(NRING+1)]\n' +
+          ind + 'with BuildPart() as cap:\n' +
+          ind + '    with BuildSketch(Plane.XZ) as sk:\n' +
+          ind + '        with Locations((0, BASE_T)):\n' +
+          ind + '            with BuildLine() as ln:\n' +
+          ind + '                Polyline([(0, HEIGHT)] + [(r, z) for r, z in pts] + [(0, 0)])\n' +
+          ind + '            make_face()\n' +
+          ind + '    revolve(axis=Axis.Z)\n' +
+          ind + 'caps.append(cap.part.translate((cx, cy, 0)))\n';
+      }
+      s += body;
+      return s;
+    });
+
+    b123d += '\nresult = base' + (K.lattice === 'hex' ? '.part' : '') + '\n' +
+      'for cap in caps:\n' +
+      '    result = result.fuse(cap) if hasattr(result, "fuse") else result.union(cap)\n' +
+      '\nexport_step(result, "microstruct_array.step")\n' +
+      'print("OK -> microstruct_array.step")\n';
+    if (id === 'parabola') {
+      b123d = b123d.replace('from math import tan, radians, sqrt',
+        'from math import tan, radians, sqrt\nNRING = 12   # 母线折线段数（与网页预览的离散度一致）');
+    }
+
+    /* ---- CadQuery ---- */
     var cq = params + '\n' +
-'import cadquery as cq\n' +
-'\n' +
-'# 基底\n' +
-'result = cq.Workplane("XY").box(NX*PITCH, NY*PITCH, BASE_T, centered=(False,False,False))\n' +
-'\n' +
-'# 金字塔阵列：底面 2·HALF_B 见方，四周留 (PITCH − 2·HALF_B) 平台\n' +
-'for i in range(NX):\n' +
-'    for j in range(NY):\n' +
-'        cx = (i+0.5)*PITCH\n' +
-'        cy = (j+0.5)*PITCH\n' +
-'        pyr = (cq.Workplane("XY")\n' +
-'               .workplane(offset=BASE_T)\n' +
-'               .rect(2*HALF_B, 2*HALF_B)\n' +
-'               .workplane(offset=HEIGHT)\n' +
-'               .rect(0.001, 0.001)\n' +
-'               .loft())\n' +
-'        pyr = pyr.translate((cx-HALF_B, cy-HALF_B, 0))\n' +
-'        result = result.union(pyr)\n' +
-'\n' +
-'cq.exporters.export(result, "pyramid_array.step")\n' +
-'print("OK -> pyramid_array.step")\n';
+      'import cadquery as cq\n' +
+      'from math import sqrt, pi\n\n' +
+      (K.lattice === 'hex' ? 'ROW_H = sqrt(3)/2*PITCH\n' : '') +
+      (id === 'parabola' ? 'NRING = 12\n' : '') +
+      '\n# 基底\n' +
+      (K.lattice === 'hex'
+        ? 'HEX_R = PITCH/sqrt(3)\n' +
+          'base = None\n' +
+          'for i in range(NX):\n' +
+          '    for j in range(NY):\n' +
+          '        cx = (i+0.5)*PITCH + (0.5 if j%2 else 0)*PITCH\n' +
+          '        cy = (j+0.5)*ROW_H\n' +
+          '        one = (cq.Workplane("XY")\n' +
+          '               .polygon(6, 2*HEX_R)\n' +
+          '               .extrude(BASE_T)\n' +
+          '               .translate((cx, cy, 0)))\n' +
+          '        base = one if base is None else base.union(one)\n'
+        : 'base = cq.Workplane("XY").box(NX*PITCH, NY*PITCH, BASE_T, centered=(False,False,False))\n') +
+      '\nresult = base\n';
+
+    cq += latticeLoop('', function (ind) {
+      if (id === 'pyramid' || id === 'hexpyr') {
+        var sides = id === 'hexpyr' ? 6 : 4;
+        return ind + 'cap = (cq.Workplane("XY")\n' +
+          ind + '       .workplane(offset=BASE_T)\n' +
+          ind + '       .polygon(' + sides + ', 2*HALF_B)\n' +
+          ind + '       .workplane(offset=HEIGHT)\n' +
+          ind + '       .rect(0.001, 0.001)\n' +
+          ind + '       .loft()\n' +
+          ind + '       .translate((cx, cy, 0)))\n' +
+          ind + 'result = result.union(cap)\n';
+      }
+      if (id === 'frustum') {
+        return ind + 'cap = (cq.Workplane("XY")\n' +
+          ind + '       .workplane(offset=BASE_T)\n' +
+          ind + '       .rect(2*HALF_B, 2*HALF_B)\n' +
+          ind + '       .workplane(offset=HEIGHT)\n' +
+          ind + '       .rect(2*HALF_B*TOP_K, 2*HALF_B*TOP_K)\n' +
+          ind + '       .loft()\n' +
+          ind + '       .translate((cx, cy, 0)))\n' +
+          ind + 'result = result.union(cap)\n';
+      }
+      if (id === 'cone') {
+        return ind + 'cap = (cq.Workplane("XY")\n' +
+          ind + '       .workplane(offset=BASE_T)\n' +
+          ind + '       .circle(HALF_B)\n' +
+          ind + '       .workplane(offset=HEIGHT)\n' +
+          ind + '       .circle(0.001)\n' +
+          ind + '       .loft()\n' +
+          ind + '       .translate((cx, cy, 0)))\n' +
+          ind + 'result = result.union(cap)\n';
+      }
+      if (id === 'sphere') {
+        return ind + '# 球冠 = 球 ∩ 圆柱\n' +
+          ind + 'sph = cq.Workplane("XY").workplane(offset=BASE_T+HEIGHT-R_SPHERE).sphere(R_SPHERE)\n' +
+          ind + 'cyl = (cq.Workplane("XY").workplane(offset=BASE_T)\n' +
+          ind + '       .circle(HALF_B).extrude(HEIGHT))\n' +
+          ind + 'result = result.union(sph.intersect(cyl).translate((cx, cy, 0)))\n';
+      }
+      /* parabola */
+      return ind + 'prof = [(r, z) for r, z in\n' +
+        ind + '        [(HALF_B*(1-j/NRING), HEIGHT*(1-(1-j/NRING)**2)) for j in range(NRING+1)]]\n' +
+        ind + 'cap = (cq.Workplane("XZ").workplane(offset=0)\n' +
+        ind + '       .moveTo(0, BASE_T).lineTo(0, BASE_T+HEIGHT)\n' +
+        ind + '       .lineTo(prof[0][0], BASE_T+prof[0][1])\n' +
+        ind + '       .spline([(r, BASE_T+z) for r, z in prof[1:]])\n' +
+        ind + '       .close().revolve(360, (0, 0, 0), (0, 1, 0))\n' +
+        ind + '       .translate((cx, cy, 0)))\n' +
+        ind + 'result = result.union(cap)\n';
+    });
+
+    cq += '\ncq.exporters.export(result, "microstruct_array.step")\n' +
+      'print("OK -> microstruct_array.step")\n';
 
     return { b123d: b123d, cq: cq };
   }
@@ -1659,16 +1819,41 @@
     if (bound) return;
     bound = true;
 
-    /* 参数输入：防抖后刷新 */
-    var inputs = document.querySelectorAll('#view-prism .field input');
+    /* 参数输入：防抖后刷新。
+       select 也一并绑定 —— 形状下拉是二维的主开关，漏了它就会出现
+       「换了形状但模型没变」（历史上倾角参数就这么失效过）。 */
+    var inputs = document.querySelectorAll('#view-prism .field input, #view-prism .field select');
     for (var i = 0; i < inputs.length; i++) {
       (function (el) {
-        el.addEventListener('input', function () {
+        var ev = (el.tagName === 'SELECT') ? 'change' : 'input';
+        el.addEventListener(ev, function () {
           clearTimeout(el._t);
           el._t = setTimeout(refresh, 120);
         });
       })(inputs[i]);
     }
+
+    /* 形状下拉：切换时同步「顶面占比 k」输入的显隐与形状说明。
+       只有台锥需要 k —— 把它常显出来会让人以为每种形状都有平顶。 */
+    var shapeSel = $('p2_shape');
+    function syncShapeUI() {
+      var K = Sh().get(shapeSel ? shapeSel.value : 'pyramid');
+      var topF = $('p2_top_field');
+      if (topF) topF.style.display = K.usesTop ? '' : 'none';
+      var hint = $('p2_shape_hint');
+      if (hint) hint.textContent = K.hint;
+    }
+    if (shapeSel) {
+      shapeSel.addEventListener('change', function () {
+        syncShapeUI();
+        /* 换形状 = 换了一个不同的模型（足迹、晶格都可能变），视角重置 */
+        lastFrameMode = '';
+        refresh();
+        resize();
+        drawOnce();
+      });
+    }
+    syncShapeUI();
 
     /* 模式切换 */
     var btns = document.querySelectorAll('#view-prism .mode-btn');
@@ -1773,94 +1958,66 @@
         };
       })(tabs[t]);
     }
-
-    $('btn_copy').onclick = function () {
-      var cv = $('codeview');
-      if (!cv) return;
-      copyText(cv.textContent, $('btn_copy'));
-    };
   }
 
-  /* buildSTEP2D 与上面的 buildSTEP 同构，只是顶点来自金字塔网格。
+  /* buildSTEP2D：整板的平面片 B-rep。
 
-     网格结构与 rebuildMesh2D 严格一致（否则预览与导出件对不上）：
-       每格 = 四周平台环（4 个四边形）+ 金字塔侧面（4 个三角形）
-     2b = pitch 时平台宽度为 0，此时金字塔底面角点与格角重合，
-     直接共用网格点 —— 这样底面棱边由相邻两格共享，壳仍闭合。
-     若给它们另起一套顶点，底面棱边会只被一个面引用，壳就不水密了。 */
+     与上面的 buildSTEP 同构，但顶点来自 buildPlate2D —— 也就是
+     **预览网格、STL、STEP 三处共用同一份顶点/面**，不再各建一套。
+     原先二维的 STEP 里金字塔公式是第三份实现，与几何量读数和预览网格
+     两处都能对不上；现在只有 prism-shapes.js 一处。
+
+     两处必须这么做，否则壳闭不上：
+       ① 顶点焊接（buildPlate2D 里做）—— 相邻胞的公共棱要是同一个顶点；
+          不焊接时每条公共棱只被一个面引用，CAD 里算出 1e+102 的垃圾体积。
+       ② 边查表 —— 面的每条边要复用已建过的 EDGE_CURVE。原实现用线性
+          扫描找边，面数一上万就是 O(n²)（几千个面已经要跑十几秒），
+          换形状后曲面形状整板近万个面，线性扫描直接卡死。 */
   function buildSTEP2D(geo) {
-    var p = geo.p, Wx = geo.Wx, Wy = geo.Wy;
-    var t = p.base, h = p.height, pitch = p.pitch, nx = p.nx, ny = p.ny;
-    var b = geo.half;
-    var hasPyr = b > 1e-9;
-    var hasLand = (pitch - 2 * b) > 1e-9;
-    var shareBase = !hasLand;         // 无平台 → 底面角点即格角
+    var plate = geo.plate;
+    if (!plate || !plate.polys.length) return '';
+    var pts = plate.verts, polys = plate.polys;
+    var i;
 
-    var pts = [];
-    var b0 = 0, b1 = 1, b2 = 2, b3 = 3;
-    pts.push([0, 0, 0], [Wx, 0, 0], [Wx, Wy, 0], [0, Wy, 0]);
-
-    var g = [], i, j;
-    for (i = 0; i <= nx; i++) { g[i] = []; for (j = 0; j <= ny; j++) { g[i][j] = pts.length; pts.push([i * pitch, j * pitch, t]); } }
-
-    var base4 = [], apex = [];
-    for (i = 0; i < nx; i++) {
-      base4[i] = []; apex[i] = [];
-      for (j = 0; j < ny; j++) {
-        if (shareBase) {
-          base4[i][j] = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
-        } else {
-          var cx = (i + 0.5) * pitch, cy = (j + 0.5) * pitch;
-          var o = [];
-          o.push(pts.length); pts.push([cx - b, cy - b, t]);
-          o.push(pts.length); pts.push([cx + b, cy - b, t]);
-          o.push(pts.length); pts.push([cx + b, cy + b, t]);
-          o.push(pts.length); pts.push([cx - b, cy + b, t]);
-          base4[i][j] = o;
-        }
-        apex[i][j] = pts.length; pts.push([(i + 0.5) * pitch, (j + 0.5) * pitch, t + h]);
-      }
-    }
-
-    var edges = [];
-    function E(a, b) {
-      var pa = pts[a], pb = pts[b];
+    /* 边必须**规范化方向**后去重：一条公共棱在两个相邻面里的绕向相反
+       （a→b 与 b→a），若按有向分别建出两条 EDGE_CURVE，两个面就各引用
+       一条、每条只被 1 个面用到 —— STEP 校验器报"开口 11600 条"，
+       CAD 里壳闭不上。故统一按 (min,max) 建边，面用 .T./.F. 表示绕向。 */
+    var edges = [], emap = Object.create(null);
+    function edgeKey(a, b) { return a < b ? (a + '_' + b) : (b + '_' + a); }
+    function edgeOf(a, b) {
+      var k = edgeKey(a, b);
+      var e = emap[k];
+      if (e !== undefined) return e;
+      var lo = a < b ? a : b, hi = a < b ? b : a;
+      var pa = pts[lo], pb = pts[hi];
       var dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
-      var len = Math.hypot(dx, dy, dz);
-      edges.push({ a: a, b: b, dx: dx / len, dy: dy / len, dz: dz / len, origin: pa.slice() });
-      return edges.length - 1;
+      var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (!(len > 1e-12)) { dx = 1; dy = 0; dz = 0; len = 1; }
+      e = edges.length;
+      emap[k] = e;
+      edges.push({ a: lo, b: hi, dx: dx / len, dy: dy / len, dz: dz / len, origin: pa.slice() });
+      return e;
     }
-
-    E(b0, b1); E(b1, b2); E(b2, b3); E(b3, b0);
-    E(b0, g[0][0]); E(b1, g[nx][0]); E(b2, g[nx][ny]); E(b3, g[0][ny]);
-    for (i = 0; i < nx; i++) for (j = 0; j <= ny; j++) E(g[i][j], g[i + 1][j]);
-    for (i = 0; i <= nx; i++) for (j = 0; j < ny; j++) E(g[i][j], g[i][j + 1]);
-    for (i = 0; i < nx; i++) for (j = 0; j < ny; j++) {
-      var I = base4[i][j], A = apex[i][j];
-      var O = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
-      if (!shareBase) {
-        for (var k = 0; k < 4; k++) E(O[k], I[k]);                 // 平台环辐条
-        for (var k2 = 0; k2 < 4; k2++) E(I[k2], I[(k2 + 1) % 4]);  // 金字塔底棱
-      }
-      if (hasPyr) for (var k3 = 0; k3 < 4; k3++) E(I[k3], A);      // 金字塔侧棱
+    /* 先把所有面用到的边都建出来（去重由 emap 保证） */
+    for (i = 0; i < polys.length; i++) {
+      var pp = polys[i], m = pp.length;
+      for (var q = 0; q < m; q++) edgeOf(pp[q], pp[(q + 1) % m]);
     }
 
     function cross(a, b) {
       return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
     }
-    function nrm(vec) { var l = Math.hypot(vec[0], vec[1], vec[2]) || 1; return [vec[0] / l, vec[1] / l, vec[2] / l]; }
+    function nrm(vec) { var l = Math.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]) || 1; return [vec[0] / l, vec[1] / l, vec[2] / l]; }
     function pickRef(n) { return Math.abs(n[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0]; }
 
     function faceFromVerts(vl) {
       var loopEdges = [];
       for (var q = 0; q < vl.length; q++) {
         var a = vl[q], b = vl[(q + 1) % vl.length];
-        var found = -1, orient = '.T.';
-        for (var e = 0; e < edges.length; e++) {
-          if (edges[e].a === a && edges[e].b === b) { found = e; orient = '.T.'; break; }
-          if (edges[e].a === b && edges[e].b === a) { found = e; orient = '.F.'; break; }
-        }
-        loopEdges.push({ ec: found, orient: orient });
+        var ec = emap[edgeKey(a, b)];
+        if (ec === undefined) ec = edgeOf(a, b);
+        loopEdges.push({ ec: ec, orient: (a < b ? '.T.' : '.F.') });
       }
       var P0 = pts[vl[0]], P1 = pts[vl[1]], P2 = pts[vl[2]];
       var n = cross(
@@ -1871,28 +2028,7 @@
     }
 
     var facePlanes = [];
-    facePlanes.push(faceFromVerts([b0, b3, b2, b1]));
-    var sideY0 = [b0, b1];
-    for (i = nx; i >= 0; i--) sideY0.push(g[i][0]);
-    facePlanes.push(faceFromVerts(sideY0));
-    var sideX1 = [b1, b2];
-    for (j = ny; j >= 0; j--) sideX1.push(g[nx][j]);
-    facePlanes.push(faceFromVerts(sideX1));
-    var sideY1 = [b2, b3];
-    for (i = 0; i <= nx; i++) sideY1.push(g[i][ny]);
-    facePlanes.push(faceFromVerts(sideY1));
-    var sideX0 = [b3, b0];
-    for (j = 0; j <= ny; j++) sideX0.push(g[0][j]);
-    facePlanes.push(faceFromVerts(sideX0));
-    for (i = 0; i < nx; i++) for (j = 0; j < ny; j++) {
-      var O2 = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]];
-      var I2 = base4[i][j], A2 = apex[i][j];
-      for (var kk = 0; kk < 4; kk++) {
-        var kk2 = (kk + 1) % 4;
-        if (!shareBase) facePlanes.push(faceFromVerts([O2[kk], O2[kk2], I2[kk2], I2[kk]]));  // 平台环
-        if (hasPyr) facePlanes.push(faceFromVerts([I2[kk], I2[kk2], A2]));                   // 金字塔侧面
-      }
-    }
+    for (i = 0; i < polys.length; i++) facePlanes.push(faceFromVerts(polys[i]));
 
     var id = 0;
     function N() { return ++id; }
@@ -1916,8 +2052,8 @@
       push('#' + locId + " = CARTESIAN_POINT('',(" + l.origin[0].toFixed(6) + ',' + l.origin[1].toFixed(6) + ',' + l.origin[2].toFixed(6) + '));');
       /* lnId 必须是数组并逐条落位。原实现把它声明为循环内局部 var，
          却在 EDGE_CURVE 里按索引取 lnId[i]，i>=1 时恒为 undefined，
-         于是导出 #undefined 引用 —— 2448 条 EDGE_CURVE 全部语法错误，
-         壳无法闭合、体积算出 1e+102 的垃圾值。 */
+         于是导出 #undefined 引用 —— 2448 条 EDGE_CURVE 全部语法错误。
+         lnId 数组本身在 v3.5.0 已修，这里沿用。 */
       lnId[i] = N();
       push('#' + lnId[i] + " = LINE('',#" + locId + ',#' + vecId + ');');
       ecId[i] = N();
@@ -1953,8 +2089,9 @@
     }
     var shell = N();
     push('#' + shell + " = CLOSED_SHELL('',(#" + faceIds.join(',#') + '));');
+    var nm = (geo.K && geo.K.label) ? geo.K.label : 'MicroStructArray';
     var brep = N();
-    push('#' + brep + " = MANIFOLD_SOLID_BREP('PyramidArray',#" + shell + ');');
+    push('#' + brep + " = MANIFOLD_SOLID_BREP('" + nm + "',#" + shell + ');');
 
     /* 产品结构与单位声明：修法同 buildSTEP，详见该处注释。 */
     var appCtx = N();
@@ -1962,7 +2099,7 @@
     var prodCtx = N();
     push('#' + prodCtx + " = PRODUCT_CONTEXT('mechanical',#" + appCtx + ",'mechanical');");
     var product = N();
-    push('#' + product + " = PRODUCT('PyramidArray','PyramidArray','',(#" + prodCtx + '));');
+    push('#' + product + " = PRODUCT('" + nm + "','" + nm + "','',(#" + prodCtx + '));');
     var pdf = N();
     push('#' + pdf + " = PRODUCT_DEFINITION_FORMATION('','',#" + product + ');');
     var pdCtx = N();
@@ -1984,16 +2121,17 @@
     push('#' + guac2 + ' = ( GEOMETRIC_REPRESENTATION_CONTEXT(3) GLOBAL_UNIT_ASSIGNED_CONTEXT((#' + lu2 + ',#' + au2 + ',#' + su2 + ')) REPRESENTATION_CONTEXT(\'3D\',\'3D\') );');
 
     var absr = N();
-    push('#' + absr + " = ADVANCED_BREP_SHAPE_REPRESENTATION('PyramidArray',(#" + brep + '),#' + guac2 + ');');
+    push('#' + absr + " = ADVANCED_BREP_SHAPE_REPRESENTATION('" + nm + "',(#" + brep + '),#' + guac2 + ');');
     var sdr = N();
     push('#' + sdr + ' = SHAPE_DEFINITION_REPRESENTATION(#' + pds + ',#' + absr + ');');
 
     return 'ISO-10303-21;\nHEADER;\n' +
-      "FILE_DESCRIPTION(('Pyramid prism array'),'2;1');\n" +
-      "FILE_NAME('pyramid_array.step','" + new Date().toISOString() + "',(''),(''),'pyramid-designer','','');\n" +
+      "FILE_DESCRIPTION(('" + nm + " array'),'2;1');\n" +
+      "FILE_NAME('microstruct_array.step','" + new Date().toISOString() + "',(''),(''),'prism-designer','','');\n" +
       "FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\n" +
       'ENDSEC;\nDATA;\n' + defs.join('\n') + '\nENDSEC;\nEND-ISO-10303-21;\n';
   }
+
 
   /* ---------- 对外接口 ---------- */
   window.Prism = {
@@ -2010,7 +2148,14 @@
       if (!currentGeo) return '';
       return (mode === '1d') ? buildSTEP(currentGeo) : buildSTEP2D(currentGeo);
     },
-    buildScripts: function () { return currentGeo ? buildScripts(currentGeo) : null; },
+    /* 同样要按模式分派。原实现恒走 1D 生成器，二维下会把金字塔几何喂给
+       1D 脚本生成器（读 p.pitch/p.height 拿到的是二维的量），生成出一份
+       与预览完全无关的脚本 —— 面板上的 tab 处理器自己分派了，所以页面上看
+       不出来，但所有走此 API 的调用方（含测试）都会拿到错的脚本。 */
+    buildScripts: function () {
+      if (!currentGeo) return null;
+      return (mode === '1d') ? buildScripts(currentGeo) : buildScripts2D(currentGeo);
+    },
     /* 供无头验证同步驱动 OrbitControls 的阻尼收敛。
        真实浏览器里由 rAF 循环逐帧调 controls.update()；
        无头环境 rAF 被节流（实测 9000ms 预算只跑 3~5 帧），
@@ -2034,7 +2179,7 @@
         p1: { pitch: a.pitch, height: a.height, angle: a.angle, base: a.base,
               radius: a.radius, N: a.N, L: a.L },
         p2: { pitch: b.pitch, height: b.height, angle: b.angle, base: b.base,
-              nx: b.nx, ny: b.ny }
+              nx: b.nx, ny: b.ny, shape: b.shape, topRatio: b.topRatio }
       };
     },
     /* 纯计算、无副作用：给定一维参数，返回半底宽与**实际生效**的圆角半径 */
@@ -2080,17 +2225,26 @@
         W: p.N * p.pitch, H: p.base + p.height, angle: p.angle, radius: p.radius
       };
     },
-    /* 二维金字塔的半底宽 b（含按半齿距封顶），唯一定义点仍是 halfBase2D */
+    /* 二维结构单元的半底宽 b（含按晶格上限封顶）。
+       唯一定义点仍是内核的 halfBase() —— 本文件不再自己算一遍，否则
+       「读数用的公式」与「建模用的公式」又会是两份。
+       shape / topRatio 缺省时按四棱锥处理（老调用方不受影响）。 */
     half2D: function (p2) {
-      var q = { pitch: +p2.pitch, height: +p2.height, angle: +p2.angle, base: +p2.base };
+      var q = {
+        shape: p2.shape || 'pyramid', topRatio: +(p2.topRatio || 0),
+        pitch: +p2.pitch, height: +p2.height, angle: +p2.angle, base: +p2.base
+      };
       if (!(q.pitch > 0) || !(q.height >= 0) || !(q.base >= 0) ||
           !isFinite(q.pitch) || !isFinite(q.height) || !isFinite(q.base) ||
           !(q.angle > 0) || !(q.angle < 180)) {
         return null;
       }
       var hb = halfBase2D(q);
-      return { half: hb.use, want: hb.want, clamped: hb.clamped };
+      return { half: hb.use, want: hb.want, clamped: hb.clamped, max: hb.max };
     },
+    /* 供性能预估内核取形状内核与晶格参数，避免它再去解析一遍 DOM */
+    shapeOf: function (id) { return Sh().get(id); },
+    shapes: function () { return Sh().list; },
     probe: function () {      if (!camera || !renderer || !currentGeo) return null;
       var el = document.querySelector('.prism-stage');
       if (!el) return null;
