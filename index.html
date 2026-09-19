@@ -777,6 +777,24 @@
 
         <div id="params_1d">
           <div class="field">
+            <label for="p_shape">shape 肋条截面形状</label>
+            <select id="p_shape">
+              <option value="tri" selected>三角形肋（V 型）</option>
+              <option value="trap">梯形肋（平顶 / 截头）</option>
+              <option value="cyl">半圆柱脊（柱面微透镜）</option>
+              <option value="saw">锯齿肋（非对称斜肋）</option>
+              <option value="sine">正弦波脊</option>
+              <option value="para">抛物面脊</option>
+            </select>
+            <p class="param-hint" id="p_shape_hint"></p>
+          </div>
+          <div class="field" id="p_top_field" style="display:none">
+            <label for="p_top">top ratio 顶面半宽占比 k <span class="unit">0–0.95</span></label>
+            <input id="p_top" type="number" step="0.05" min="0" max="0.95" value="0.35">
+            <p class="param-hint">平顶半宽 = k·b。k = 0 即普通三角肋；k 越大越接近平条
+              （平顶不参与角度变换，只增加脱模余量与耐刮面积）。</p>
+          </div>
+          <div class="field">
             <label for="p_pitch">pitch 齿距 <span class="unit">mm</span></label>
             <input id="p_pitch" type="number" step="0.01" value="1.0">
             <p class="param-hint">相邻两齿中心线的间距（周期）。齿底宽 2b 之外的
@@ -788,9 +806,9 @@
             <p class="param-hint">齿顶相对齿根的高度 h（肋的起伏幅度）。</p>
           </div>
           <div class="field">
-            <label for="p_angle">apex angle 顶角 <span class="unit">°</span></label>
+            <label for="p_angle" id="p_angle_label">apex angle 顶角 <span class="unit">°</span></label>
             <input id="p_angle" type="number" step="0.5" value="60">
-            <p class="param-hint">齿顶处两条齿面之间的夹角 α，是<b>全角</b>
+            <p class="param-hint" id="p_angle_hint">齿顶处两条齿面之间的夹角 α，是<b>全角</b>
               （不是半角 α/2，也不是斜面与底面的夹角）。齿半底宽
               <b>b = h·tan(α/2)</b>，齿底宽 2b。</p>
           </div>
@@ -1772,6 +1790,7 @@
 <script src="js/vendor-three.min.js"></script>
 <script src="js/vendor-orbitcontrols.js"></script>
 <script src="js/prism-shapes.js"></script>
+<script src="js/prism-shapes1d.js"></script>
 <script src="js/prism.js"></script>
 <script src="js/prism-perf.js"></script>
 <script src="js/optimal-design.js"></script>

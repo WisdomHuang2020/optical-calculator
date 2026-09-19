@@ -522,12 +522,18 @@ if (!im) {
     cnt(s1, /=\s*CIRCLE\s*\(/g) === 0, 'CIRCLE = ' + cnt(s1, /=\s*CIRCLE\s*\(/g));
 
   /* ② 端盖闭合：轮廓 64 点 → 圆角后 704 个采样点 → 拓扑压缩为
-        192 条边（64 弧 + 128 直线），加 2 个端盖环共 194 个 EDGE_LOOP；
-        顶点数 = 2×192 = 384。 */
+        128 条边（64 弧 + 64 直线），加 2 个端盖环共 130 个 EDGE_LOOP；
+        顶点数 = 2×128 = 256。
+
+        v3.11.0：原来是 192 边（64 弧 + 128 直线）。多出来的 64 条直线是
+        圆角弧的**首段**被当成直边写出去了 —— 切点 a 到第一个采样点之间
+        本来就在弧上，写成弦是近似。把首段并回弧之后每个圆角只剩
+        「1 弧 + 1 条到下一个角的直线」，边数降到 128。数变小了，
+        几何反而更准。 */
   var loops = cnt(s1, /=\s*EDGE_LOOP\s*\(/g);
   var vtx = cnt(s1, /=\s*VERTEX_POINT\s*\(/g);
-  okTrue('1D EDGE_LOOP 数 = 192 侧面 + 2 端盖', loops === 194, 'EDGE_LOOP = ' + loops);
-  okTrue('1D 顶点数 = 2 × 192（底环 + 顶环）', vtx === 384, 'VERTEX_POINT = ' + vtx);
+  okTrue('1D EDGE_LOOP 数 = 128 侧面 + 2 端盖', loops === 130, 'EDGE_LOOP = ' + loops);
+  okTrue('1D 顶点数 = 2 × 128（底环 + 顶环）', vtx === 256, 'VERTEX_POINT = ' + vtx);
 
   /* ③ 产品结构 + 单位：缺任何一项都可能导致内核静默不转移几何。 */
   ['APPLICATION_CONTEXT', 'PRODUCT', 'PRODUCT_CONTEXT',

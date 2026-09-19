@@ -166,6 +166,9 @@ const sandbox = {
 win.document = fakeDoc; win.setTimeout = setTimeout; sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(read('js/prism-shapes.js'), sandbox, { filename: 'prism-shapes.js' });
+/* v3.11.0：一维形状内核。prism.js 的一维截面已改为由它供点与半底宽，
+   不在 vm 里先加载就会在 halfBase() 处炸 —— 与二维的 prism-shapes.js 同理。 */
+vm.runInContext(read('js/prism-shapes1d.js'), sandbox, { filename: 'prism-shapes1d.js' });
 vm.runInContext(read('js/prism.js'), sandbox, { filename: 'prism.js' });
 vm.runInContext(read('js/prism-perf.js'), sandbox, { filename: 'prism-perf.js' });
 

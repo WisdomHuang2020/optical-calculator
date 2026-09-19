@@ -27,6 +27,13 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var TAU = Math.PI * 2;
+  /* STEP 里单条弧边的最大扫角（弧度）。有理二次 Bézier 的权重
+     w1 = cos(Δ/2)，Δ→180° 时 w1→0、控制点发散，故必须切段。
+     取 120°（w1 = cos60° = 0.5，数值稳定）：
+       · 圆角弧最大就是齿顶的 120°（顶角 60° 时），正好一段搞定；
+       · 半圆柱脊的 180° 弧切成 120° + 60° 两段。
+     取更小的 60° 会把本可一段写完的圆角拆成两段，白白多出一批顶点与面。 */
+  var MAX_ARC_SWEEP = 120 * Math.PI / 180;
   var RAD = Math.PI / 180;
 
   /* ---------- 语义色：从 styles.css 的 --c-* 读取，不硬编码 ---------- */
@@ -115,15 +122,32 @@
 
   function readParams() {
     inputNotes = [];
+    var sh = Sh1().of(shape1D());
+    var topEl = $('p_top');
+    var top = topEl ? parseFloat(topEl.value) : 0;
+    if (!isFinite(top)) top = 0;
+    if (top < 0) { top = 0; inputNotes.push('顶面半宽占比 k 不能为负，已按 0 处理。'); }
+    if (top > 0.95) { top = 0.95; inputNotes.push('顶面半宽占比 k 超过 0.95 时肋退化成平顶薄条，已按 0.95 处理。'); }
     return {
+      shape: shape1D(),
+      topRatio: sh.usesTop ? top : 0,
       pitch: readNum('p_pitch', 1.0, '齿距 pitch', 0.01),
       height: readNum('p_height', 0.25, '齿高 height', 0.001),
-      angle: readNum('p_angle', 60, '顶角 α', 1, 179),
+      /* α 的定义域随形状变（顶角 / 倾角 / 切线角 / 最大坡度），
+         故上下界取自内核而不是写死 —— 写死就会把某一形状的界套到另一形状上。 */
+      angle: readNum('p_angle', sh.aDef, sh.angleLabel, sh.aMin, sh.aMax),
       base: readNum('p_base', 0.20, '底板厚 base', 0),
       radius: readNum('p_radius', 0.02, '圆角 R', 0),
       N: readCount('p_teeth', 1, 500, '齿数 N'),
       L: readNum('p_length', 50, '长度 L', 0.1)
     };
+  }
+
+  function Sh1() { return window.PrismShapes1D; }
+  function shape1D() {
+    var el = $('p_shape');
+    var id = el && el.value;
+    return (id && Sh1().S[id]) ? id : 'tri';
   }
 
   /* 齿半底宽的**唯一定义点**。rawProfile 与 buildGeometry 必须共用它，
@@ -139,11 +163,10 @@
      want = 参数意图值；use = 实际可用于建模的值。
      齿底宽 2b 超过齿距 pitch 时相邻齿必然重叠，此处按半齿距封顶，
      保证截面不自交；调用方须就此给出可见告警，不能静默封顶。 */
-  function halfBase(p) {
-    var want = p.height * Math.tan(p.angle / 2 * RAD);
-    var max = p.pitch / 2;
-    return { want: want, use: Math.min(want, max), clamped: want > max + 1e-9 };
-  }
+  /* 一维半底宽：唯一定义点在 js/prism-shapes1d.js（六种截面各一个公式）。
+     本文件只做转发 —— 公式散在调用处正是「页面显示值 ≠ 实际生成的截面」
+     这类缺陷的温床，二维已为此把公式抽进 prism-shapes.js，一维同理。 */
+  function halfBase(p) { return Sh1().halfOf(p.shape || 'tri', p); }
 
   /* 折线去重：跳过与上一点重合的点，并检查首尾是否重复。
 
@@ -174,34 +197,40 @@
     return out;
   }
 
+  /* 最短边长：圆角提示里要给出"卡在哪条边上"的具体数。
+     原先这里写的是 hypot(b, h)（三角肋的斜边长），换成曲面形状后
+     最短边是弧上的采样弦，沿用旧式会给一个与实际约束无关的数。 */
+  function shortestEdge(pts) {
+    var m = Infinity;
+    for (var i = 0; i < pts.length; i++) {
+      var a = pts[i], b = pts[(i + 1) % pts.length];
+      var l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (l > 1e-12 && l < m) m = l;
+    }
+    return isFinite(m) ? m : 0;
+  }
+
   /* 无圆角原始截面点（X-Z 平面，逆时针）
 
-     齿形由**顶角**决定，不是白占满一个齿距：
-       · 齿底宽 2b = 2h·tan(α/2)，居于所属齿距中央；
+     齿形由参数决定，不是白占满一个齿距：
+       · 齿底宽 2b（各形状公式见 prism-shapes1d.js），居于所属齿距中央；
        · 齿间保留宽度 (pitch − 2b) 的平台 —— 相邻齿不接触。
      这正是棱镜膜的实物形态，也是「填充率 η = 2b/pitch」的由来。
 
      原实现把齿根直接落在 i·pitch 上，即齿底宽恒等于一个整 pitch，
      于是**顶角参数完全不参与建模**：实测顶角 20°→150° 生成的截面
      逐点相同，实际齿顶角恒为 2·atan(pitch/2h)（默认参数下 126.87°），
-     与输入的 60° 无关。 */
+     与输入的 60° 无关。
+
+     曲面形状（半圆柱 / 正弦 / 抛物）在这里就带上 skip 与 inMeta：
+     skip 标明哪些点是弧上采样点（不该倒圆角），inMeta 标明哪些边是弧
+     （半圆柱据此在 STEP 里写出真圆柱面）。 */
   function rawProfile(p) {
-    var pitch = p.pitch, hh = p.height, t = p.base, N = p.N;
-    var b = halfBase(p).use;
-    var W = N * pitch;
-    var pts = [];
-    pts.push([0, 0]);
-    pts.push([W, 0]);
-    pts.push([W, t]);
-    for (var i = N - 1; i >= 0; i--) {
-      var xc = (i + 0.5) * pitch;
-      pts.push([xc + b, t]);        // 齿根（出射侧）
-      pts.push([xc, t + hh]);       // 齿顶
-      pts.push([xc - b, t]);        // 齿根（入射侧）
-    }
-    pts.push([0, t]);
-    /* 去重见 dedupePts 的说明：2b = pitch（最密排，合法）时齿根点会重合 */
-    return { pts: dedupePts(pts), W: W, half: b };
+    var id = p.shape || 'tri';
+    var hb = halfBase(p);
+    var pr = Sh1().profileOf(id, p, hb.use);
+    return { pts: pr.pts, skip: pr.skip, inMeta: pr.inMeta,
+             polyArea: pr.polyArea, W: p.N * p.pitch, half: hb.use };
   }
 
   /* 每个顶点的圆角半径与切线长：**唯一定义点**。
@@ -223,12 +252,15 @@
        k_u·T_u + k_v·T_v ≤ f·(T_u + T_v) = 边长   （f = 该边算出的系数）。
 
      返回与 pts 等长的 rr / T / turn；退化顶点（可直接用原顶点）为 0。 */
-  function filletRadii(pts, r) {
+  /* skip[i] = true 表示该顶点**不是拐角**（曲面形状的弧上采样点），
+     不该倒圆角 —— 否则逐采样点倒一遍，截面会被啃掉一圈。 */
+  function filletRadii(pts, r, skip) {
     var n = pts.length, i;
     var rr = new Array(n), T = new Array(n), turn = new Array(n);
     for (i = 0; i < n; i++) {
       rr[i] = 0; T[i] = 0; turn[i] = 0;
       if (!(r > 0)) continue;
+      if (skip && skip[i]) continue;
       var P = pts[i], Pr = pts[(i - 1 + n) % n], Pn = pts[(i + 1) % n];
       var v1 = [P[0] - Pr[0], P[1] - Pr[1]];
       var v2 = [Pn[0] - P[0], Pn[1] - P[1]];
@@ -282,19 +314,25 @@
 
      rr 的钳位必须与 filletDetailed 完全一致（min(r, 0.45·l1, 0.45·l2)），
      否则显示面积与导出件对不上。 */
-  function exactArea(pts, r) {
+  /* polyArea 给定时直接用它替代鞋带公式：曲面形状的采样折线比真实曲线
+     小 0.2%~0.6%，拿它当"精确值"会与 STEP 里的真圆弧对不上。 */
+  function exactArea(pts, r, skip, polyArea) {
     var n = pts.length;
     var a = 0;
-    for (var i = 0; i < n; i++) {
-      var p0 = pts[i], p1 = pts[(i + 1) % n];
-      a += p0[0] * p1[1] - p1[0] * p0[1];
+    if (polyArea === undefined || polyArea === null) {
+      for (var i = 0; i < n; i++) {
+        var p0 = pts[i], p1 = pts[(i + 1) % n];
+        a += p0[0] * p1[1] - p1[0] * p0[1];
+      }
+      a = Math.abs(a) / 2;
+    } else {
+      a = polyArea;
     }
-    a = Math.abs(a) / 2;
     if (!(r > 0)) return a;
 
     /* 半径与切线长一律取自 filletRadii（唯一定义点），
        绝不在本函数里另算一遍 —— 两处各写一遍正是「显示值 ≠ 导出件」的根因。 */
-    var fr = filletRadii(pts, r);
+    var fr = filletRadii(pts, r, skip);
     var dA = 0;
     for (var k = 0; k < n; k++) {
       var rr = fr.rr[k], T = fr.T[k], turn = fr.turn[k];
@@ -322,19 +360,29 @@
        segArc[k]—— 与 pts 等长；描述「pts[k] → pts[k+1] 这一条边」
                    是否为圆弧：是则给出 { cx, cy, r }，否则 null。
                    STEP 导出按边（segment）取用它来决定写 CIRCLE 还是 LINE。 */
-  function filletDetailed(pts, r, seg) {
+  function filletDetailed(pts, r, seg, skip, inMeta) {
     seg = seg || 8;
     var n = pts.length;
     var out = [];
     var arcs = [];
     var segArc = [];
     /* 半径/切线长取自 filletRadii（唯一定义点），与 exactArea 必然同源 */
-    var fr = filletRadii(pts, r);
+    var fr = filletRadii(pts, r, skip);
+
+    /* 落点前先把「进入这一点的那条边」的弧元数据写到上一条边的槽位上。
+       segArc[k] 的语义是「out[k] → out[k+1] 这条边」，而 inMeta[i] 说的是
+       「pts[i−1] → pts[i]」—— 正好是前一个已落点出发的那条边，槽位一致。 */
+    function put(P, metaIn, metaNode) {
+      if (out.length) segArc[out.length - 1] = metaIn || null;
+      out.push(P.slice()); arcs.push(metaNode || null); segArc.push(null);
+    }
+
     for (var i = 0; i < n; i++) {
       var P = pts[i];
       var rr = fr.rr[i], T = fr.T[i], turn = fr.turn[i];
+      var metaIn = (inMeta && inMeta[i]) || null;
       if (!(rr > 1e-12) || !(T > 1e-12) || Math.abs(turn) < 1e-12) {
-        out.push(P.slice()); arcs.push(null); segArc.push(null);
+        put(P, metaIn, null);
         continue;
       }
       var Pr = pts[(i - 1 + n) % n];
@@ -366,17 +414,17 @@
       while (dAng > Math.PI) dAng -= TAU;
       while (dAng < -Math.PI) dAng += TAU;
       var meta = { cx: c[0], cy: c[1], r: rr, cv: turn > 0 };
-      /* 切点 a 写进轮廓（它替代了原来的顶点 P 作为该处轮廓通过点）。 */
-      out.push(a.slice()); arcs.push(null); segArc.push(null);
+      /* 切点 a 写进轮廓（它替代了原来的顶点 P 作为该处轮廓通过点）。
+         进入 a 的那条边沿用调用方给的元数据（曲面形状可能是弧）。 */
+      put(a, metaIn, null);
       /* 中间采样点 s=1..seg-1 落在圆弧上；段 [s→s+1] 属于圆弧。 */
       for (var s = 1; s < seg; s++) {
         var ang = angA + dAng * (s / seg);
-        out.push([c[0] + Math.cos(ang) * rr, c[1] + Math.sin(ang) * rr]);
-        arcs.push(meta);
-        segArc.push(meta);
+        put([c[0] + Math.cos(ang) * rr, c[1] + Math.sin(ang) * rr], meta, meta);
       }
-      /* 切点 b 收尾；段 [b → 下一个角的切点] 是直边，故 segArc 为 null。 */
-      out.push(b.slice()); arcs.push(null); segArc.push(null);
+      /* 切点 b 收尾。段 [最后一个采样点 → b] 仍在弧上，故带 meta；
+         段 [b → 下一个角] 是直边，留给下一次 put 写 null。 */
+      put(b, meta, null);
     }
     return { pts: out, arcs: arcs, segArc: segArc };
   }
@@ -388,9 +436,13 @@
 
   function buildGeometry() {
     var p = readParams();
+    var sh = Sh1().of(p.shape);
     var hb = halfBase(p);
     var half = hb.use;                                 // 实际用于建模的半底宽 b
-    var beta = (180 - p.angle) / 2;                    // 底角（折射面与底面的夹角）
+    /* 底角（折射面与底面的夹角）：三角肋用顶角换算，其余形状 α 本身就是
+       与底面的夹角。这一格目前不直接显示，但 downstream 会用到，
+       不能对所有形状都套 (180−α)/2 —— 那对梯形/曲面是纯错的。 */
+    var beta = (p.shape === 'tri') ? (180 - p.angle) / 2 : p.angle;
     var W = p.N * p.pitch;
     var H = p.base + p.height;
     var fill = 2 * half / p.pitch;                     // 填充率 η = 2b/pitch
@@ -399,24 +451,24 @@
     var warns = inputNotes.slice();
     if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.L > 0) || !(p.N >= 1) ||
         !(p.angle > 0) || !(p.angle < 180)) {
-      /* 顶角的定义域是开区间 (0°, 180°)：0° 时齿退化成零宽、180° 时
-         tan(α/2)→∞ 会让半底宽发散。原先只查 pitch/height/base/L/N，
-         **没有查顶角**，等于把定义域外的值放进了 tan()。 */
+      /* α 的定义域是开区间：0° 时肋退化成零宽、180° 时 tan 发散。
+         readNum 已按当前形状的 aMin/aMax 钳过，这里是最后一道兜底。 */
       warns.push('存在非法参数，请检查：pitch / height / length 需 > 0，base / radius ≥ 0，' +
-                 '顶角需落在 (0°, 180°) 开区间内，齿数 ≥ 1。');
+                 sh.angleLabel + ' 需落在 (' + sh.aMin + '°, ' + sh.aMax + '°) 内，齿数 ≥ 1。');
       ok = false;
     }
     if (hb.clamped) {
-      warns.push('齿半底宽 h·tan(α/2) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
-            (p.pitch / 2).toFixed(3) + ' mm，相邻齿会重叠。截面已按半齿距封顶' +
-            '（齿底恰好相接，填充率 1.000）。要得到真实齿形请增大 pitch，' +
-            '或减小 height / 顶角。');
+      warns.push('半底宽 ' + sh.bExpr.replace('半底宽 ', '') + ' = ' + hb.want.toFixed(3) +
+            ' mm 超过半齿距 ' + (p.pitch / 2).toFixed(3) + ' mm，相邻肋会重叠。' +
+            '截面已按半齿距封顶（齿底恰好相接，填充率 1.000）。要得到真实齿形' +
+            '请增大 pitch，或减小 height / ' + sh.angleLabel + '。');
       ok = false;
     }
 
     /* 保留圆弧元数据：轮廓点用于预览与面积，arcs 用于 STEP 里
        写出真正的 CIRCLE / CYLINDRICAL_SURFACE。 */
-    var fd = filletDetailed(rawProfile(p).pts, p.radius, 10);
+    var raw = rawProfile(p);
+    var fd = filletDetailed(raw.pts, p.radius, 10, raw.skip, raw.inMeta);
     var prof = fd.pts, arcs = fd.segArc;
 
     /* 圆角**实际生效值**。filletRadii 会按两条规则钳位：
@@ -431,7 +483,7 @@
          R = 1.57 → 齿顶 0.090（0.057×，相差 17 倍）
        输入 1.57 而实际只有 0.090 —— 页面原先对此没有任何提示，
        用户只会觉得"改了没反应"。 */
-    var frAll = filletRadii(rawProfile(p).pts, p.radius);
+    var frAll = filletRadii(raw.pts, p.radius, raw.skip);
     var rList = [];
     for (var q = 0; q < frAll.rr.length; q++) {
       if (frAll.rr[q] > 1e-12) rList.push(frAll.rr[q]);
@@ -441,10 +493,11 @@
     var rClamped = (p.radius > 0) && (rMax < p.radius - 1e-9);
     if (rClamped) {
       warns.push('圆角半径 R = ' + p.radius + ' mm 超出该齿形能实现的尺寸' +
-            '（齿边长度仅 ' + Math.hypot(hb.use, p.height).toFixed(3) + ' mm），' +
+            '（最短边仅 ' + shortestEdge(raw.pts).toFixed(3) + ' mm），' +
             '实际生效 ' + rMin.toFixed(3) + ' ~ ' + rMax.toFixed(3) + ' mm —— ' +
             '再增大 R 也不会改变形状。要得到更大的圆角请增大 pitch / height，' +
-            '或减小顶角。');
+            '或减小 ' + sh.angleLabel + '。' +
+            (sh.curved ? '（曲面截面沿弧采样，单段折线很短，圆角会先在这里饱和。）' : ''));
     }
     showWarn(warns.join('\n'));
 
@@ -461,15 +514,17 @@
       areaPoly += a[0] * b[1] - b[0] * a[1];
     }
     areaPoly = Math.abs(areaPoly) / 2;
-    var areaExact = exactArea(rawProfile(p).pts, p.radius);
+    /* 曲面形状给解析面积（见 rawProfile 注释），多边形形状用鞋带公式本来就是精确的 */
+    var areaExact = exactArea(raw.pts, p.radius, raw.skip, raw.polyArea);
     var area = areaExact;
     var vol = area * p.L;
 
     /* 标签随模式切换（1D 原先是 index.html 的静态文字，且与写入的值错位：
-       「面/边数」那一格实际写的是底角 β）。现由 LABELS_1D 单点定义。 */
+       「面/边数」那一格实际写的是底角 β）。现由 LABELS_1D 单点定义；
+       半底宽 / 填充率两格随形状改写公式（与二维 bExpr 的做法一致）。 */
     setText('s_k1', LABELS_1D[0]);
     setText('s_k2', LABELS_1D[1]);
-    setText('s_k3', LABELS_1D[2]);
+    setText('s_k3', sh.bExpr);
     setText('s_k4', LABELS_1D[3]);
     setText('s_k5', LABELS_1D[4]);
     setText('s_k6', LABELS_1D[5]);
@@ -491,7 +546,9 @@
     if (kvT) kvT.hidden = true;
 
     return {
-      p: p, prof: prof, arcs: arcs, W: W, H: H, half: half, beta: beta, fill: fill,
+      p: p, prof: prof, arcs: arcs, rawPts: raw.pts, shape: p.shape,
+      curved: !!sh.curved, usesTop: !!sh.usesTop,
+      W: W, H: H, half: half, beta: beta, fill: fill,
       rMin: rMin, rMax: rMax, rClamped: rClamped,
       area: area, areaPoly: areaPoly, vol: vol, valid: ok
     };
@@ -1115,13 +1172,26 @@
     for (i = 0; i < V; i++) {
       var ar = segArc[i];
       if (ar) {
-        /* 连续同圆的采样点归成一条弧：从当前点一路吃到圆心变化的那个点 */
-        var j = i, cx = ar.cx, cy = ar.cy, r = ar.r;
+        /* 连续同圆的采样点归成一条弧：从当前点一路吃到圆心变化的那个点。
+
+           但**不能无上限地吃**：半圆柱脊的弧是 180°，而下面写弧用的是
+           有理二次 Bézier，权重 w1 = cos(Δ/2) —— Δ→180° 时 w1→0，控制点
+           发散。故累计扫角超过 MAX_ARC_SWEEP 就断开成另一条弧边
+           （相邻两段共端点、共圆心，OCCT 仍能 sew）。圆角 Δ 本来就 < 90°，
+           这条限制对它不起作用。 */
+        var j = i, cx = ar.cx, cy = ar.cy, r = ar.r, acc = 0;
         while (segArc[(j + 1) % V] &&
                Math.abs(segArc[(j + 1) % V].cx - cx) < 1e-9 &&
                Math.abs(segArc[(j + 1) % V].cy - cy) < 1e-9 &&
                (j + 1) % V !== i) {
-          j = (j + 1) % V;
+          var nj = (j + 1) % V;
+          var d1 = Math.atan2(prof[nj][1] - cy, prof[nj][0] - cx) -
+                   Math.atan2(prof[j][1] - cy, prof[j][0] - cx);
+          while (d1 > Math.PI) d1 -= TAU;
+          while (d1 < -Math.PI) d1 += TAU;
+          if (Math.abs(acc + d1) > MAX_ARC_SWEEP) break;
+          acc += d1;
+          j = nj;
         }
         /* 记录圆弧的真正张角：STEP 里裸 CIRCLE 是「整圆」，
            EDGE_CURVE 引用它时必须用 TRIMMED_CURVE 把参数区间钉到
@@ -1400,10 +1470,27 @@
   function buildScripts(geo) {
     var p = geo.p, half = geo.half;
     var v = function (x) { return Number(x).toFixed(6); };
+    var sh = Sh1().of(geo.shape || 'tri');
+
+    /* 截面点直接取**页面预览所用的那份**（未倒圆角），而不是在脚本里
+       按三角肋重写一遍生成循环 —— 一维加形状后，重写就等于对另外五种
+       形状都生成错的几何。曲面形状是折线采样，注释里如实说明。 */
+    var ptsSrc = 'pts = [\n' +
+      geo.rawPts.map(function (q) { return '    (' + v(q[0]) + ', ' + v(q[1]) + '),'; }).join('\n') +
+      '\n]\n';
+    var ptsHead = '# 原始截面点（XZ 平面，逆时针）—— 直接取自页面预览的轮廓\n' +
+      '# 形状：' + sh.name + '；半底宽 b = ' + v(half) + '，齿间保留 (PITCH − 2b) 的平台\n' +
+      (geo.curved
+        ? '# 注意：曲面截面按折线采样（与页面预览一致）；STEP 导出对半圆柱脊\n' +
+          '#       写真圆柱面，二者在采样密度上的差异 < 0.1% 面积。\n'
+        : '');
+
     var params = '# 参数（单位 mm）\n' +
       'PITCH   = ' + v(p.pitch) + '   # 齿距\n' +
       'HEIGHT  = ' + v(p.height) + '  # 齿高\n' +
-      'APEX    = ' + p.angle + '      # 顶角 (deg)\n' +
+      'ANGLE   = ' + p.angle + '      # ' + sh.angleLabel + ' (deg)\n' +
+      'SHAPE   = "' + (geo.shape || 'tri') + '"   # ' + sh.en + '\n' +
+      (geo.usesTop ? 'TOP_K   = ' + v(p.topRatio) + '   # 平顶半宽占比 k\n' : '') +
       'BASE_T  = ' + v(p.base) + '    # 基底厚\n' +
       'RADIUS  = ' + v(p.radius) + '  # 齿顶/齿根圆角\n' +
       'N       = ' + p.N + '         # 齿数\n' +
@@ -1414,15 +1501,7 @@
 'from math import tan, radians\n' +
 'from build123d import *\n' +
 '\n' +
-'# 原始截面点（XZ 平面，逆时针）\n' +
-'# 齿底宽 = 2·HALF_B，齿间保留 (PITCH − 2·HALF_B) 的平台\n' +
-'pts = [(0,0.0),(PITCH*N,0.0),(PITCH*N,BASE_T)]\n' +
-'for i in range(N-1,-1,-1):\n' +
-'    cx = (i+0.5)*PITCH\n' +
-'    pts.append((cx+HALF_B, BASE_T))\n' +
-'    pts.append((cx, BASE_T+HEIGHT))\n' +
-'    pts.append((cx-HALF_B, BASE_T))\n' +
-'pts.append((0.0, BASE_T))\n' +
+ptsHead + ptsSrc +
 '\n' +
 'with BuildPart() as bp:\n' +
 '    with BuildSketch(Plane.XZ) as sk:\n' +
@@ -1443,15 +1522,7 @@
 'import cadquery as cq\n' +
 'from math import tan, radians\n' +
 '\n' +
-'# 原始截面点（XZ 平面，逆时针）\n' +
-'# 齿底宽 = 2·HALF_B，齿间保留 (PITCH − 2·HALF_B) 的平台\n' +
-'pts = [(0,0.0),(PITCH*N,0.0),(PITCH*N,BASE_T)]\n' +
-'for i in range(N-1,-1,-1):\n' +
-'    cx = (i+0.5)*PITCH\n' +
-'    pts.append((cx+HALF_B, BASE_T))\n' +
-'    pts.append((cx, BASE_T+HEIGHT))\n' +
-'    pts.append((cx-HALF_B, BASE_T))\n' +
-'pts.append((0.0, BASE_T))\n' +
+ptsHead + ptsSrc +
 '\n' +
 '# 在 XZ 平面画截面，沿 Y 拉伸\n' +
 'wp = cq.Workplane("XZ")\n' +
@@ -1893,6 +1964,40 @@
         });
       })(inputs[i]);
     }
+
+    /* 一维形状下拉：切换时同步三件事 ——
+         ① 「顶面占比 k」输入的显隐（只有梯形肋需要 k）；
+         ② α 的标签与提示（六种截面里 α 根本不是同一个量：顶角 / 倾角 /
+            切线角 / 最大坡度。标签不跟着换，用户会拿顶角的数填进倾角的公式）；
+         ③ 形状说明。
+       另外换形状时把 α 一并置为该形状的默认值：保留旧值等于把上一个形状的
+       角度当成这一个形状的角度用，得到的齿形与预期无关。 */
+    var shapeSel1 = $('p_shape');
+    function syncShapeUI1D() {
+      var K = Sh1().of(shapeSel1 ? shapeSel1.value : 'tri');
+      var topF = $('p_top_field');
+      if (topF) topF.style.display = K.usesTop ? '' : 'none';
+      var lab = $('p_angle_label');
+      if (lab) lab.innerHTML = K.angleLabel + ' <span class="unit">°</span>';
+      var ah = $('p_angle_hint');
+      if (ah) ah.innerHTML = K.angleHint;
+      var shHint = $('p_shape_hint');
+      if (shHint) shHint.innerHTML = K.hint;
+      return K;
+    }
+    if (shapeSel1) {
+      shapeSel1.addEventListener('change', function () {
+        var K = syncShapeUI1D();
+        var aEl = $('p_angle');
+        if (aEl) aEl.value = K.aDef;
+        /* 换形状 = 换了一个截面模型，尺寸可能差很多，视角重置 */
+        lastFrameMode = '';
+        refresh();
+        resize();
+        drawOnce();
+      });
+    }
+    syncShapeUI1D();
 
     /* 形状下拉：切换时同步「顶面占比 k」输入的显隐与形状说明。
        只有台锥需要 k —— 把它常显出来会让人以为每种形状都有平顶。 */

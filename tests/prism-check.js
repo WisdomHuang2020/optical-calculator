@@ -45,6 +45,7 @@ function okTrue(name, cond, extra) {
 const html = read('index.html');
 const css = read('styles.css');
 const prism = read('js/prism.js');
+const k1d = read('js/prism-shapes1d.js');
 const app = read('js/app.js');
 
 /* ---------- 1. 零外部依赖 ---------- */
@@ -210,8 +211,12 @@ okTrue('rawProfile 经由 halfBase 取半底宽（不再自算）',
   /function rawProfile[\s\S]*?halfBase\s*\(p\)/.test(prism));
 okTrue('rawProfile 不再出现 h/tan(α/2) 的倒式',
   !/Math\.tan\(alpha\s*\/\s*2\s*\*\s*RAD\)\s*;\s*\n\s*var half/.test(prism));
+/* v3.11：一维加形状后，肋的顶点生成搬进了 js/prism-shapes1d.js
+   （六种截面各有自己的点生成），prism.js 只做组装。故这条断言改打在
+   内核上：三角肋的齿根必须落在齿距中央 ±b，而不是 i·pitch。 */
 okTrue('齿根落在齿距中央 ± b（不再是 i·pitch）',
-  /xc\s*\+\s*b,\s*t/.test(prism) && /xc\s*-\s*b,\s*t/.test(prism));
+  /xc\s*\+\s*c\.b,\s*c\.t/.test(k1d) && /xc\s*-\s*c\.b,\s*c\.t/.test(k1d) &&
+  !/pts\.push\(\[i\s*\*\s*pitch/.test(prism));
 okTrue('二维半底宽有唯一定义点 halfBase2D()', /function halfBase2D\s*\(/.test(prism));
 okTrue('二维三角形计数有唯一定义点 triCount2D()', /function triCount2D\s*\(/.test(prism));
 /* v3.8.0：二维体积改由形状内核的 volumeOf() 给出（六种形状各有解析式），
@@ -222,8 +227,10 @@ okTrue('二维体积来自形状内核 volumeOf（本文件不再抄公式）',
 okTrue('二维半底宽来自形状内核 halfBase（本文件不再抄公式）',
   /S\.halfBase\(K,\s*p\)/.test(prism) && !/p\.height\s*\/\s*Math\.tan\(p\.angle/.test(prism));
 okTrue('圆角半径有唯一定义点 filletRadii()', /function filletRadii\s*\(/.test(prism));
+/* 唯一的圆角定义点：两处调用都必须带 skip（曲面形状的弧上采样点不倒角），
+   否则又会出现「显示值 ≠ 实际轮廓」。 */
 okTrue('filletDetailed 与 exactArea 共用 filletRadii()',
-  (prism.match(/filletRadii\s*\(pts,\s*r\)/g) || []).length >= 2);
+  (prism.match(/filletRadii\s*\(pts,\s*r,\s*skip\)/g) || []).length >= 2);
 okTrue('圆角按边约束切线长（T_u + T_v ≤ 边长）',
   /T\[i\]\s*\+\s*T\[j\]/.test(prism));
 okTrue('相机 up 显式设为世界 Z（否则板子渲染成竖墙）',
@@ -273,9 +280,10 @@ okTrue('一维网格不开平面着色（makeMaterial() 无参）',
    （圆弧半径 R）很容易被误读成角度/弧度。这里把「标注」本身作为门禁。 */
 console.log('\n=== 9. 参数单位与物理定义标注 ===');
 const hintCount = (html.match(/class="param-hint"/g) || []).length;
-/* v3.8.0：二维新增「形状」与「顶面占比 k」两个输入，各带一条说明 → 8 条 */
-okTrue('每个参数都带定义说明（7 条一维 + 8 条二维）', hintCount === 15,
-  `param-hint 共 ${hintCount} 条（一维 7 + 二维 8）`);
+/* v3.8.0：二维新增「形状」与「顶面占比 k」两个输入，各带一条说明 → 8 条。
+   v3.11.0：一维同样新增「截面形状」与「顶面占比 k」两个输入 → 9 条。 */
+okTrue('每个参数都带定义说明（9 条一维 + 8 条二维）', hintCount === 17,
+  `param-hint 共 ${hintCount} 条（一维 9 + 二维 8）`);
 okTrue('二维面板有形状下拉（六种形状）',
   (html.match(/<option value="(pyramid|frustum|cone|sphere|parabola|hexpyr)"/g) || []).length === 6);
 okTrue('形状下拉只有台锥时才显示顶面占比 k',
@@ -301,6 +309,191 @@ okTrue('.param-hint 显式跨列（.field 是两列网格）',
   /\.param-hint\s*\{[\s\S]*?grid-column:\s*1\s*\/\s*-1/.test(cssAll));
 okTrue('.warn-box 保留换行（多条告警各占一行）',
   /\.warn-box\s*\{[\s\S]*?white-space:\s*pre-line/.test(cssAll));
+
+/* ============================================================
+ * 10. 一维截面形状内核（v3.11.0）
+ *
+ * 一维原先只有三角肋一种，加五种截面后，形状相关的公式与点生成都搬进了
+ * js/prism-shapes1d.js。这一节做**运行时**校验（不是正则文本匹配）——
+ * 公式写错只靠看代码看不出来，得把数算出来比对。
+ * ============================================================ */
+console.log('\n=== 10. 一维截面形状内核 ===');
+
+global.window = {};
+require('../js/prism-shapes1d.js');
+const K = global.window.PrismShapes1D;
+
+ok('一维形状注册 6 种', K.IDS.length, 6);
+okTrue('六种形状各有名称 / α 标签 / 定义域 / 半底宽公式 / 说明',
+  K.IDS.every(function (id) {
+    const s = K.S[id];
+    return s && s.name && s.en && s.angleLabel && s.angleHint && s.hint &&
+           s.aMin > 0 && s.aMax > s.aMin && s.aDef >= s.aMin && s.aDef <= s.aMax &&
+           typeof s.bExpr === 'string' && typeof s.bOf === 'function' &&
+           typeof s.areaOf === 'function' && typeof s.profile === 'function';
+  }));
+okTrue('α 的定义域各不相同（顶角/倾角/切线角/最大坡度不是同一个量）',
+  new Set(K.IDS.map(function (id) { return K.S[id].angleLabel; })).size >= 4);
+okTrue('只有梯形肋需要顶面占比 k',
+  K.IDS.filter(function (id) { return K.S[id].usesTop; }).join(',') === 'trap');
+
+/* 半底宽：解析式 vs 定义式的交叉校验。
+   每个形状都按自己的定义反推一遍，不复用 bOf —— 复用就等于没校验。 */
+function shoelace(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return Math.abs(a) / 2;
+}
+const RAD = Math.PI / 180;
+const BP = { pitch: 1.0, height: 0.25, base: 0.20, N: 8, topRatio: 0.35 };
+
+function caseOf(id) {
+  const s = K.S[id];
+  const p = Object.assign({}, BP, { angle: s.aDef });
+  const h = K.halfOf(id, p);
+  return { s, p, h, pr: K.profileOf(id, p, h.use) };
+}
+const cases = {};
+K.IDS.forEach(function (id) { cases[id] = caseOf(id); });
+
+ok('三角肋 b = h·tan(α/2)', +cases.tri.h.use.toFixed(6),
+  +(BP.height * Math.tan(K.S.tri.aDef * RAD / 2)).toFixed(6));
+ok('梯形肋 b = h/(tanα·(1−k))', +cases.trap.h.use.toFixed(6),
+  +(BP.height / (Math.tan(K.S.trap.aDef * RAD) * (1 - 0.35))).toFixed(6));
+ok('半圆柱脊 α=90° 时 b = h（正半圆）', +cases.cyl.h.use.toFixed(6), +BP.height.toFixed(6));
+ok('锯齿肋底宽 = h/tanα', +(2 * cases.saw.h.use).toFixed(6),
+  +(BP.height / Math.tan(K.S.saw.aDef * RAD)).toFixed(6));
+ok('正弦波脊 b = πh/(2·tanα)', +cases.sine.h.use.toFixed(6),
+  +(Math.PI * BP.height / (2 * Math.tan(K.S.sine.aDef * RAD))).toFixed(6));
+ok('抛物面脊 b = 2h/tanα', +cases.para.h.use.toFixed(6),
+  +(2 * BP.height / Math.tan(K.S.para.aDef * RAD)).toFixed(6));
+
+/* 半底宽超过半齿距时必须封顶（否则相邻肋重叠、截面自交） */
+okTrue('2b 超过 pitch 时按半齿距封顶并给出 clamped',
+  (function () {
+    const p = Object.assign({}, BP, { pitch: 0.2, angle: 60 });
+    const h = K.halfOf('tri', p);
+    return h.clamped && Math.abs(h.use - 0.1) < 1e-12;
+  })());
+
+/* 截面基本性质：闭合、非负、最高点 = t+h、宽 = N·pitch */
+K.IDS.forEach(function (id) {
+  const c = cases[id], pts = c.pr.pts, t = c.p.base, h = c.p.height, W = c.p.N * c.p.pitch;
+  let ymin = Infinity, ymax = -Infinity, xmin = Infinity, xmax = -Infinity;
+  for (const q of pts) {
+    ymin = Math.min(ymin, q[1]); ymax = Math.max(ymax, q[1]);
+    xmin = Math.min(xmin, q[0]); xmax = Math.max(xmax, q[0]);
+  }
+  okTrue('[' + id + '] 截面闭合于板宽内且不越界',
+    Math.abs(ymin) < 1e-9 && Math.abs(ymax - (t + h)) < 1e-6 &&
+    Math.abs(xmin) < 1e-9 && Math.abs(xmax - W) < 1e-9,
+    `y∈[${ymin.toFixed(3)},${ymax.toFixed(3)}] x∈[${xmin.toFixed(3)},${xmax.toFixed(3)}]`);
+});
+
+/* 面积：解析值 vs 极密采样的数值积分（曲面形状才看得出差别） */
+function numArea(id) {
+  /* 用 4000 段细分把单肋面积积出来，再乘 N 加平板 —— 与解析式独立 */
+  const c = cases[id], b = c.h.use, h = c.p.height, t = c.p.base, W = c.p.N * c.p.pitch;
+  let s = 0, M = 4000;
+  for (let j = 0; j < M; j++) {
+    const x = -b + 2 * b * (j + 0.5) / M;
+    let y;
+    if (id === 'cyl') {
+      const R = (b * b + h * h) / (2 * h);
+      y = (t + h - R) + Math.sqrt(Math.max(0, R * R - x * x));
+    } else if (id === 'sine') {
+      y = t + (h / 2) * (1 + Math.cos(Math.PI * x / b));
+    } else if (id === 'para') {
+      y = t + h * (1 - (x / b) * (x / b));
+    } else if (id === 'tri') {
+      y = t + h * (1 - Math.abs(x) / b);
+    } else if (id === 'trap') {
+      const kt = 0.35 * b;
+      y = Math.abs(x) <= kt ? t + h : t + h * (b - Math.abs(x)) / (b - kt);
+    } else { /* saw：陡面在右，缓面斜率 tanα */
+      const w = 2 * b;
+      y = t + h * (x + b) / w;
+    }
+    s += (2 * b / M) * (y - t);
+  }
+  return W * t + c.p.N * s;
+}
+K.IDS.forEach(function (id) {
+  const c = cases[id];
+  const ana = c.pr.polyArea, num = numArea(id);
+  const rel = Math.abs(ana - num) / num;
+  okTrue('[' + id + '] 解析截面积与数值积分一致（<0.3%）', rel < 0.003,
+    `解析 ${ana.toFixed(4)} vs 数值 ${num.toFixed(4)}，差 ${(rel * 100).toFixed(3)}%`);
+});
+
+/* 曲面形状：弧上采样点必须标记为"不是拐角"，否则会被逐个倒圆角啃掉一圈 */
+okTrue('曲面形状标记 skip（弧上采样点不倒圆角）',
+  ['cyl', 'sine', 'para'].every(function (id) {
+    const pr = cases[id].pr;
+    return pr.skip.length === pr.pts.length && pr.skip.filter(Boolean).length > 0;
+  }));
+okTrue('多边形形状不标记 skip（每个顶点都是真拐角）',
+  ['tri', 'trap', 'saw'].every(function (id) {
+    return cases[id].pr.skip.every(function (v) { return !v; });
+  }));
+/* 半圆柱脊带弧元数据 → STEP 写真圆柱面；正弦/抛物按折线导出 */
+okTrue('半圆柱脊带圆弧元数据（STEP 写真圆柱面）',
+  cases.cyl.pr.inMeta.filter(Boolean).length > 0 &&
+  cases.cyl.pr.inMeta.filter(Boolean).every(function (m) {
+    const R = (cases.cyl.h.use ** 2 + BP.height ** 2) / (2 * BP.height);
+    return Math.abs(m.r - R) < 1e-9 && m.cv === true;
+  }));
+okTrue('正弦 / 抛物面按折线导出（无弧元数据）',
+  cases.sine.pr.inMeta.filter(Boolean).length === 0 &&
+  cases.para.pr.inMeta.filter(Boolean).length === 0);
+okTrue('进入肋第一个点的那条边是平板（不带弧元数据）',
+  K.IDS.every(function (id) { return cases[id].pr.inMeta[3] === null; }));
+
+/* 最密排（2b = pitch）时不留重合点 —— 重合点会让 STEP 写出零向量 DIRECTION */
+okTrue('最密排（2b = pitch）时无重合相邻点',
+  K.IDS.every(function (id) {
+    const s = K.S[id];
+    const p = Object.assign({}, BP, { angle: s.aMax, pitch: 0.5 });
+    const h = K.halfOf(id, p);
+    const pr = K.profileOf(id, p, h.use);
+    for (let i = 0; i < pr.pts.length; i++) {
+      const a = pr.pts[i], b = pr.pts[(i + 1) % pr.pts.length];
+      if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-9) return false;
+    }
+    return true;
+  }));
+
+/* prism.js / index.html 侧：形状下拉与动态标签 */
+okTrue('index.html 引用了 js/prism-shapes1d.js',
+  /<script src="js\/prism-shapes1d\.js"><\/script>/.test(html));
+/* 必须用 scriptPos 锚定真正的 <script src> 标签：'js/prism.js' 这个串在
+   页脚说明文字里也出现过一次，直接 indexOf 会取到错误位置（踩过）。 */
+okTrue('脚本顺序：形状内核在 prism.js 之前',
+  scriptPos('js/prism-shapes1d.js') > 0 &&
+  scriptPos('js/prism-shapes1d.js') < scriptPos('js/prism.js'));
+okTrue('一维面板有截面形状下拉（六种）',
+  (html.match(/<option value="(tri|trap|cyl|saw|sine|para)"/g) || []).length === 6);
+okTrue('一维形状下拉只有梯形肋时显示顶面占比 k',
+  /id="p_top_field"/.test(html) && /usesTop/.test(prism));
+okTrue('α 的标签与提示随形状改写（六种形状 α 不是同一个量）',
+  /id="p_angle_label"/.test(html) && /id="p_angle_hint"/.test(html) &&
+  /p_angle_label[\s\S]{0,200}angleLabel/.test(prism));
+okTrue('换形状时把 α 置为该形状的默认值（避免张冠李戴）',
+  /aEl\.value\s*=\s*K\.aDef/.test(prism));
+okTrue('一维半底宽来自形状内核（prism.js 不再抄公式）',
+  /halfBase\s*\(p\)\s*\{\s*return\s*Sh1\(\)\.halfOf/.test(prism) &&
+  !/var want = p\.height \* Math\.tan\(p\.angle/.test(prism));
+okTrue('半底宽读数随形状改写公式', /setText\('s_k3',\s*sh\.bExpr\)/.test(prism));
+okTrue('脚本导出按实际截面点输出（不再重写三角肋生成循环）',
+  /geo\.rawPts\.map/.test(prism));
+/* 半圆柱脊的弧是 180°，若整条合成一条边就用有理二次 Bézier 写，
+   w1 = cos(Δ/2) 在 Δ→180° 时趋于 0（控制点发散），必须切段。 */
+okTrue('STEP 单条弧边扫角有上限（半圆柱脊 180° 会被切开）',
+  /MAX_ARC_SWEEP\s*=\s*120\s*\*\s*Math\.PI\s*\/\s*180/.test(prism) &&
+  /Math\.abs\(acc \+ d1\)\s*>\s*MAX_ARC_SWEEP/.test(prism));
 
 console.log(`\n棱镜板页一致性：通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail === 0 ? 0 : 1);
