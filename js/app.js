@@ -495,12 +495,20 @@
     t.classList.add('active');
     var v = $('view-' + name);
     if (v) v.classList.add('active');
+    /* 页脚按当前页切换内容。原来只有一份全局文案（光度学公式 + DIALux 复核），
+       在棱镜三页上完全不适用 —— 同一份备注不该照搬到讲棱镜的页面上。 */
+    document.querySelectorAll('.footer .fset').forEach(function (f) {
+      var list = (f.getAttribute('data-for') || '').split(/\s+/);
+      f.classList.toggle('active', list.indexOf(name) >= 0);
+    });
     if (name === 'prism' && window.Prism) {
       // 棱镜视图的 WebGL 必须在容器可见且有尺寸后再初始化：
       // 首次进入时 init()，之后只是 resize + 重绘。
       // 原 MLA_Prism.html 在容器未布局时初始化，实测画布高度停在 20px。
       window.Prism.init();
       window.Prism.resize();
+      /* 光学性能预估（重计算，故只算一次，之后由用户点按钮更新） */
+      if (window.PrismPerf) window.PrismPerf.init();
     }
     if (name === 'solid' && viz) {
       // 同步重绘，不只依赖 rAF（rAF 在后台标签/无头环境会被节流，

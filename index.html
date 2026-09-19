@@ -864,7 +864,63 @@
           <div class="kv" id="kv_radius"><div class="k" id="s_k6">圆角 R（实际生效）</div><div class="v" id="s_r">-</div></div>
         </div>
 
-        <h2><span class="num">3</span>导出</h2>
+        <h2><span class="num">3</span>光学性能预估 <span class="unit">对比纯平板</span></h2>
+        <p class="perf-note" style="margin-bottom:8px">
+          导出 STEP 之前先做一次筛选性估算：几何光学光线追迹（斯涅尔 + 菲涅耳
+          + 全反射 + 腔体回收），与<b>同总高 H 的理想纯平板</b>对照。
+          这是<b>理想几何上限</b>，不含材料吸收、粗糙面散射、膜层干涉与制造偏差，
+          不能替代 LightTools / LiteTrace。
+        </p>
+        <div class="perf-ctl">
+          <label>入射工况
+            <select id="perf_coupling">
+              <option value="coupled">光学耦合 · 内部各向同性</option>
+              <option value="air">空气耦合 · 内部角 ≤ θc</option>
+            </select>
+          </label>
+          <label>折射率 n
+            <input id="perf_n" type="number" step="0.001" min="1.3" max="2.6" value="1.49">
+          </label>
+          <label>腔体回收率 ρ
+            <input id="perf_rho" type="number" step="0.01" min="0" max="1" value="0.85">
+          </label>
+          <label>视角半角 θv <span class="unit">°</span>
+            <input id="perf_thetav" type="number" step="1" min="5" max="89" value="60">
+          </label>
+          <label>均匀度门限 <span class="unit">%</span>
+            <input id="perf_umin" type="number" step="1" min="5" max="100" value="70">
+          </label>
+        </div>
+        <p class="perf-note">n：PMMA 1.49 / PC 1.586 / PS 1.59。
+          ρ 是退回腔体的光被重新利用的比例（含反射片损耗与从底面再进入时的菲涅耳损失）。
+          「工况」选错结论会反号 —— 光学耦合下棱镜板能打破逃逸锥、大幅提高出光效率；
+          空气耦合下平板本来就取出九成，棱镜的收益转为轴上准直而非总通量。</p>
+
+        <table class="perf-tbl">
+          <thead><tr><th>指标</th><th>纯平板</th><th>本设计</th></tr></thead>
+          <tbody>
+            <tr><td>首遇逸出率 p₁</td><td id="pf_p1f">—</td><td id="pf_p1d">—</td></tr>
+            <tr><td>出光效率 η</td><td id="pf_etaf">—</td><td id="pf_etad">—</td></tr>
+            <tr><td>视角均匀度 U</td><td id="pf_uf">—</td><td id="pf_ud">—</td></tr>
+            <tr><td>半高全角 FWHM</td><td id="pf_ff">—</td><td id="pf_fd">—</td></tr>
+          </tbody>
+        </table>
+        <div class="perf-verdict" id="pf_verdict">尚未计算</div>
+        <div class="perf-scan" id="pf_scan"></div>
+        <button class="btn solid" id="pf_btn">开始预估</button>
+        <p class="perf-note" id="pf_meta"></p>
+        <p class="perf-caveat">
+          <b>口径</b>：出光效率 = 从顶面逸出的能量 / 介质内入射能量，含腔体回收；
+          「首遇逸出率」只看第一次遇到顶面就出来的那一份，与循环次数无关，故不含任何
+          数值取舍。「视角均匀度」= ±θv 锥内强度的立体角加权平均 / 峰值强度，
+          看的是<b>配光曲线平不平</b>；<b>面内照度均匀度</b>取决于整个灯具
+          （导光板、扩散板、灯距），本页给不出，必须另行仿真或实测。
+          一维肋的「未逸出」里有一大块是<b>物理</b>限制：挤出几何的面外波矢分量守恒，
+          |k<sub>y</sub>| &gt; 1 的光（各向同性注入时占 1 − 1/n）在任何斜面上都全反射、
+          永远取不出来 —— 这正是背光行业要把两张 BEF 正交交叉使用的原因。
+        </p>
+
+        <h2><span class="num">4</span>导出</h2>
         <button class="btn solid" id="btn_step">下载 STEP (.step)</button>
         <button class="btn" id="btn_build123d">下载 build123d 脚本 (.py)</button>
         <button class="btn" id="btn_cq">下载 CADQuery 脚本 (.py)</button>
@@ -909,20 +965,70 @@
 
 </div>
 
-<div class="footer">
-  <div>
-    光学概念和光学设计 <b class="app-version">v—</b> —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
-    E = I·cosγ/d²），cosⁿ 配光为解析近似，非实测配光文件。
+<div class="footer" id="app-footer">
+  <div class="fset active" data-for="calc solid theory">
+    <div>
+      光学概念和光学设计 <b class="app-version">v—</b> —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
+      E = I·cosγ/d²），cosⁿ 配光为解析近似，非实测配光文件。
+    </div>
+    <div>
+      计算核心见 <code>js/optics.js</code>，可脱离页面单独复核；
+      立体角三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法）。
+    </div>
+    <div>
+      本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
+      灯具 IES 文件复核。数值仅供参考，不构成设计依据。
+    </div>
   </div>
-  <div>
-    计算核心见 <code>js/optics.js</code>，可脱离页面单独复核；
-    立体角三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法）；
-    棱镜板三维预览见 <code>js/prism.js</code>（Three.js 已本地化到 <code>js/vendor-*.js</code>）。
+
+  <div class="fset" data-for="prism">
+    <div>
+      棱镜板设计 <b class="app-version">v—</b> —— 几何按参数化解析式生成：一维齿半底宽
+      <code>b = h·tan(α/2)</code>、二维金字塔 <code>b = h/tan(α)</code>，2b ≤ 齿距为最密排；
+      三维预览与 STEP / STL 导出共用同一套轮廓点，圆角按真实圆弧写入。
+    </div>
+    <div>
+      设计核心见 <code>js/prism.js</code>（Three.js 已本地化到 <code>js/vendor-*.js</code>）；
+      光学性能预估见 <code>js/prism-perf.js</code>（几何光学蒙特卡洛，含菲涅耳与腔体回收）；
+      光学校核清单在「材料与参考」页。
+    </div>
+    <div>
+      导出件是<b>理想几何</b>：不含圆角以外的工艺偏差、材料吸收、膜层干涉、散射与莫尔效应。
+      正式光学结果请用 LightTools / LiteTrace 复核；本页预估的用途是方案筛选与趋势判断。
+    </div>
   </div>
-  <div>
-    本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
-    灯具 IES 文件复核。数值仅供参考，不构成设计依据。
+
+  <div class="fset" data-for="know">
+    <div>
+      棱镜原理 <b class="app-version">v—</b> —— 演示为二维截面几何光学：斯涅尔定律 + 全反射 + 菲涅耳，
+      光线追迹见 <code>js/prism-knowledge.js</code>；三个演示都是 Canvas 2D，不引入 WebGL。
+    </div>
+    <div>
+      角度口径：θ<sub>in</sub> 是<b>材料内部角</b>，相对板面法线 +z（朝出光侧为正）；
+      光线扇形图的入射角上限是临界角 θ<sub>c</sub> = arcsin(1/n)，超出部分物理上不存在
+      （朗伯光经平板折射进入材料后不可能超过它）。
+    </div>
+    <div>
+      三维图与扇形图都是<b>二维截面模型</b>（强迫面外分量为 0），会显著低估三维下的全反射占比 ——
+      n = 1.49 时二维只有约 0.5%，真实三维约 46%。定量结论请以三维光线追迹或实测为准。
+    </div>
   </div>
+
+  <div class="fset" data-for="mats">
+    <div>
+      材料与参考 <b class="app-version">v—</b> —— 折射率与临界角为标准值；典型规格取自公开论文与
+      经销商页面，属<b>二手来源</b>，3M 官方产品数据表在本环境未能取得，故不作为权威值使用。
+    </div>
+    <div>
+      设计校核直接读取「棱镜板设计」页的<b>实时参数与几何</b>（<code>js/prism.js</code>），不另设判据 ——
+      两处各写一套判据，必然给出互相矛盾的结论。
+    </div>
+    <div>
+      本页数字用于方案筛选与选材初判；选材、报价与法规符合性请以厂商正式数据表与标准原文为准。
+    </div>
+  </div>
+</div>
+
 <!-- ===== 第 5 个页面 · 棱镜原理（概览 + 光学原理）===== -->
 <div class="view kn" id="view-know">
   <!-- ===== 页 0 · 概览（知识） ===== -->
@@ -1140,7 +1246,6 @@
   </section>
   </div>
 </div>
-</div>
 
 <script src="js/version.js"></script>
 <script src="js/optics.js"></script>
@@ -1150,6 +1255,7 @@
 <script src="js/vendor-three.min.js"></script>
 <script src="js/vendor-orbitcontrols.js"></script>
 <script src="js/prism.js"></script>
+<script src="js/prism-perf.js"></script>
 <script src="js/prism-knowledge.js"></script>
 <script src="js/app.js"></script>
 </body>

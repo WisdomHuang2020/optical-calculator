@@ -515,6 +515,10 @@ ul.tight li { margin-bottom: 5px; }
   font-size: 11.5px; color: var(--text-3); line-height: 1.9;
 }
 .footer code { font-family: var(--mono); color: var(--text-2); }
+/* 页脚内容按当前 tab 切换：前 3 页共用一份，棱镜三页各写各的。
+   原来只有一份全局文案，内容是光度学公式与 DIALux 复核 —— 对棱镜三页完全不适用。 */
+.footer .fset { display: none; }
+.footer .fset.active { display: block; }
 
 /* 推导步骤 */
 .steps { counter-reset: st; list-style: none; margin: 0; padding: 0; }
@@ -731,6 +735,59 @@ ul.tight li { margin-bottom: 5px; }
   color: var(--text-2); background: var(--surface);
   white-space: pre;
 }
+
+
+/* ---- 光学性能预估（第 4 页） ----------------------------------------
+   全部锁在 .prism-layout 作用域内，避免 .perf-* 与知识页的类名互相污染。 */
+.prism-layout .perf-ctl {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 7px 8px; margin: 4px 0 6px;
+}
+.prism-layout .perf-ctl label {
+  display: block; font-size: 11px; line-height: 1.5; color: var(--text-3);
+}
+.prism-layout .perf-ctl select,
+.prism-layout .perf-ctl input {
+  display: block; width: 100%; margin-top: 3px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 7px; border-radius: var(--radius-sm);
+  font-size: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums;
+}
+.prism-layout .perf-ctl select { grid-column: 1 / -1; }
+.prism-layout .perf-ctl select:focus,
+.prism-layout .perf-ctl input:focus { outline: none; border-color: var(--primary); }
+
+.perf-tbl { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11.5px; }
+.perf-tbl th, .perf-tbl td {
+  padding: 5px 6px; border-bottom: 1px solid var(--border); text-align: right;
+}
+.perf-tbl th { color: var(--text-3); font-weight: 600; font-size: 10.5px; }
+.perf-tbl th:first-child, .perf-tbl td:first-child { text-align: left; color: var(--text-3); }
+.perf-tbl td { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.perf-tbl td:nth-child(3) { color: var(--primary-2); font-weight: 600; }
+
+.perf-verdict {
+  margin-top: 10px; padding: 8px 10px; border-radius: var(--radius-sm);
+  font-size: 11.5px; line-height: 1.6; white-space: pre-line;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-left-width: 3px; color: var(--text-2);
+}
+.perf-verdict.ok { border-left-color: var(--primary-2); color: var(--text); }
+.perf-verdict.warn { background: var(--amber-soft); border-color: var(--amber); color: var(--amber-ink); }
+.perf-verdict.stale { border-style: dashed; color: var(--text-3); }
+.perf-scan { margin-top: 8px; font-size: 11px; line-height: 1.6; color: var(--text-2); }
+.prism-layout #pf_btn.dirty { border-color: var(--amber); color: var(--amber-ink); }
+.prism-layout #pf_btn:disabled { opacity: .6; cursor: progress; }
+.prism-layout #pf_meta { margin-top: 7px; }
+/* 性能卡片的说明文字。语义上与参数面板里的 .param-hint 不同（那不是
+   「参数定义说明」），故单列一类，避免污染 param-hint 的计数断言。 */
+.prism-layout .perf-note {
+  margin: 8px 0; font-size: 11px; line-height: 1.6; color: var(--text-3);
+}
+.prism-layout .perf-note b { color: var(--text-2); font-weight: 600; }
+.perf-caveat {
+  margin: 8px 0 0; font-size: 11px; line-height: 1.65; color: var(--text-3);
+}
+.perf-caveat b { color: var(--text-2); }
 
 /* ---- 打印 ---- */
 @media print {

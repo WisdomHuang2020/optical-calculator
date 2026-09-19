@@ -37,6 +37,10 @@ const SUITES = [
      页面照常显示、控制台不响」这类静默失效，故单列一个套件，
      既有静态（零外部依赖、样式作用域、颜色走变量）也有运行时（画布像素）。 */
   { name: '棱镜知识页 · 演示与校核', file: 'knowledge-check.js' },
+  /* 性能预估卡片 + 分页页脚（v3.7.0）：蒙特卡洛内核的能量账、物理极限、
+     单调性在 Node vm 里直接断言（不起 Chrome，套件保持快）；
+     页脚断言守住「备注不照搬前 3 页」这一本版修复的缺陷本身。 */
+  { name: '棱镜性能预估 · 内核物理与页脚', file: 'prism-perf-check.js' },
   { name: '计算内核 · 光度学数值断言', file: 'verify.js' },
   { name: '参考算例 · 外部文件复核', file: 'verify-user-file.js' },
   { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' },

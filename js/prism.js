@@ -1628,6 +1628,9 @@
     var sc = (mode === '1d') ? buildScripts(currentGeo) : buildScripts2D(currentGeo);
     var cv = $('codeview');
     if (cv) cv.textContent = currentLang === 'build123d' ? sc.b123d : sc.cq;
+    /* 光学性能预估是重计算（二维约 3 s），参数一变只标脏、不自动重算 ——
+       否则每敲一个数字都要卡几秒。软依赖，模块缺失时本页功能不受影响。 */
+    if (window.PrismPerf) window.PrismPerf.markStale();
   }
 
   /* ============================================================
@@ -2048,6 +2051,45 @@
         rMin: list.length ? Math.min.apply(null, list) : 0,
         rMax: list.length ? Math.max.apply(null, list) : 0
       };
+    },
+    /* ---------- 供「光学性能预估」读取 ----------
+       性能预估必须用**本文件生成的同一套轮廓**去做光线追迹，不能另写一份
+       齿形公式 —— 本项目历史上所有「显示 ≠ 实际」的缺陷都源于同一个式子
+       被写了两遍。故这里只暴露「取几何」的纯函数，追迹由 prism-perf.js 负责。 */
+    /* 一维轮廓（含圆角采样）+ 单元胞所需的基本量。纯计算、无副作用。 */
+    profile1D: function (p1, seg) {
+      var p = {
+        pitch: +p1.pitch, height: +p1.height, angle: +p1.angle,
+        base: +p1.base, radius: +p1.radius,
+        N: Math.max(1, Math.min(500, Math.round(+p1.N))),
+        L: isFinite(+p1.L) ? +p1.L : 1
+      };
+      if (!(p.pitch > 0) || !(p.height >= 0) || !(p.base >= 0) || !(p.radius >= 0) ||
+          !isFinite(p.pitch) || !isFinite(p.height) || !isFinite(p.base) || !isFinite(p.angle) ||
+          !(p.angle > 0) || !(p.angle < 180)) {
+        return null;
+      }
+      /* seg = 圆弧的折线采样段数。默认 10 与 STEP 导出保持一致；
+         光学预估走 5 —— 圆角只张 60°~90°，5 段已足够，而折线段数直接
+         决定光线求交的成本（每次命中要扫一整个单元胞的所有折线段）。 */
+      var fd = filletDetailed(rawProfile(p).pts, p.radius, seg || 10);
+      return {
+        pts: fd.pts, segArc: fd.segArc,
+        pitch: p.pitch, t: p.base, h: p.height, N: p.N,
+        half: halfBase(p).use, halfWant: halfBase(p).want, halfClamped: halfBase(p).clamped,
+        W: p.N * p.pitch, H: p.base + p.height, angle: p.angle, radius: p.radius
+      };
+    },
+    /* 二维金字塔的半底宽 b（含按半齿距封顶），唯一定义点仍是 halfBase2D */
+    half2D: function (p2) {
+      var q = { pitch: +p2.pitch, height: +p2.height, angle: +p2.angle, base: +p2.base };
+      if (!(q.pitch > 0) || !(q.height >= 0) || !(q.base >= 0) ||
+          !isFinite(q.pitch) || !isFinite(q.height) || !isFinite(q.base) ||
+          !(q.angle > 0) || !(q.angle < 180)) {
+        return null;
+      }
+      var hb = halfBase2D(q);
+      return { half: hb.use, want: hb.want, clamped: hb.clamped };
     },
     probe: function () {      if (!camera || !renderer || !currentGeo) return null;
       var el = document.querySelector('.prism-stage');
