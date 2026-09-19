@@ -45,7 +45,7 @@
           <h2><span class="num">1</span>灯具光学参数</h2>
 
           <div class="field">
-            <label>配光模型</label>
+            <label for="model">配光模型</label>
             <select id="model">
               <option value="cosN">cosⁿ 余弦幂（LED 投光灯常用）</option>
               <option value="uniform">均匀锥配光（理想简化）</option>
@@ -53,17 +53,17 @@
           </div>
 
           <div class="field">
-            <label>总光通量 Φ <span class="unit">lm</span></label>
+            <label for="flux">总光通量 Φ <span class="unit">lm</span></label>
             <input id="flux" type="number" value="9000" min="1" step="100">
           </div>
 
           <div class="field">
-            <label>中心光强 I₀ <span class="unit">cd</span><em>留空 = 自动推导</em></label>
+            <label for="imax">中心光强 I₀ <span class="unit">cd</span><em>留空 = 自动推导</em></label>
             <input id="imax" type="number" placeholder="自动推导" min="0" step="50">
           </div>
 
           <div class="field">
-            <label>光束角 2θ½ <span class="unit">°</span><em>半光强全角</em></label>
+            <label for="beam">光束角 2θ½ <span class="unit">°</span><em>半光强全角</em></label>
             <input id="beam" type="number" value="38" min="1" max="179" step="1">
             <div class="mini-hint">
               等价半角 θ½ = <b id="beam-full">19.0°</b>。
@@ -76,25 +76,27 @@
           <h2><span class="num">2</span>被照面几何</h2>
 
           <div class="field">
-            <label>灯具到被照面的垂直距离 h <span class="unit">m</span></label>
+            <label for="height">灯具到被照面的垂直距离 h <span class="unit">m</span></label>
             <input id="height" type="number" value="3" min="0.01" step="0.1">
           </div>
 
           <div class="field">
             <label>被照面形状</label>
-            <div class="seg">
+            <!-- 单选组的标题用 <label> 是标不上的（label 只能关联单个控件）。
+                 这里把组本身标成 radiogroup，读屏会先报「被照面形状」再报选项。 -->
+            <div class="seg" role="radiogroup" aria-label="被照面形状">
               <label><input type="radio" name="shape" value="circle" checked>圆形 半径 R</label>
               <label><input type="radio" name="shape" value="rect">矩形 L × W</label>
             </div>
           </div>
 
           <div class="field" id="field-R">
-            <label>被照面半径 R <span class="unit">m</span><em title="默认自动跟随半光强光斑半径 h·tan θ½；一旦手动修改，就不再被自动覆盖">= h·tan θ½ 自动</em></label>
+            <label for="radius">被照面半径 R <span class="unit">m</span><em title="默认自动跟随半光强光斑半径 h·tan θ½；一旦手动修改，就不再被自动覆盖">= h·tan θ½ 自动</em></label>
             <input id="radius" type="number" value="1.033" min="0.001" step="0.001">
           </div>
 
           <div class="field hidden" id="field-rect">
-            <label>长 L × 宽 W <span class="unit">m</span></label>
+            <label for="len">长 L × 宽 W <span class="unit">m</span></label>
             <div class="row">
               <input id="len" type="number" value="1.2" min="0.001" step="0.1">
               <span class="sep">×</span>
@@ -269,7 +271,7 @@
           </div>
 
           <div class="field">
-            <label>锥内光通量 Φ<sub>cone</sub> <span class="unit">lm</span></label>
+            <label for="sa-flux">锥内光通量 Φ<sub>cone</sub> <span class="unit">lm</span></label>
             <input id="sa-flux" type="number" value="9000" min="0" step="100">
           </div>
           <div class="summary" style="grid-template-columns:1fr 1fr">
@@ -284,28 +286,28 @@
           </div>
 
           <div class="field" style="margin-top:14px">
-            <label>微圆环极角 α <span class="unit">= 微元的极角 θ</span></label>
+            <label for="sa-ring">微圆环极角 α <span class="unit">= 微元的极角 θ</span></label>
             <div class="slider-row">
               <input type="range" id="sa-ring" min="1" max="89" step="0.5" value="10.5">
               <span class="slider-val" id="sa-ring-val">10.5°</span>
             </div>
           </div>
           <div class="field">
-            <label>环带带宽 dα <span class="unit">= 微元的 dθ</span></label>
+            <label for="sa-ringw">环带带宽 dα <span class="unit">= 微元的 dθ</span></label>
             <div class="slider-row">
               <input type="range" id="sa-ringw" min="0.5" max="20" step="0.5" value="3">
               <span class="slider-val" id="sa-ringw-val">3.0°</span>
             </div>
           </div>
           <div class="field">
-            <label>微元方位角 φ₀</label>
+            <label for="sa-phi">微元方位角 φ₀</label>
             <div class="slider-row">
               <input type="range" id="sa-phi" min="0" max="360" step="5" value="0">
               <span class="slider-val" id="sa-phi-val">0°</span>
             </div>
           </div>
           <div class="field">
-            <label>微元方位跨度 dφ</label>
+            <label for="sa-dphi">微元方位跨度 dφ</label>
             <div class="slider-row">
               <input type="range" id="sa-dphi" min="2" max="90" step="1" value="20">
               <span class="slider-val" id="sa-dphi-val">20°</span>
@@ -775,30 +777,30 @@
 
         <div id="params_1d">
           <div class="field">
-            <label>pitch 齿距 <span class="unit">mm</span></label>
+            <label for="p_pitch">pitch 齿距 <span class="unit">mm</span></label>
             <input id="p_pitch" type="number" step="0.01" value="1.0">
             <p class="param-hint">相邻两齿中心线的间距（周期）。齿底宽 2b 之外的
               <b>pitch − 2b</b> 是齿间平台。</p>
           </div>
           <div class="field">
-            <label>height 齿高 <span class="unit">mm</span></label>
+            <label for="p_height">height 齿高 <span class="unit">mm</span></label>
             <input id="p_height" type="number" step="0.01" value="0.25">
             <p class="param-hint">齿顶相对齿根的高度 h（肋的起伏幅度）。</p>
           </div>
           <div class="field">
-            <label>apex angle 顶角 <span class="unit">°</span></label>
+            <label for="p_angle">apex angle 顶角 <span class="unit">°</span></label>
             <input id="p_angle" type="number" step="0.5" value="60">
             <p class="param-hint">齿顶处两条齿面之间的夹角 α，是<b>全角</b>
               （不是半角 α/2，也不是斜面与底面的夹角）。齿半底宽
               <b>b = h·tan(α/2)</b>，齿底宽 2b。</p>
           </div>
           <div class="field">
-            <label>base thickness 基底厚 <span class="unit">mm</span></label>
+            <label for="p_base">base thickness 基底厚 <span class="unit">mm</span></label>
             <input id="p_base" type="number" step="0.01" value="0.20">
             <p class="param-hint">齿根以下的平板厚度 t。</p>
           </div>
           <div class="field">
-            <label>radius 圆角 <span class="unit">mm</span></label>
+            <label for="p_radius">radius 圆角 <span class="unit">mm</span></label>
             <input id="p_radius" type="number" step="0.005" value="0.02">
             <p class="param-hint">齿顶与齿根过渡圆弧的<b>半径 R</b>——是<b>长度</b>
               （mm），不是角度、不是弧度。受齿边长度限制：沿一条齿边，相邻两
@@ -806,12 +808,12 @@
               生效</b>。实际生效值见下方「圆角 R（实际生效）」。</p>
           </div>
           <div class="field">
-            <label>teeth 齿数 N <span class="unit">个</span></label>
+            <label for="p_teeth">teeth 齿数 N <span class="unit">个</span></label>
             <input id="p_teeth" type="number" step="1" min="1" value="20">
             <p class="param-hint">板宽 <b>W = N · pitch</b>。</p>
           </div>
           <div class="field">
-            <label>length 板长 <span class="unit">mm · 拉伸向</span></label>
+            <label for="p_length">length 板长 <span class="unit">mm · 拉伸向</span></label>
             <input id="p_length" type="number" step="1" value="50">
             <p class="param-hint">沿齿长方向的拉伸长度 L。体积 = 截面积 × L。</p>
           </div>
@@ -819,7 +821,7 @@
 
         <div id="params_2d" style="display:none">
           <div class="field">
-            <label>shape 微结构形状</label>
+            <label for="p2_shape">shape 微结构形状</label>
             <select id="p2_shape">
               <option value="pyramid" selected>四棱锥（正方形底）</option>
               <option value="frustum">台锥（截头四棱锥）</option>
@@ -831,24 +833,24 @@
             <p class="param-hint" id="p2_shape_hint"></p>
           </div>
           <div class="field" id="p2_top_field" style="display:none">
-            <label>top ratio 顶面半宽占比 k <span class="unit">0–0.95</span></label>
+            <label for="p2_top">top ratio 顶面半宽占比 k <span class="unit">0–0.95</span></label>
             <input id="p2_top" type="number" step="0.05" min="0" max="0.95" value="0.35">
             <p class="param-hint">平顶半宽 = k·b，b = h/(tanα·(1−k))。k = 0 即普通
               四棱锥；k 越大越接近平板（平顶不参与角度变换，只增加脱模余量）。</p>
           </div>
           <div class="field">
-            <label>pitch 中心间距 <span class="unit">mm</span></label>
+            <label for="p2_pitch">pitch 中心间距 <span class="unit">mm</span></label>
             <input id="p2_pitch" type="number" step="0.01" value="1.0">
             <p class="param-hint">相邻两个结构<b>中心线</b>的间距（方形晶格 X/Y 相同；
               蜂窝晶格为相邻中心距离，行距 = √3/2·pitch）。</p>
           </div>
           <div class="field">
-            <label>height 结构高 <span class="unit">mm</span></label>
+            <label for="p2_height">height 结构高 <span class="unit">mm</span></label>
             <input id="p2_height" type="number" step="0.01" value="0.25">
             <p class="param-hint">顶点相对底面的高度 h。</p>
           </div>
           <div class="field">
-            <label>angle 倾角 α <span class="unit">°</span></label>
+            <label for="p2_angle">angle 倾角 α <span class="unit">°</span></label>
             <input id="p2_angle" type="number" step="0.5" value="45">
             <p class="param-hint">与<b>水平底面</b>的夹角——注意与一维的「顶角」
               不是同一个量（一维是齿顶两条齿面的夹角）。平面面型的 α 就是面倾角；
@@ -856,17 +858,17 @@
               半底宽公式见下方「几何量」一栏，随形状切换。</p>
           </div>
           <div class="field">
-            <label>base thickness 基底厚 <span class="unit">mm</span></label>
+            <label for="p2_base">base thickness 基底厚 <span class="unit">mm</span></label>
             <input id="p2_base" type="number" step="0.01" value="0.20">
             <p class="param-hint">结构底面以下的平板厚度 t。</p>
           </div>
           <div class="field">
-            <label>columns X 列数 <span class="unit">个</span></label>
+            <label for="p2_nx">columns X 列数 <span class="unit">个</span></label>
             <input id="p2_nx" type="number" step="1" min="1" value="20">
             <p class="param-hint">板宽 <b>Wx = Nx · pitch</b>（蜂窝晶格含半齿距偏移）。</p>
           </div>
           <div class="field">
-            <label>rows Y 行数 <span class="unit">个</span></label>
+            <label for="p2_ny">rows Y 行数 <span class="unit">个</span></label>
             <input id="p2_ny" type="number" step="1" min="1" value="20">
             <p class="param-hint">板宽 <b>Wy = Ny · pitch</b>（蜂窝晶格为 Ny·√3/2·pitch）。</p>
           </div>
@@ -1168,35 +1170,35 @@
 
           <div class="opt-ctl">
             <div class="field">
-              <label>目标均匀度 U* <span class="unit">%</span></label>
+              <label for="od_u">目标均匀度 U* <span class="unit">%</span></label>
               <input id="od_u" type="range" min="40" max="95" step="1" value="75">
               <output id="od_u_v" class="od-out">75%</output>
             </div>
             <div class="field">
-              <label>目标出光效率 η* <span class="unit">%</span></label>
+              <label for="od_e">目标出光效率 η* <span class="unit">%</span></label>
               <input id="od_e" type="range" min="20" max="60" step="1" value="42">
               <output id="od_e_v" class="od-out">42%</output>
             </div>
             <div class="field">
-              <label>观看半锥 θ<sub>v</sub> <span class="unit">°</span></label>
+              <label for="od_tv">观看半锥 θ<sub>v</sub> <span class="unit">°</span></label>
               <input id="od_tv" type="range" min="15" max="60" step="1" value="35">
               <output id="od_tv_v" class="od-out">35°</output>
             </div>
             <div class="field">
-              <label>整机厚度预算 <span class="unit">mm</span></label>
+              <label for="od_budget">整机厚度预算 <span class="unit">mm</span></label>
               <input id="od_budget" type="range" min="12" max="60" step="1" value="30">
               <output id="od_budget_v" class="od-out">30mm</output>
             </div>
             <div class="field">
-              <label>U 评议口径</label>
+              <label for="od_udef">U 评议口径</label>
               <select id="od_udef"></select>
             </div>
             <div class="field">
-              <label>LED 一次配光</label>
+              <label for="od_src">LED 一次配光</label>
               <select id="od_src"></select>
             </div>
             <div class="field">
-              <label>LED 阵列密度</label>
+              <label for="od_n">LED 阵列密度</label>
               <select id="od_n">
                 <option value="0">自动（由优化器决定）</option>
                 <option value="4">4 × 4</option>
@@ -1209,7 +1211,7 @@
               </select>
             </div>
             <div class="field">
-              <label>扩散板厚度 <span class="unit">mm</span></label>
+              <label for="od_t">扩散板厚度 <span class="unit">mm</span></label>
               <select id="od_t">
                 <option value="0">自动（由优化器决定）</option>
                 <option value="1">1.0</option>
@@ -1219,12 +1221,12 @@
               </select>
             </div>
             <div class="field">
-              <label>边框反射率 ρ<sub>w</sub></label>
+              <label for="od_rho">边框反射率 ρ<sub>w</sub></label>
               <input id="od_rho" type="range" min="60" max="98" step="1" value="93">
               <output id="od_rho_v" class="od-out">0.93</output>
             </div>
             <div class="field">
-              <label>优化偏好</label>
+              <label for="od_prefer">优化偏好</label>
               <select id="od_prefer">
                 <option value="balanced">均衡</option>
                 <option value="cost">成本优先</option>
@@ -1533,10 +1535,10 @@
             <div class="p-head"><h3>单棱镜光线追迹</h3><span class="sub">等腰三角形齿截面 · 光自下方背光腔射入 · θ_in 为<b>材料内部角</b>，相对板面法线 +z（图中朝上＝出光侧），正值为偏向右侧</span></div>
             <canvas id="rayCv" width="520" height="360" role="img" aria-label="单棱镜光线追迹演示：等腰三角形齿截面上的矢量光线追迹"></canvas>
             <div class="sliders" style="margin-top:12px">
-              <div class="sl"><label>顶角 α</label><input type="range" id="ray_alpha" min="40" max="160" step="1" value="90"><output id="ray_alpha_v">90°</output></div>
-              <div class="sl"><label>折射率 n</label><input type="range" id="ray_n" min="1.40" max="1.70" step="0.01" value="1.49"><output id="ray_n_v">1.49</output></div>
-              <div class="sl"><label>入射角 θ_in</label><input type="range" id="ray_theta" min="-60" max="60" step="1" value="-20"><output id="ray_theta_v">-20°</output></div>
-              <div class="sl"><label>入射位置</label><input type="range" id="ray_x" min="5" max="45" step="1" value="22"><output id="ray_x_v">22%</output></div>
+              <div class="sl"><label for="ray_alpha">顶角 α</label><input type="range" id="ray_alpha" min="40" max="160" step="1" value="90"><output id="ray_alpha_v">90°</output></div>
+              <div class="sl"><label for="ray_n">折射率 n</label><input type="range" id="ray_n" min="1.40" max="1.70" step="0.01" value="1.49"><output id="ray_n_v">1.49</output></div>
+              <div class="sl"><label for="ray_theta">入射角 θ_in</label><input type="range" id="ray_theta" min="-60" max="60" step="1" value="-20"><output id="ray_theta_v">-20°</output></div>
+              <div class="sl"><label for="ray_x">入射位置</label><input type="range" id="ray_x" min="5" max="45" step="1" value="22"><output id="ray_x_v">22%</output></div>
             </div>
           </div>
         </div>

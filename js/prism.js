@@ -87,16 +87,42 @@
     return v;
   }
 
+  /* 连续量输入的解析。原实现直接 parseFloat：输入框清空 / 填了非数字
+     时得到 NaN，NaN 一路传到几何与体积，页面最终显示 "NaN mm³"
+     —— 既不报错也不解释，用户只能自己猜。这里统一回退到该字段的
+     出厂默认值，并把"已回退"写进 inputNotes 让提示区说出来。 */
+  function readNum(id, dflt, label, min, max) {
+    var el = $(id);
+    if (!el) return dflt;
+    var raw = parseFloat(el.value);
+    if (!isFinite(raw)) {
+      inputNotes.push(label + ' 不是有效数字，已按默认值 ' + dflt + ' 计算。');
+      return dflt;
+    }
+    /* 除零防护：齿距 / 齿高这类做分母的量取 0 时，填充率 2b/pitch
+       会直接变 NaN 或 Infinity，而校验提示要到函数末尾才报出来，
+       中间已经把 NaN 写进了页面。故在此就地钳到正的下界并说明。 */
+    if (min !== undefined && raw < min) {
+      inputNotes.push(label + ' 必须 ≥ ' + min + '，已按 ' + min + ' 计算（输入 ' + raw + '）。');
+      return min;
+    }
+    if (max !== undefined && raw > max) {
+      inputNotes.push(label + ' 必须 ≤ ' + max + '，已按 ' + max + ' 计算（输入 ' + raw + '）。');
+      return max;
+    }
+    return raw;
+  }
+
   function readParams() {
     inputNotes = [];
     return {
-      pitch: parseFloat($('p_pitch').value),
-      height: parseFloat($('p_height').value),
-      angle: parseFloat($('p_angle').value),
-      base: parseFloat($('p_base').value),
-      radius: parseFloat($('p_radius').value),
+      pitch: readNum('p_pitch', 1.0, '齿距 pitch', 0.01),
+      height: readNum('p_height', 0.25, '齿高 height', 0.001),
+      angle: readNum('p_angle', 60, '顶角 α', 1, 179),
+      base: readNum('p_base', 0.20, '底板厚 base', 0),
+      radius: readNum('p_radius', 0.02, '圆角 R', 0),
       N: readCount('p_teeth', 1, 500, '齿数 N'),
-      L: parseFloat($('p_length').value)
+      L: readNum('p_length', 50, '长度 L', 0.1)
     };
   }
 
@@ -492,10 +518,10 @@
     return {
       shape: ($('p2_shape') && $('p2_shape').value) || 'pyramid',
       topRatio: top,
-      pitch: parseFloat($('p2_pitch').value),
-      height: parseFloat($('p2_height').value),
-      angle: parseFloat($('p2_angle').value),
-      base: parseFloat($('p2_base').value),
+      pitch: readNum('p2_pitch', 1.0, '间距 pitch', 0.01),
+      height: readNum('p2_height', 0.25, '结构高度 h', 0.001),
+      angle: readNum('p2_angle', 45, '倾角 α', 1, 89),
+      base: readNum('p2_base', 0.20, '底板厚 base', 0),
       nx: readCount('p2_nx', 1, 500, '列数 Nx'),
       ny: readCount('p2_ny', 1, 500, '行数 Ny')
     };
@@ -745,11 +771,23 @@
     if (renderer && scene && camera) renderer.render(scene, camera);
   }
 
+  /* 渲染循环可以暂停。原先 animate() 无条件续帧，于是切到别的页签之后
+     本页的 3D 仍在后台每帧渲染 —— 用户看不见，CPU/GPU 却一直在转
+     （笔记本上表现是风扇常转、掉电快）。由 app.js 在切页签时调用。 */
+  var animPaused = false;
   function animate() {
     if (!renderer) return;
+    if (animPaused) return;          /* 断链：不再续帧，直到 resumeAnim() */
     requestAnimationFrame(animate);
     if (controls) controls.update();
     drawOnce();
+  }
+  function pauseAnim() { animPaused = true; }
+  function resumeAnim() {
+    if (!renderer) return;
+    if (!animPaused) return;
+    animPaused = false;
+    requestAnimationFrame(animate); /* 重新起链 */
   }
 
   /* 棱镜板表面材质。
@@ -1767,11 +1805,17 @@
    * ============================================================ */
   function setText(id, txt) { var e = $(id); if (e) e.textContent = txt; }
 
+  /* 三维引擎不可用是一条**常驻**结论，不是某次刷新的临时告警。
+     原先若把提示直接写进这个框，随后 refresh() 收尾的 showWarn('')
+     会把它连文本一起清掉（display:none）—— 降级提示刚显示就被抹掉，
+     等于没有。故降级文案单独存 threeErr，每次 showWarn 都拼在前面。 */
+  var threeErr = '';
   function showWarn(msg) {
     var w = $('prism-warn');
     if (!w) return;
-    w.style.display = msg ? 'block' : 'none';
-    w.textContent = msg;
+    var full = (threeErr ? threeErr : '') + (threeErr && msg ? '\n' : '') + (msg || '');
+    w.style.display = full ? 'block' : 'none';
+    w.textContent = full;
   }
 
   /* ============================================================
@@ -1806,12 +1850,29 @@
       refresh();
       return;
     }
-    /* 首次进入本视图时容器才有尺寸，故 init 时再初始化 WebGL */
-    initThree();
+    /* 首次进入本视图时容器才有尺寸，故 init 时再初始化 WebGL。
+       initThree 必须包 try/catch：`new THREE.WebGLRenderer()` 在拿不到
+       WebGL 上下文时**直接抛异常**（浏览器禁用硬件加速、老设备、
+       企业策略禁用 WebGL 都会触发）。若让它冒泡出去，后面的
+       bindControls / refresh / resize / drawOnce 会整段跳过 ——
+       表现是"3D 区空白 + 所有参数控件失灵 + 页面一声不吭"，
+       用户完全无从判断发生了什么。
+       降级策略：3D 可以没有，参数与 STEP/脚本导出必须照常可用。 */
+    var threeOk = true;
+    try {
+      initThree();
+    } catch (e) {
+      threeOk = false;
+      renderer = null;
+      threeErr = '三维预览不可用（本机 WebGL 上下文创建失败：' +
+        (e && e.message ? e.message : String(e)) + '）。参数计算与 STEP / 脚本导出仍可正常使用。';
+      if (window.console && console.warn) console.warn('prism: WebGL 初始化失败，已降级为无 3D 模式', e);
+    }
     bindControls();
+    /* refresh() 内部会调 showWarn() 收尾；threeErr 已在上面写入，
+       故提示会随本次刷新一并显示，且此后每次刷新都不会被清掉。 */
     refresh();
-    resize();
-    drawOnce();
+    if (threeOk) { resize(); drawOnce(); }
   }
 
   var bound = false;
@@ -2138,6 +2199,8 @@
     init: init,
     resize: function () { resize(); drawOnce(); },
     redraw: function () { drawOnce(); },
+    pauseAnim: pauseAnim,
+    resumeAnim: resumeAnim,
     get mode() { return mode; },
     get geo() { return currentGeo; },
     /* 按当前模式分派：1D 走棱镜肋、2D 走金字塔阵列。

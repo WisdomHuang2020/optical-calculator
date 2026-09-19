@@ -358,7 +358,10 @@ input[type="range"]::-moz-range-thumb {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px; margin-bottom: 16px;
 }
-@media (max-width: 720px) { .stats { grid-template-columns: 1fr 1fr; } }
+/* 用 minmax(0, 1fr) 而不是 1fr：1fr 的最小尺寸是 min-content，
+   卡片里的长词 / 固定宽列会把整列顶宽，实测窄屏下两列各 272px、
+   合计 556px 撑破 496px 视口。minmax(0, 1fr) 才允许列压缩到 0。 */
+@media (max-width: 720px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .stat {
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -796,6 +799,50 @@ ul.tight li { margin-bottom: 5px; }
 }
 
 /* ============================================================
+ * 移动端（≤ 620px）
+ *
+ * 原先本站只有 1080 / 1020 / 860 / 720 四个断点，窄到手机宽度时
+ * 没有任何规则兜底：实测 496px 视口下 calc 页 100 个元素越界、
+ * prism 页 87 个、mats 页 58 个（表格摊到 720px 无法收缩），
+ * 整站横向滚动条常驻。这里补齐移动端规则。
+ * ============================================================ */
+@media (max-width: 620px) {
+  .wrap { padding: 16px 12px 48px; }
+
+  /* 所有多列网格一律退成单列，并用 minmax(0, ·) 允许压缩 */
+  .layout, .solid-layout, .prism-layout,
+  .stats, .kn .stats, .kn .cols, .kn .formulas,
+  .kn .readout, .kn .check-grid, .kn .hero .grid, .kn .demo2,
+  .stat-grid, .opt-model, .opt-console, .opt-matrow {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* 表格：保底宽度留在卡片内横向滚动，而不是把页面顶宽。
+     min-width 只对真正宽的表生效，窄表仍按内容自然排布。 */
+  .card, .panel { overflow-x: auto; }
+  table { min-width: 460px; }
+
+  /* 画布与自适应媒体 */
+  canvas { max-width: 100%; height: auto; }
+  .prism-stage { height: 320px; }
+
+  /* 控件排布：.row 是 flex（不是 grid），靠换行而不是改列模板 */
+  .row { flex-wrap: wrap; }
+  .kn .demo .ctrl, .kn .demo2 .sl { grid-template-columns: minmax(72px, auto) minmax(0, 1fr) 46px; }
+
+  /* 字号与内边距收紧，换取可读的行宽 */
+  .card { padding: 14px 14px; }
+  .stat { padding: 11px 12px; }
+
+  /* 页签横向可滚动：7 个页签在手机上必然放不下 */
+  .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+
+  /* 最优设计页的伪彩场与色标并排会挤爆，改为上下堆叠 */
+  #view-opt .opt-fieldwrap { flex-direction: column; align-items: center; }
+  #view-opt #od_bar { width: 100%; max-width: 320px; height: 44px; }
+}
+
+/* ============================================================
  * 棱镜知识页（第 5 / 6 个 tab）
  * ------------------------------------------------------------
  * 这两页的内容取自一份独立的《棱镜板设计》单页文档。该文档自成一套令牌
@@ -1091,3 +1138,12 @@ ul.tight li { margin-bottom: 5px; }
   #view-opt .opt-console { grid-template-columns: 1fr; }
   #view-opt .opt-matrow { grid-template-columns: 1fr 1fr; }
 }
+
+/* 平板宽度（621–1020px）：本页的结果表（约束清单 / 三材料对比 / 敏感性）
+   列数多、内容不折行，实测 768px 视口下摊到 794px 顶破页面；这里让它
+   自身横向滚动。伪彩场与色标并排也会挤出去，允许换行。 */
+@media (max-width: 1020px) {
+  #view-opt table { display: block; overflow-x: auto; }
+  #view-opt .opt-fieldwrap { flex-wrap: wrap; }
+}
+

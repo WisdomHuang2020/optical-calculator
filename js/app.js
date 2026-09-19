@@ -487,6 +487,18 @@
     });
   }
 
+  /* 动画预算：只让**当前**视图的渲染循环转。
+     立体角的自转 rAF 与棱镜的 3D rAF 原本都是无条件常驻，切到别的页签
+     之后仍在后台每帧重绘 —— 画面用户看不见，CPU/GPU 与电量照耗
+     （笔记本上的直观表现是风扇常转）。 */
+  function syncAnim(name) {
+    if (viz) viz.running = (name === 'solid');
+    if (window.Prism && window.Prism.pauseAnim) {
+      if (name === 'prism') window.Prism.resumeAnim();
+      else window.Prism.pauseAnim();
+    }
+  }
+
   function activateTab(name) {
     var t = document.querySelector('.tab[data-tab="' + name + '"]');
     if (!t) return false;
@@ -495,6 +507,7 @@
     t.classList.add('active');
     var v = $('view-' + name);
     if (v) v.classList.add('active');
+    syncAnim(name);
     /* 页脚按当前页切换内容。原来只有一份全局文案（光度学公式 + DIALux 复核），
        在棱镜三页上完全不适用 —— 同一份备注不该照搬到讲棱镜的页面上。 */
     document.querySelectorAll('.footer .fset').forEach(function (f) {
@@ -580,6 +593,11 @@
       }, 160);
     });
     window.addEventListener('hashchange', applyHash);
+    /* 深链可能已切页（applyHash），也可能仍停在默认首屏。无论哪种，
+       动画预算都要按**最终**激活的页签对齐，否则首屏是 calc 时立体角
+       的自转会在后台空转。 */
+    var activeTab = document.querySelector('.tab.active');
+    syncAnim(activeTab ? activeTab.dataset.tab : 'calc');
   }
 
   if (document.readyState === 'loading') {

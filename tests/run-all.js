@@ -52,7 +52,19 @@ const SUITES = [
   { name: '计算内核 · 光度学数值断言', file: 'verify.js' },
   { name: '参考算例 · 外部文件复核', file: 'verify-user-file.js' },
   { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' },
-  { name: 'STEP 导出 · 结构校验 + 内核读回', file: 'step-export.js' }
+  { name: 'STEP 导出 · 结构校验 + 内核读回', file: 'step-export.js' },
+  /* 全站运行时审核（v3.10.2）：冒烟只验首屏四个视图"渲染出来没有"，
+     本套件做的是遍历式体检 —— 7 个页签逐个切、每个控件逐个触发、
+     画布逐个量像素、逐元素查横向溢出。能用 WIDTH 环境变量换断点复跑。 */
+  { name: '全站审核 · 逐页遍历与控件体检', file: 'site-audit.js' },
+  /* 同一份脚本，DEGRADE=1 把 WebGLRenderer 换成必抛异常的桩 ——
+     真实用户禁用硬件加速 / 老设备会走到这条路径，而无头 Chrome 自带
+     SwiftShader，正常情况下永远走不到，只能这样确定性复现。 */
+  { name: '全站审核 · 无 WebGL 降级路径', file: 'site-audit.js', env: { DEGRADE: '1' } },
+  /* 非法输入不得把 NaN / Infinity 印到页面上（v3.10.2 修的就是棱镜页这条）。
+     单独成套件而不是并进 site-audit：它要把每个输入框灌脏再复位，
+     与"逐页遍历体检"混跑会互相污染页面状态。 */
+  { name: '非法输入 · 不得显示 NaN / Infinity', file: 'nan-input-check.js' }
 ];
 
 const LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'run-all-logs-'));
@@ -67,11 +79,13 @@ for (const s of SUITES) {
   /* 落盘而不是 stdio:'inherit' —— 失败时才能把输出回放出来。
      另加超时上限：某个套件卡死（如无头 Chrome 挂住）时，
      整轮不能无限等，要带着"这一条超时了"的信息失败。 */
+  /* env 字段：同一份脚本用不同开关跑成不同套件
+     （如 site-audit.js 正常模式 / DEGRADE=1 模拟无 WebGL）。 */
   const r = spawnSync(process.execPath, [p], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     timeout: 15 * 60 * 1000,
-    env: process.env
+    env: Object.assign({}, process.env, s.env || {})
   });
 
   const out = String(r.stdout || '');
