@@ -19,3 +19,8 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.swp
+
+# 对账/探针留下的临时产物（API 转储、截图、日志）
+releases.json
+tags.json
+runs.json
