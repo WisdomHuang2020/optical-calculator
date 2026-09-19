@@ -991,127 +991,364 @@
 <div class="view" id="view-opt">
   <section id="s-opt-method">
     <div class="wrap">
-      <div class="kicker"><span>07</span><span class="en">Optimal Design Method</span></div>
+      <div class="kicker"><span>05</span><span class="en">Optimal Design Method</span></div>
       <h2 class="sec">最优设计方法：扩散板与棱镜板如何取得平衡</h2>
       <p class="lead">
-        面板灯一类面光源要同时拿到<strong>高发光面均匀度</strong>与<strong>高出光效率</strong>，
-        靠的是两块光学件的配合：<b>扩散板</b>负责把导光板的网点「抹平」成均匀发光面，
-        <b>棱镜板</b>负责把漫射光「收拢」进观看锥、提升正向出光。两者各管一头，又在
-        雾度上彼此拉扯——本页给出一套筛选级方法：给定目标均匀度 U* 与效率 η*，
-        自动给出最优的扩散板材料（透过率 / 雾度）与棱镜形状、关键角度。
+        面板灯这类面光源要同时拿到<strong>高发光面均匀度 U</strong>与<strong>高出光效率 η</strong>，
+        靠的是两块光学件的分工：<b>扩散板</b>把 LED 阵列的灯影「抹平」成均匀发光面，
+        <b>棱镜板</b>把漫射光「收拢」进观看锥、把出光效率提上去。两者不各自为战——
+        雾度、混光距离、灯数、厚度预算牵一发动全身。本页给出一条<b>可复核的闭环方法</b>：
+        给定目标与约束，自动扫出扩散板材料（透过率 / 雾度 / 板厚）与棱镜（形状 / 关键角度）
+        的平衡最优组合，并把每一步的物理来路都摊开给你看。
       </p>
 
-      <div class="grid opt-couple">
-        <div class="opt-couple-text">
-          <h3>1 · 扩散板与棱镜板各管什么</h3>
-          <ul class="opt-list">
-            <li><b>扩散板</b>：① 透过率 <code>Td</code> 决定效率损失（其余被吸收 / 背散）；
-              ② 雾度 <code>Hd</code> 决定发光面<strong>空间均匀度 U</strong>——雾度越高越均匀，
-              但雾化的光更难被棱镜收拢，会拖累效率。</li>
-            <li><b>棱镜板</b>：把漫射光折射 / 全反射收拢到观看锥内，提升<strong>出光效率 η</strong>；
-              它几乎不改变发光面的<strong>空间均匀度</strong>（那是扩散板的活），只改出光角度。</li>
-            <li><b>真正的拉扯</b>：要高 U 要提 Hd，但 Hd 越高棱镜越难准直 → η 越低；
-              要 η 高要降 Hd、提 Td、把棱镜做锐，但又会牺牲均匀度。平衡即在两者之间取舍。</li>
-          </ul>
+      <!-- ========== ① 流程图 ========== -->
+      <div class="card opt-flow">
+        <h2><span class="num">§1</span>设计流程（闭环，十步）</h2>
+        <svg class="opt-flow-svg" viewBox="0 0 1040 700" role="img" aria-label="最优设计方法流程图">
+          <defs>
+            <marker id="odArw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="var(--primary)"></path>
+            </marker>
+            <marker id="odArwD" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="var(--c-amber)"></path>
+            </marker>
+          </defs>
 
-          <h3>2 · 真正决定棱镜性能的是四个量</h3>
-          <p class="perf-note">
-            <b>不是形状名字，而是这四个量</b>：① 侧壁斜率分布（决定角度变换，本模型里就是关键角度 α）；
-            ② 填充率（平顶 / 齿根占比 = 漏光通道，填充率越低条带风险越高）；
-            ③ 对称性（决定配光是否各向同性，二维阵列优于正交双 V）；
-            ④ 尖顶锐度（决定能否脱模与尖端 TIR 行为）。
-            <b>同一族形状里改角度，效果差异可能比换形状更大</b>——所以优化器把 α 作为主变量，
-            形状作为次变量（对称性 / 尖顶锐度的工艺权衡）。
+          <!-- ① -->
+          <rect class="fbox" x="40" y="26" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="56" y="48">① 需求与目标量化</text>
+          <text class="fsub" x="56" y="66">目标发光面均匀度 U*、目标出光效率 η*</text>
+          <text class="fsub" x="56" y="82">观看半锥 θv、整机厚度预算 Hb</text>
+          <text class="fsub" x="56" y="98">评议口径：有效面 min/max · mean/max · 9/13 点法</text>
+
+          <!-- ② -->
+          <rect class="fbox" x="570" y="26" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="586" y="48">② 系统与边界条件</text>
+          <text class="fsub" x="586" y="66">发光面开口 W×H、LED 阵列密度 N、一次配光 p</text>
+          <text class="fsub" x="586" y="82">边框反射率 ρw、板面细结构特征间距 q</text>
+          <text class="fsub" x="586" y="98">扩散板厚度候选 t、成本偏好（省成本 / 留余量 / 均衡）</text>
+
+          <path class="flink" d="M470 70 L562 70" marker-end="url(#odArw)"></path>
+
+          <!-- ③ -->
+          <rect class="fbox" x="40" y="152" width="430" height="104" rx="8"></rect>
+          <text class="ftitle" x="56" y="174">③ 扩散板候选（材料 × 雾度）</text>
+          <text class="fsub" x="56" y="192">材料 PC / PMMA / PS：n、本体透过率 Tsub、雾度上限</text>
+          <text class="fsub" x="56" y="208">雾度 Hd → 散射光学厚度 τ = −ln(1−Hd)</text>
+          <text class="fsub" x="56" y="224">透过率 Td = Tsub·(1 − 0.085·Hd^1.4)，板内横向展宽 σ = 0.35·t·tanΘ</text>
+          <text class="fsub" x="56" y="242">→ 决定「抹得掉什么」：细结构抹得掉，大间距灯影抹不掉</text>
+
+          <!-- ④ -->
+          <rect class="fbox" x="570" y="152" width="430" height="104" rx="8"></rect>
+          <text class="ftitle" x="586" y="174">④ 棱镜候选（形状 × 侧壁角）</text>
+          <text class="fsub" x="586" y="192">六形状 × α × 覆盖率；α ≤ 拔模 / 复制保真上限</text>
+          <text class="fsub" x="586" y="208">覆盖率 = 1 − 尖端 / 谷底复制圆角占比（平台 = 漏光通道）</text>
+          <text class="fsub" x="586" y="224">棱镜代理：收敛半角 β、萃取效率 ηx（与棱镜板设计页 MC 校准）</text>
+          <text class="fsub" x="586" y="242">→ 只改出光角度，几乎不改发光面空间分布</text>
+
+          <path class="flink" d="M255 114 L255 144" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 114 L785 144" marker-end="url(#odArw)"></path>
+
+          <!-- ⑤ -->
+          <rect class="fbox fbox-a" x="40" y="296" width="430" height="120" rx="8"></rect>
+          <text class="ftitle" x="56" y="318">⑤ 前向模型 A：空间混光 → U</text>
+          <text class="fsub" x="56" y="336">单灯足迹 E ∝ (1 + (r/OD)²)^(−p)，其汉克尔变换有闭式解</text>
+          <text class="fsub" x="56" y="352">阵列第 (m,n) 阶谐波被压到 M(2π·(OD/p)·√(m²+n²))</text>
+          <text class="fsub" x="56" y="368">镜像源法计入边框 ρw 回收 → 场积分 = 采光利用率 φconf</text>
+          <text class="fsub" x="56" y="384">叠加细结构残余对比 → 逐像素 / 取样两种 U 口径</text>
+          <text class="fsub" x="56" y="404"><tspan class="fkey">判据：OD/p ≳ 0.8 才谈得上无灯影</tspan></text>
+
+          <!-- ⑥ -->
+          <rect class="fbox fbox-a" x="570" y="296" width="430" height="120" rx="8"></rect>
+          <text class="ftitle" x="586" y="318">⑥ 前向模型 B：回收 + 角度 → η</text>
+          <text class="fsub" x="586" y="336">η = Td · ηx,plate · φconf　（整半球出光效率）</text>
+          <text class="fsub" x="586" y="352">ηx,plate = 覆盖率·ηx + (1−覆盖率)·ηflat　（平台 = 漏光通道）</text>
+          <text class="fsub" x="586" y="368">角度分布 = (1−Hd)·cos(ms·θ) + Hd·cos(md·θ)</text>
+          <text class="fsub" x="586" y="384">锥内占比 C = ∫(0..θv) L·sinθ dθ / ∫(0..π/2) L·sinθ dθ</text>
+          <text class="fsub" x="586" y="404"><tspan class="fkey">锥内出光效率 = η·C</tspan></text>
+
+          <path class="flink" d="M255 256 L255 288" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 256 L785 288" marker-end="url(#odArw)"></path>
+
+          <!-- ⑦ -->
+          <rect class="fbox fbox-b" x="40" y="456" width="910" height="86" rx="8"></rect>
+          <text class="ftitle" x="56" y="478">⑦ 双目标筛选 + 硬约束校核</text>
+          <text class="fsub" x="56" y="496">U ≥ U* 且 η ≥ η*；同时过：整机厚度 ≤ 预算 · α ≤ 拔模上限 · 覆盖率 ≥ 80% · OD/p ≥ 0.8 · 无可辨灯影</text>
+          <text class="fsub" x="56" y="512">任一不过即判为不可行，并报缺口：还差多少、卡在哪一条（不是简单地说「无解」）</text>
+          <text class="fsub" x="56" y="532">约束不可行的方向就是设计要动的方向：加厚度 → 加 OD；加灯数 → 降 p；换配光 → 加宽足迹</text>
+
+          <path class="flink" d="M255 416 L255 446" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 416 L785 446" marker-end="url(#odArw)"></path>
+
+          <!-- ⑧ -->
+          <rect class="fbox" x="40" y="582" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="56" y="604">⑧ Pareto 前沿 + 加权评分</text>
+          <text class="fsub" x="56" y="622">先取 (U, η) 互不支配的前沿，再按成本 / 性能余量 / 均衡打分</text>
+          <text class="fsub" x="56" y="638">成本指数含：LED 数量、材料用量、模具难度、雾度配方、整机厚度</text>
+          <text class="fsub" x="56" y="654">同一前沿上多花 1 分钱换几个点 U，这里给得清清楚楚</text>
+
+          <!-- ⑨ -->
+          <rect class="fbox" x="570" y="582" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="586" y="604">⑨ 敏感性 / 公差分析</text>
+          <text class="fsub" x="586" y="622">α ±3°、Hd ±0.05、OD −15%、灯数每边 −2 各自打一遍</text>
+          <text class="fsub" x="586" y="638">谁最敏感，谁的公差就要收得最紧（模具与批次管控的落点）</text>
+          <text class="fsub" x="586" y="654">别把公差平均分配——那是最贵的做法</text>
+
+          <path class="flink" d="M255 542 L255 574" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 542 L785 574" marker-end="url(#odArw)"></path>
+
+          <!-- 反馈闭环 -->
+          <path class="flink flink-d" d="M470 626 C 520 626 520 276 470 276" marker-end="url(#odArwD)"></path>
+          <path class="flink flink-d" d="M570 626 C 520 626 520 676 40 676 L 40 300" marker-end="url(#odArwD)"></path>
+          <text class="fdash" x="250" y="694">实测不符 → 回到候选集（材料 / 雾度 / 形状 / α / 灯数）重跑，不是拍脑袋改一个数</text>
+        </svg>
+        <p class="perf-note">
+          图中③~⑥是本页的<b>前向模型</b>：给定一组设计参数，算出 (U, η)。⑦~⑨是<b>反问题</b>：
+          在参数空间里搜索满足目标的组合。二者分开写，模型改一处不会把搜索逻辑也带歪。
+        </p>
+      </div>
+
+      <!-- ========== ② 三个物理模型卡 ========== -->
+      <div class="grid opt-model">
+        <div class="card">
+          <h3>空间混光：灯影凭什么被抹掉</h3>
+          <p class="opt-p">
+            一颗 LED 是朗伯点源，在距离 OD 的扩散板平面上留下照度足迹
+            <code>E(r) ∝ (1 + (r/OD)²)<sup>−p</sup></code>。它的<b>零阶汉克尔变换有闭式解</b>，
+            于是周期为 p<sub>LED</sub> 的阵列，第 (m,n) 阶空间谐波会被压低到
+            <code>M(2π·(OD/p<sub>LED</sub>)·√(m²+n²))</code>——这定量给出了那句经验法则
+            「<b>OD/p ≳ 0.8 灯影才消失</b>」，而不是靠感觉。
           </p>
-
-          <h3>3 · 平衡最优解方法</h3>
-          <ol class="opt-list">
-            <li>定义目标：发光面均匀度 U*（如 ≥70%）与出光效率 η*。</li>
-            <li>扫描候选：扩散板 <code>(Td, Hd)</code> × 棱镜 <code>(六形状, α)</code>，
-              用与「棱镜板设计」页蒙特卡洛校准过的棱镜代理 + 扩散板两段模型，算每组 <code>(U, η)</code>。</li>
-            <li>在<b>同时满足双约束</b>的候选里，取离目标最近、且最省（高填充 = 少平台浪费、
-              低雾度 = 少散射损耗）的点；若双约束无法同时满足，回退到 Pareto 最近点并提示放宽目标。</li>
-          </ol>
+          <p class="opt-p">
+            关键推论：<b>雾度抹不抹得掉，取决于结构尺度</b>。板内横向散射展宽
+            σ<sub>scat</sub> 只有 0.1~1.1 mm，所以雾化能轻易抹平 sub-mm~mm 级的网点与细缺陷
+            （残余对比随雾度指数下降），却<b>抹不平几十毫米级的灯影</b>——后者只能靠
+            OD/p 或加密阵列。把「灯影」和「网点可见」当一回事，是这类设计最常见的误判。
+          </p>
         </div>
-
-        <div class="opt-couple-fig">
-          <svg viewBox="0 0 360 300" role="img" aria-label="扩散板与棱镜板耦合示意图" style="width:100%;height:auto">
-            <defs>
-              <marker id="odArr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
-                <path d="M0,0 L7,3 L0,6 Z" fill="var(--primary)"></path>
-              </marker>
-            </defs>
-            <rect x="8" y="120" width="80" height="54" rx="6" fill="var(--surface-2)" stroke="var(--border)"></rect>
-            <text x="48" y="142" text-anchor="middle" class="svg-lbl">入射光</text>
-            <text x="48" y="160" text-anchor="middle" class="svg-lbl svg-sub">朗伯 / 网点</text>
-
-            <rect x="120" y="112" width="96" height="70" rx="6" fill="var(--surface-2)" stroke="var(--c-amber)"></rect>
-            <text x="168" y="134" text-anchor="middle" class="svg-lbl">扩散板</text>
-            <text x="168" y="152" text-anchor="middle" class="svg-lbl svg-sub">Td 透过率</text>
-            <text x="168" y="168" text-anchor="middle" class="svg-lbl svg-sub">Hd 雾度 → U</text>
-
-            <rect x="248" y="112" width="96" height="70" rx="6" fill="var(--surface-2)" stroke="var(--primary)"></rect>
-            <text x="296" y="134" text-anchor="middle" class="svg-lbl">棱镜板</text>
-            <text x="296" y="152" text-anchor="middle" class="svg-lbl svg-sub">形状 · α</text>
-            <text x="296" y="168" text-anchor="middle" class="svg-lbl svg-sub">→ 收敛 → η</text>
-
-            <line x1="88" y1="147" x2="118" y2="147" stroke="var(--primary)" marker-end="url(#odArr)"></line>
-            <line x1="216" y1="147" x2="246" y2="147" stroke="var(--primary)" marker-end="url(#odArr)"></line>
-
-            <path d="M344 147 C 360 147 360 250 320 250 L 296 250" fill="none" stroke="var(--c-ray-refract)" stroke-width="1.5" marker-end="url(#odArr)"></path>
-            <text x="356" y="200" text-anchor="middle" class="svg-lbl svg-sub" transform="rotate(90 356 200)">出光</text>
-
-            <text x="168" y="270" text-anchor="middle" class="svg-lbl">U（发光面均匀度）</text>
-            <text x="296" y="270" text-anchor="middle" class="svg-lbl">η（出光效率 / 锥内）</text>
-          </svg>
-          <p class="perf-note" style="margin-top:6px">
-            棱镜代理（β 收敛半角、ηx 萃取效率）已与「棱镜板设计」页的几何光学蒙特卡洛在
-            金字塔 α=45° 参考点校准（ηx≈0.59）；耦合模型为筛选级，正式设计请用 LightTools / LiteTrace 复核。
+        <div class="card">
+          <h3>侧墙回收：厚度是怎么吃掉效率的</h3>
+          <p class="opt-p">
+            混光距离越大越均匀，但光斑也越容易铺到边框之外。真实灯具边框内侧有反射片
+            （白反射 ρ≈0.90~0.95，ESR 可达 0.98），这里用<b>镜像源法</b>计入：
+            每条边把源镜像出去、按 ρ<sup>反射次数</sup> 衰减，矩形腔两轴镜像做笛卡尔积，
+            角落反射自动带上 ρ<sup>m+n</sup>。
+          </p>
+          <p class="opt-p">
+            落在开口内的光通占比就是<b>采光利用率 φ<sub>conf</sub></b>，它随 OD 增大而下降——
+            <b>这正是「均匀度」与「效率」之间那根真正拉扯的绳子</b>：想均匀就得加厚，
+            加厚就有一部分光被边框吃掉了。φ<sub>conf</sub> 直接进效率表达式，
+            不藏在经验系数里。
+          </p>
+        </div>
+        <div class="card">
+          <h3>棱镜：只改角度，不改空间分布</h3>
+          <p class="opt-p">
+            出光效率写成 <code>η = T<sub>d</sub> · η<sub>x,plate</sub> · φ<sub>conf</sub></code>，
+            其中 <code>η<sub>x,plate</sub> = 覆盖率·η<sub>x</sub> + (1−覆盖率)·η<sub>flat</sub></code>——
+            <b>平台占比就是漏光通道</b>，直接进效率，而不是当作均匀度的经验惩罚。
+            锥内再乘 <code>C</code>：把出射角分布
+            <code>(1−H<sub>d</sub>)·cos<sup>m_s</sup>θ + H<sub>d</sub>·cos<sup>m_d</sup>θ</code>
+            在 ±θ<sub>v</sub> 上积分得到。
+          </p>
+          <p class="opt-p">
+            于是雾度的两副面孔就清楚了：它<b>抬高 U</b>（抹平细结构），
+            又<b>压低 C</b>（散射份更难被棱镜收拢）。现代扩散板高雾不太掉透过率，
+            所以真正的代价不在 T<sub>d</sub>，而在<b>准直被破坏</b>这一头。
           </p>
         </div>
       </div>
 
-      <div class="opt-ctl">
-        <div class="field">
-          <label>目标均匀度 U* <span class="unit">%</span></label>
-          <input id="od_u" type="range" min="60" max="95" step="1" value="72">
-          <output id="od_u_v" class="od-out">72%</output>
+      <!-- ========== ③ 设计输入 ========== -->
+      <div class="opt-console">
+        <div class="card">
+          <h2><span class="num">§2</span>设计输入与约束</h2>
+          <div class="opt-matpick" id="od_matpick"></div>
+
+          <div class="opt-ctl">
+            <div class="field">
+              <label>目标均匀度 U* <span class="unit">%</span></label>
+              <input id="od_u" type="range" min="40" max="95" step="1" value="75">
+              <output id="od_u_v" class="od-out">75%</output>
+            </div>
+            <div class="field">
+              <label>目标出光效率 η* <span class="unit">%</span></label>
+              <input id="od_e" type="range" min="20" max="60" step="1" value="42">
+              <output id="od_e_v" class="od-out">42%</output>
+            </div>
+            <div class="field">
+              <label>观看半锥 θ<sub>v</sub> <span class="unit">°</span></label>
+              <input id="od_tv" type="range" min="15" max="60" step="1" value="35">
+              <output id="od_tv_v" class="od-out">35°</output>
+            </div>
+            <div class="field">
+              <label>整机厚度预算 <span class="unit">mm</span></label>
+              <input id="od_budget" type="range" min="12" max="60" step="1" value="30">
+              <output id="od_budget_v" class="od-out">30mm</output>
+            </div>
+            <div class="field">
+              <label>U 评议口径</label>
+              <select id="od_udef"></select>
+            </div>
+            <div class="field">
+              <label>LED 一次配光</label>
+              <select id="od_src"></select>
+            </div>
+            <div class="field">
+              <label>LED 阵列密度</label>
+              <select id="od_n">
+                <option value="0">自动（由优化器决定）</option>
+                <option value="4">4 × 4</option>
+                <option value="6">6 × 6</option>
+                <option value="8">8 × 8</option>
+                <option value="10">10 × 10</option>
+                <option value="12">12 × 12</option>
+                <option value="14">14 × 14</option>
+                <option value="16">16 × 16</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>扩散板厚度 <span class="unit">mm</span></label>
+              <select id="od_t">
+                <option value="0">自动（由优化器决定）</option>
+                <option value="1">1.0</option>
+                <option value="1.5">1.5</option>
+                <option value="2">2.0</option>
+                <option value="2.5">2.5</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>边框反射率 ρ<sub>w</sub></label>
+              <input id="od_rho" type="range" min="60" max="98" step="1" value="93">
+              <output id="od_rho_v" class="od-out">0.93</output>
+            </div>
+            <div class="field">
+              <label>优化偏好</label>
+              <select id="od_prefer">
+                <option value="balanced">均衡</option>
+                <option value="cost">成本优先</option>
+                <option value="margin">性能余量优先</option>
+              </select>
+            </div>
+            <div class="field opt-chk">
+              <label class="chk"><input id="od_hotspot" type="checkbox"> 灯影必须不可辨（残余对比 ≤ 15%，即 U ≥ 85%）</label>
+            </div>
+          </div>
+
+          <div class="opt-run">
+            <button id="od_btn" class="btn solid">求解最优组合</button>
+            <span id="od_meta" class="perf-note"></span>
+          </div>
         </div>
-        <div class="field">
-          <label>目标出光效率 η* <span class="unit">%</span></label>
-          <input id="od_e" type="range" min="60" max="95" step="1" value="72">
-          <output id="od_e_v" class="od-out">72%</output>
+
+        <div class="card" id="od_mat_card">
+          <h2><span class="num">§3</span>材料：PC / PMMA / PS</h2>
+          <div id="od_mat_detail"></div>
         </div>
-        <div class="field">
-          <label>观看半锥 θv <span class="unit">°</span></label>
-          <input id="od_tv" type="range" min="20" max="45" step="1" value="35">
-          <output id="od_tv_v" class="od-out">35°</output>
-        </div>
-        <button id="od_btn" class="btn solid">计算最优组合</button>
       </div>
 
-      <div id="od_verdict" class="perf-verdict">设定目标后点「计算最优组合」。</div>
+      <!-- ========== ④ 结果 ========== -->
+      <div id="od_verdict" class="perf-verdict">设定目标与约束后点「求解最优组合」。</div>
 
       <div class="opt-result">
-        <table class="opt-tbl">
-          <thead><tr><th>类别</th><th>推荐</th><th>关键值</th></tr></thead>
-          <tbody>
-            <tr><td>扩散板材料</td><td id="od_mat">—</td><td id="od_mat_k">—</td></tr>
-            <tr><td>透过率 Td</td><td id="od_td">—</td><td rowspan="2" id="od_diff_k">—</td></tr>
-            <tr><td>雾度 Hd</td><td id="od_hd">—</td></tr>
-            <tr><td>棱镜形状</td><td id="od_shape">—</td><td id="od_shape_k">—</td></tr>
-            <tr><td>关键角度 α</td><td id="od_alpha">—</td><td id="od_alpha_k">—</td></tr>
-            <tr><td>预测均匀度 U</td><td id="od_u_r">—</td><td rowspan="2" id="od_perf_k">—</td></tr>
-            <tr><td>预测出光效率 η</td><td id="od_e_r">—</td></tr>
-          </tbody>
-        </table>
-        <div class="opt-plot">
-          <canvas id="od_canvas" width="520" height="420" role="img" aria-label="(U, η) 权衡散点图"></canvas>
-          <p class="perf-note">散点为全部候选 (U, η)；颜色区分棱镜形状；虚线框为目标区 [U*, η*]；
-            ★ 为选中最优解。落在框外的候选无法同时满足双目标。</p>
+        <div class="card">
+          <h3>推荐方案</h3>
+          <table class="opt-tbl" id="od_out_tbl">
+            <thead><tr><th>项目</th><th>取值</th><th>说明 / 来路</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>发光面亮度分布</h3>
+          <div class="opt-figbar">
+            <span class="seg">
+              <button class="segbtn active" data-view="opt">推荐方案</button>
+              <button class="segbtn" data-view="base">低配基线对照</button>
+            </span>
+            <span class="sp"></span>
+            <span id="od_field_meta" class="perf-note"></span>
+          </div>
+          <div class="opt-fieldwrap">
+            <canvas id="od_field" width="320" height="320" role="img" aria-label="发光面亮度伪彩图"></canvas>
+            <canvas id="od_bar" width="60" height="320" aria-label="色标"></canvas>
+          </div>
+          <p class="perf-note">
+            伪彩 = 正面亮度（归一化到均值 1）。图上标出 LED 位置与取样点；
+            虚线框为量测排除的 5% 压边区。<b>基线</b>取同厚度预算下的低配做法（6×6 阵列、H<sub>d</sub>=0.35），
+            用来说明「少花钱买来的就是这些灯影」。
+          </p>
         </div>
       </div>
-      <p id="od_meta" class="perf-note"></p>
+
+      <div class="opt-result">
+        <div class="card">
+          <h3>中心剖面亮度</h3>
+          <canvas id="od_slice" width="470" height="190" role="img" aria-label="发光面水平中线亮度剖面"></canvas>
+          <p class="perf-note">
+            实线为推荐方案、虚线为基线。阴影带是 ±5% 目视可辨区间；
+            落在带内的起伏人眼看不出来，超出即被判为灯影。
+          </p>
+        </div>
+        <div class="card">
+          <h3>出射角分布与观看锥</h3>
+          <canvas id="od_ang" width="470" height="230" role="img" aria-label="出射光强角分布"></canvas>
+          <p class="perf-note">
+            红区是目标观看锥 ±θ<sub>v</sub>；锥内占半球的比例就是 C。
+            灰色虚线是无棱镜、同雾度扩散板的朗伯出射——两条线之间的面积差，
+            就是棱镜板替你「收拢」回来的光。
+          </p>
+        </div>
+      </div>
+
+      <div class="opt-result">
+        <div class="card">
+          <h3>(U, η) 权衡与 Pareto 前沿</h3>
+          <canvas id="od_scatter" width="470" height="340" role="img" aria-label="U-η 权衡散点图"></canvas>
+          <p class="perf-note">
+            每个点是过硬约束的一组候选（颜色区分棱镜形状），虚线框是目标区，
+            折线是 Pareto 前沿，★ 是选出的最优组合。前沿上往右上方走，
+            每一步都要拿厚度 / 灯数 / 成本去换。
+          </p>
+        </div>
+        <div class="card">
+          <h3>约束校核</h3>
+          <table class="opt-tbl" id="od_checks">
+            <thead><tr><th>约束</th><th>实测 / 计算</th><th>限值</th><th>判定</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div id="od_why" class="perf-note"></div>
+        </div>
+      </div>
+
+      <div class="opt-result">
+        <div class="card">
+          <h3>三材料对照（同一目标、同一约束）</h3>
+          <table class="opt-tbl" id="od_matcmp">
+            <thead><tr><th>材料</th><th>η</th><th>U</th><th>推荐 H<sub>d</sub></th><th>棱镜</th><th>成本指数</th><th>一句话结论</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>敏感性与公差落点</h3>
+          <table class="opt-tbl" id="od_sens">
+            <thead><tr><th>扰动</th><th>来自</th><th>ΔU</th><th>Δη</th><th>处置</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="perf-note opt-caveat">
+        <b>口径与诚实声明。</b>
+        ① 空间混光与边框回收是<b>半解析</b>：足迹用闭式汉克尔变换、边框用镜像源法，
+        与独立实现的直接二维求和交叉验证一致（偏差 &lt; 0.01%）。
+        ② 棱镜的收敛半角 β 与萃取效率 η<sub>x</sub> 是与「棱镜板设计」页蒙特卡洛在
+        金字塔 α=45°、n=1.49 参考点校准的<b>代理模型</b>，其余形状 / 角度靠单调形状因子外推，
+        <b>不做逐点验证</b>；折射率 n 的影响取 ±2% 的一阶趋势，同样标注为弱趋势。
+        ③ η 定义为「进入扩散板的光通中最终从出光面射出的比例」，<b>不含 LED 到扩散板的耦合损失</b>，
+        故绝对值偏保守，横向对比有效。
+        ④ 本页用于方案筛选与趋势判断；正式设计请用 LightTools / LiteTrace 加实测复核。
+      </p>
     </div>
   </section>
 </div>
@@ -1187,12 +1424,27 @@
 
   <div class="fset" data-for="opt">
     <div>
-      最优设计方法 <b class="app-version">v—</b> —— 扩散板（透过率 Td、雾度 Hd）与棱镜板（六形状、关键角度 α）
-      的耦合平衡：扩散板管发光面空间均匀度 U，棱镜板管出光角度收敛（效率 η），二者在雾度上彼此拉扯。
+      最优设计方法 <b class="app-version">v—</b> —— 扩散板（材料 PC / PMMA / PS、板厚 t、雾度 Hd）与棱镜板
+      （六形状、关键角度 α）在总厚度预算下的耦合平衡：扩散板管发光面空间均匀度 U，棱镜板管出光角度收敛
+      与萃取效率 η，二者在雾度上彼此拉扯——雾度上去，U 变好但透过率 Td 掉、出光被拉回朗伯，η 变差。
     </div>
     <div>
-      棱镜代理（收敛半角 β、萃取效率 ηx）与「棱镜板设计」页的几何光学蒙特卡洛在金字塔 α=45° 参考点校准
-      （ηx≈0.59）；耦合模型为<b>筛选级</b>，用于趋势判断与方案筛选，正式设计请用 LightTools / LiteTrace 复核。
+      空间场不再用高斯近似，而是按单次配光footprint E(r) ∝ (1+(r/OD)²)<sup>−p</sup> 对 N×N 阵列做<b>逐点精确求和</b>
+      （与暴力求和逐格偏差 0.0000%）；边框与侧壁回收用镜像源法计入（权重 ρ<sup>阶数</sup>），折算为采光利用率 φ_conf。
+      出光角分布取 (1−Hd)·cos(m<sub>s</sub>θ) + Hd·cos(m<sub>d</sub>θ)，效率链 η = Td·ηx,plate·φ_conf，
+      视锥内份额单独积分。雾度→透过率、散射角、扩散半宽均有经验式（Td = T_sub·(1−0.085·Hd<sup>1.4</sup>)）。
+    </div>
+    <div>
+      棱镜代理（收敛半角 β、萃取效率 ηx）与「棱镜板设计」页的几何光学蒙特卡洛在金字塔 α=45°、n=1.49
+      参考点校准（ηx≈0.59），其余形状 / 角度按形状因子单调外推——<b>外推区仍是代理，不是实测</b>。
+      本模型为<b>半解析筛选级</b>：趋势与量级可信，可用于方案排序与参数寻优；正式量产设计请用
+      LightTools / LiteTrace 或第三方蒙特卡洛复核，尤其是非金字塔形状与 α 远离 45° 的工况。
+    </div>
+    <div>
+      硬约束（不可越界）：总厚度 ≤ 预算、α ≤ 该形状刀具可达角、棱镜填充率 ≥ 70%（含刀尖圆角复形损失）、
+      可选「无灯影热点」（纹波 ≤ 12%）。软目标：U ≥ U*、η ≥ η*、视锥内效率 ≥ η*_cone，三者均不可达时
+      按「欠额惩罚 + 成本 + 裕量」的目标函数在过硬约束解里取最优，而不是简单报错。
+      均匀度口径支持四种（有效面最值 / 均值 / 九点 / 十三点），并带亮度计光阑平均（半径 0.35×节距，≤18 mm）。
     </div>
     <div>
       真正决定棱镜性能的是四个量：侧壁斜率分布、填充率、对称性、尖顶锐度——同一族形状里改角度，

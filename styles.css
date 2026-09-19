@@ -999,38 +999,95 @@ ul.tight li { margin-bottom: 5px; }
 }
 
 /* ============================================================
- * 最优设计方法（第 7 个 tab · view-opt）
+ * 最优设计方法（第 5 个 tab · view-opt）
  * ============================================================ */
-#view-opt .opt-couple { grid-template-columns: 1.15fr 0.85fr; gap: 26px; align-items: start; }
-#view-opt .opt-couple-text h3 { font-size: 15px; margin: 18px 0 8px; color: var(--text); }
-#view-opt .opt-couple-text h3:first-child { margin-top: 0; }
-#view-opt .opt-list { margin: 0; padding-left: 20px; color: var(--text-2); line-height: 1.75; font-size: 13.5px; }
-#view-opt .opt-list li { margin: 5px 0; }
-#view-opt .opt-list ol { padding-left: 18px; }
-#view-opt .opt-couple-fig { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-#view-opt .svg-lbl { font-size: 11px; fill: var(--text-2); font-family: var(--mono); }
-#view-opt .svg-sub { font-size: 9.5px; fill: var(--text-3); }
-#view-opt .perf-note { margin: 8px 0; font-size: 11px; line-height: 1.6; color: var(--text-3); }
-#view-opt .perf-note b { color: var(--text-2); font-weight: 600; }
+#view-opt .lead { max-width: 900px; }
+#view-opt .opt-p { margin: 8px 0; font-size: 12.5px; line-height: 1.75; color: var(--text-2); }
+#view-opt .opt-p code { font-family: var(--mono); font-size: 11.5px; }
+#view-opt .card > h3 { font-size: 14.5px; margin: 0 0 10px; color: var(--text); }
+#view-opt .card > h2 { margin-top: 0; }
 
-#view-opt .opt-ctl { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)) auto; gap: 16px 22px; align-items: end; margin: 22px 0 6px; }
-#view-opt .opt-ctl .field { display: flex; flex-direction: column; gap: 6px; }
-#view-opt .opt-ctl .field label { font-size: 12.5px; color: var(--text-2); }
+/* ---- 流程图 ---- */
+#view-opt .opt-flow-svg { width: 100%; height: auto; display: block; margin-top: 6px; }
+#view-opt .fbox { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; }
+#view-opt .fbox-a { fill: var(--blue-soft, rgba(79,140,255,.07)); stroke: var(--primary); }
+#view-opt .fbox-b { fill: var(--amber-soft, rgba(224,160,0,.09)); stroke: var(--c-amber); }
+#view-opt .ftitle { font-size: 13px; font-weight: 600; fill: var(--text); }
+#view-opt .fsub { font-size: 10.5px; fill: var(--text-3); font-family: var(--mono); }
+#view-opt .fkey { fill: var(--primary-2); font-weight: 600; }
+#view-opt .flink { fill: none; stroke: var(--primary); stroke-width: 1.6; }
+#view-opt .flink-d { stroke: var(--c-amber); stroke-dasharray: 6 5; }
+#view-opt .fdash { font-size: 10.5px; fill: var(--amber-ink, var(--text-3)); font-family: var(--mono); }
+
+/* ---- 三张模型卡 ---- */
+#view-opt .opt-model { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+
+/* ---- 输入区 ---- */
+#view-opt .opt-console { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; margin-top: 18px; align-items: start; }
+#view-opt .opt-matrow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+#view-opt .matcard {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); cursor: pointer; text-align: left; font: inherit;
+  transition: border-color .15s, background .15s;
+}
+#view-opt .matcard:hover { border-color: var(--primary); }
+#view-opt .matcard.active { border-color: var(--primary); background: var(--blue-soft, rgba(79,140,255,.10)); }
+#view-opt .mc-lab { font-size: 13px; font-weight: 600; color: var(--text); }
+#view-opt .mc-sub { font-size: 10.5px; color: var(--text-3); font-family: var(--mono); }
+
+#view-opt .opt-ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px 18px; margin-top: 4px; }
+#view-opt .opt-ctl .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 0; }
+#view-opt .opt-ctl .field label { font-size: 12px; color: var(--text-2); }
+#view-opt .opt-ctl select {
+  height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-2); color: var(--text); font-size: 12px; font-family: inherit;
+}
 #view-opt .opt-ctl .od-out { font-family: var(--mono); font-size: 12px; color: var(--primary-2); }
-#view-opt .opt-ctl .btn { height: 38px; white-space: nowrap; }
+#view-opt .opt-chk { grid-column: 1 / -1; }
+#view-opt .chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); cursor: pointer; }
+#view-opt .opt-run { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+#view-opt .opt-run .btn { height: 38px; white-space: nowrap; }
+#view-opt .opt-run .perf-note { margin: 0; }
 
-#view-opt .opt-result { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr); gap: 22px; margin-top: 18px; align-items: start; }
-#view-opt .opt-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
-#view-opt .opt-tbl th, #view-opt .opt-tbl td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: middle; }
+#view-opt .opt-pros { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+#view-opt .opt-pros h4 { font-size: 12px; margin: 0 0 4px; color: var(--text-2); }
+#view-opt .opt-pros ul { margin: 0; padding-left: 16px; font-size: 11.5px; line-height: 1.7; color: var(--text-2); }
+
+/* ---- 结果 ---- */
+#view-opt .perf-verdict { margin-top: 16px; }
+#view-opt .opt-result { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+#view-opt .opt-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+#view-opt .opt-tbl th, #view-opt .opt-tbl td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: middle; }
 #view-opt .opt-tbl th { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
 #view-opt .opt-tbl td:first-child { color: var(--text-3); white-space: nowrap; }
-#view-opt .opt-tbl td#od_mat { font-weight: 600; color: var(--text); }
-#view-opt .opt-plot { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
-#view-opt .opt-plot canvas { width: 100%; height: auto; display: block; }
+#view-opt .od-val { font-family: var(--mono); font-weight: 600; color: var(--text); white-space: nowrap; }
+#view-opt .od-note { color: var(--text-3); font-size: 11px; line-height: 1.5; }
+#view-opt .st { font-family: var(--mono); font-weight: 600; text-align: center; }
+#view-opt .st.ok { color: var(--primary-2); }
+#view-opt .st.warn { color: var(--amber-ink, #a8700a); }
+#view-opt .st.bad { color: #d0392c; }
+#view-opt #od_why { margin-top: 8px; }
+#view-opt #od_why ul { margin: 4px 0; padding-left: 18px; }
+
+#view-opt .opt-figbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+#view-opt .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+#view-opt .segbtn {
+  border: 0; background: var(--surface-2); color: var(--text-2); font-size: 11.5px;
+  padding: 5px 10px; cursor: pointer; font-family: inherit;
+}
+#view-opt .segbtn + .segbtn { border-left: 1px solid var(--border); }
+#view-opt .segbtn.active { background: var(--primary); color: #fff; }
+#view-opt .sp { flex: 1; }
+#view-opt .opt-fieldwrap { display: flex; gap: 8px; align-items: stretch; }
+#view-opt #od_field { width: 100%; max-width: 320px; height: auto; border: 1px solid var(--border); border-radius: 6px; }
+#view-opt #od_bar { width: 60px; height: 320px; flex: none; }
+#view-opt canvas { max-width: 100%; }
+
+#view-opt .opt-caveat { margin-top: 18px; padding: 12px 14px; border-left: 3px solid var(--c-amber); background: var(--surface-2); border-radius: 6px; }
 
 @media (max-width: 1020px) {
-  #view-opt .opt-couple { grid-template-columns: 1fr; }
-  #view-opt .opt-result { grid-template-columns: 1fr; }
-  #view-opt .opt-ctl { grid-template-columns: 1fr 1fr; }
+  #view-opt .opt-model { grid-template-columns: 1fr; }
+  #view-opt .opt-console { grid-template-columns: 1fr; }
+  #view-opt .opt-matrow { grid-template-columns: 1fr 1fr; }
 }
-
