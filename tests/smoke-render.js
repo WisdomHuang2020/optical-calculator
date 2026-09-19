@@ -295,11 +295,31 @@ const INTERACTION_PROBE = [
   '                  setTimeout(function () {',
   '                    r.gBack = geoSnap();',
   '                    r.halfBack = gi("s_half").textContent;',
-  '                    var calcTab = document.querySelector(\'.tab[data-tab="calc"]\');',
-  '                    if (calcTab) calcTab.click();',
-  '                    var p = document.createElement("pre"); p.id = "__interact";',
-  '                    p.textContent = "INTERACT:" + JSON.stringify(r);',
-  '                    document.body.appendChild(p);',
+  '                    r.rDefault = gi("s_r").textContent;',
+  '                    r.geoRMaxDefault = window.Prism.geo ? window.Prism.geo.rMax : null;',
+  '                    // ⑧ 圆角：输入远超可实现尺寸时必须"可见地"告警，并报出实际生效值',
+  '                    var radEl = gi("p_radius");',
+  '                    r.radiusBefore = radEl.value;',
+  '                    radEl.value = "1.57";',
+  '                    radEl.dispatchEvent(new Event("input", { bubbles: true }));',
+  '                    setTimeout(function () {',
+  '                      r.rBig = gi("s_r").textContent;',
+  '                      r.geoRMaxBig = window.Prism.geo ? window.Prism.geo.rMax : null;',
+  '                      r.geoRClamped = window.Prism.geo ? window.Prism.geo.rClamped : null;',
+  '                      var wb = gi("prism-warn");',
+  '                      r.warnBig = (wb && wb.style.display !== "none") ? wb.textContent : "";',
+  '                      radEl.value = r.radiusBefore;',
+  '                      radEl.dispatchEvent(new Event("input", { bubbles: true }));',
+  '                      setTimeout(function () {',
+  '                        r.rBack = gi("s_r").textContent;',
+  '                        r.warnBack = (function () { var w = gi("prism-warn"); return (w && w.style.display !== "none") ? w.textContent : ""; })();',
+  '                        var calcTab = document.querySelector(\'.tab[data-tab="calc"]\');',
+  '                        if (calcTab) calcTab.click();',
+  '                        var p = document.createElement("pre"); p.id = "__interact";',
+  '                        p.textContent = "INTERACT:" + JSON.stringify(r);',
+  '                        document.body.appendChild(p);',
+  '                      }, 400);',
+  '                    }, 400);',
   '                  }, 400);',
   '                }, 400);',
   '              }, 400);',
@@ -644,6 +664,35 @@ if (!im) {
   okTrue('表面基色取自 --c-prism（非硬编码）',
     m1 && /^#[0-9a-f]{6}$/.test(m1.color) && m1.color === (m2 ? m2.color : m1.color),
     m1 ? `color=${m1.color}` : 'probe.mat 不可用');
+
+  console.log('\n=== 12. radius 圆角：单位、物理定义、以及"实际生效值"必须可见 ===');
+  /* 由来：用户看到 radius = 1.57 问「这是弧度角吗」。它不是角度 ——
+     是过渡圆弧的半径 R，长度量（mm）。但更要紧的是这个数**根本没生效**：
+     filletRadii 按「0.45×边长」与「同边两切点不互越」两条规则钳位，
+     实测 pitch=1/h=0.25/顶角 60°（齿边仅 0.289 mm）时 R 超过约 0.09 就
+     完全饱和 —— 填 1.57 与填 0.2 得到的是同一个形状。页面原先对此
+     一字未提。这一组断言同时守住「读数」与「告警」两处。 */
+  okTrue('默认 radius（0.02）下实际生效值 = 输入值',
+    R.rDefault === '0.020 mm' && R.geoRMaxDefault !== null &&
+    Math.abs(R.geoRMaxDefault - 0.02) < 1e-9,
+    `读数 ${R.rDefault} / geo.rMax ${R.geoRMaxDefault}`);
+  okTrue('radius = 1.57 时几何实际生效远小于输入（被钳位）',
+    R.geoRMaxBig !== null && R.geoRMaxBig < 0.13,
+    `geo.rMax = ${R.geoRMaxBig}（输入 1.57，相差约 ${(1.57 / R.geoRMaxBig).toFixed(1)} 倍）`);
+  okTrue('radius = 1.57 时 geo.rClamped 为真', R.geoRClamped === true,
+    `geo.rClamped=${R.geoRClamped}`);
+  okTrue('读数「圆角 R（实际生效）」与几何一致（不是照抄输入值）',
+    R.rBig && R.rBig.indexOf('0.090') === 0 && R.rBig !== '1.570 mm',
+    `读数 "${R.rBig}"`);
+  okTrue('页面给出可见告警（不能静默钳位）',
+    typeof R.warnBig === 'string' && R.warnBig.indexOf('超出该齿形能实现的尺寸') >= 0,
+    R.warnBig ? `告警："${String(R.warnBig).slice(0, 40)}…"` : '未出现告警');
+  okTrue('告警里写出了实际生效区间',
+    typeof R.warnBig === 'string' && /实际生效\s*0\.090\s*~\s*0\.125\s*mm/.test(R.warnBig),
+    '');
+  okTrue('radius 复原后读数与告警一并复原',
+    R.rBack === '0.020 mm' && (!R.warnBack || R.warnBack.indexOf('超出该齿形') < 0),
+    `读数 ${R.rBack}；残留告警 ${R.warnBack ? '有 ✘' : '无'}`);
 }
 
 console.log(`\n浏览器冒烟：通过 ${pass} 项，失败 ${fail} 项`);

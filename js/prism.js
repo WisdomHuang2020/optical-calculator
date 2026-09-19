@@ -316,22 +316,51 @@
     var H = p.base + p.height;
     var fill = 2 * half / p.pitch;                     // 填充率 η = 2b/pitch
     var ok = true, msg = '';
-
+    var warns = [];
     if (!(p.pitch > 0) || !(p.height > 0) || !(p.base >= 0) || !(p.L > 0) || !(p.N >= 1)) {
-      msg = '存在非法参数，请检查。'; ok = false;
-    } else if (hb.clamped) {
-      msg = '齿半底宽 h·tan(α/2) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
+      warns.push('存在非法参数，请检查。'); ok = false;
+    }
+    if (hb.clamped) {
+      warns.push('齿半底宽 h·tan(α/2) = ' + hb.want.toFixed(3) + ' mm 超过半齿距 ' +
             (p.pitch / 2).toFixed(3) + ' mm，相邻齿会重叠。截面已按半齿距封顶' +
             '（齿底恰好相接，填充率 1.000）。要得到真实齿形请增大 pitch，' +
-            '或减小 height / 顶角。';
+            '或减小 height / 顶角。');
       ok = false;
     }
-    showWarn(msg);
 
     /* 保留圆弧元数据：轮廓点用于预览与面积，arcs 用于 STEP 里
        写出真正的 CIRCLE / CYLINDRICAL_SURFACE。 */
     var fd = filletDetailed(rawProfile(p).pts, p.radius, 10);
     var prof = fd.pts, arcs = fd.segArc;
+
+    /* 圆角**实际生效值**。filletRadii 会按两条规则钳位：
+         · rr = min(R, 0.45·l1, 0.45·l2)
+         · 同一条边上两端切线长之和 T_u + T_v ≤ 边长
+       于是 R 超过某个阈值后**完全不再生效**，且各角点的饱和值不同
+       （齿顶与齿根的内角不同，T = rr/tan(θ/2) 随之内不同）。
+       实测 pitch=1 / h=0.25 / 顶角 60°（齿边仅 0.289 mm）：
+         R = 0.05 → 齿顶 0.050（1.00×）
+         R = 0.1  → 齿顶 0.090（0.90×）
+         R = 0.2  → 齿顶 0.090（0.45×）
+         R = 1.57 → 齿顶 0.090（0.057×，相差 17 倍）
+       输入 1.57 而实际只有 0.090 —— 页面原先对此没有任何提示，
+       用户只会觉得"改了没反应"。 */
+    var frAll = filletRadii(rawProfile(p).pts, p.radius);
+    var rList = [];
+    for (var q = 0; q < frAll.rr.length; q++) {
+      if (frAll.rr[q] > 1e-12) rList.push(frAll.rr[q]);
+    }
+    var rMin = rList.length ? Math.min.apply(null, rList) : 0;
+    var rMax = rList.length ? Math.max.apply(null, rList) : 0;
+    var rClamped = (p.radius > 0) && (rMax < p.radius - 1e-9);
+    if (rClamped) {
+      warns.push('圆角半径 R = ' + p.radius + ' mm 超出该齿形能实现的尺寸' +
+            '（齿边长度仅 ' + Math.hypot(hb.use, p.height).toFixed(3) + ' mm），' +
+            '实际生效 ' + rMin.toFixed(3) + ' ~ ' + rMax.toFixed(3) + ' mm —— ' +
+            '再增大 R 也不会改变形状。要得到更大的圆角请增大 pitch / height，' +
+            '或减小顶角。');
+    }
+    showWarn(warns.join('\n'));
 
     /* 面积两种口径：
        · areaPoly —— 对折线采样点做鞋带公式。它等于「10 段折线近似」
@@ -357,15 +386,24 @@
     setText('s_k3', LABELS_1D[2]);
     setText('s_k4', LABELS_1D[3]);
     setText('s_k5', LABELS_1D[4]);
+    setText('s_k6', LABELS_1D[5]);
     setText('s_w', W.toFixed(3) + ' mm');
     setText('s_h', H.toFixed(3) + ' mm');
     setText('s_half', half.toFixed(3) + ' mm');
     setText('s_beta', fill.toFixed(3));
     setText('s_v', prof.length);
     setText('s_vol', vol.toFixed(1) + ' mm³');
+    /* 圆角实际生效值：各角点饱和值可能不同（齿顶与齿根内角不同），
+       不一致时给区间，避免只报一个数掩盖了差异。 */
+    setText('s_r', (Math.abs(rMax - rMin) < 1e-9)
+      ? rMin.toFixed(3) + ' mm'
+      : rMin.toFixed(3) + ' ~ ' + rMax.toFixed(3) + ' mm');
+    var kvR = $('kv_radius');
+    if (kvR) kvR.hidden = false;
 
     return {
       p: p, prof: prof, arcs: arcs, W: W, H: H, half: half, beta: beta, fill: fill,
+      rMin: rMin, rMax: rMax, rClamped: rClamped,
       area: area, areaPoly: areaPoly, vol: vol, valid: ok
     };
   }
@@ -388,8 +426,10 @@
      原实现的 1D 标签写在 index.html 里、且与代码写入的值错位
      （「面/边数」那一格实际写的是底角 β = (180−α)/2），
      LABELS_1D 则声明了却从未被调用 —— 属死代码加错位，一并修正。 */
-  var LABELS_1D = ['板宽 W = N·p', '总高 H = t+h', '半底宽 b = h·tan(α/2)', '填充率 η = 2b/p', '网格点'];
-  var LABELS_2D = ['板宽 Wx = Nx·p', '总高 H = t+h', '半底宽 b = h/tan(α)', '填充率 η = (2b/p)²', '金字塔数'];
+  var LABELS_1D = ['板宽 W = N·p', '总高 H = t+h', '半底宽 b = h·tan(α/2)', '填充率 η = 2b/p', '网格点',
+    '圆角 R（实际生效）'];
+  var LABELS_2D = ['板宽 Wx = Nx·p', '总高 H = t+h', '半底宽 b = h/tan(α)', '填充率 η = (2b/p)²', '金字塔数',
+    '圆角 R（实际生效）'];
 
   /* 二维金字塔的半底宽（唯一定义点）。
 
@@ -458,6 +498,10 @@
     setText('s_beta', fill.toFixed(3));
     setText('s_v', p.nx * p.ny);
     setText('s_vol', vol.toFixed(1) + ' mm³');
+    /* 二维金字塔阵列没有圆角（面板也没有该输入），整行隐藏 —— 留一个 "—"
+       在那里反而会让人以为"二维的圆角是 0"。 */
+    var kvR2 = $('kv_radius');
+    if (kvR2) kvR2.hidden = true;
 
     return {
       p: p, Wx: Wx, Wy: Wy, H: H, half: half, side: side, fill: fill,

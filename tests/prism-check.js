@@ -192,7 +192,7 @@ const PARAM_IDS = ['p_pitch', 'p_height', 'p_angle', 'p_base', 'p_radius', 'p_te
 const missingParams = PARAM_IDS.filter((id) => html.indexOf('id="' + id + '"') === -1);
 okTrue('全部参数输入框存在', missingParams.length === 0,
   missingParams.length ? '缺少 ' + missingParams.join(', ') : PARAM_IDS.length + ' 个输入框齐全');
-const STAT_IDS = ['s_w', 's_h', 's_half', 's_beta', 's_v', 's_vol'];
+const STAT_IDS = ['s_w', 's_h', 's_half', 's_beta', 's_v', 's_vol', 's_r', 's_k6', 'kv_radius'];
 const missingStats = STAT_IDS.filter((id) => html.indexOf('id="' + id + '"') === -1);
 okTrue('几何量读数元素存在', missingStats.length === 0,
   missingStats.length ? '缺少 ' + missingStats.join(', ') : STAT_IDS.length + ' 个读数齐全');
@@ -261,6 +261,36 @@ okTrue('二维网格使用平面着色（makeMaterial(true)）',
   /Mesh\(g2,\s*makeMaterial\(true\)\)/.test(prism));
 okTrue('一维网格不开平面着色（makeMaterial() 无参）',
   /Mesh\(g,\s*makeMaterial\(\)\)/.test(prism));
+
+/* ---------- 9. 参数的单位与物理定义必须写清楚 ----------
+   由用户提问「radius 圆角用的是弧度角吗」而来。面板原先只在标题写
+   「阵列参数 (MM)」，单个字段既没有单位也没有定义 —— 一个长度量
+   （圆弧半径 R）很容易被误读成角度/弧度。这里把「标注」本身作为门禁。 */
+console.log('\n=== 9. 参数单位与物理定义标注 ===');
+const hintCount = (html.match(/class="param-hint"/g) || []).length;
+okTrue('每个一维参数都带定义说明（7 条 param-hint）', hintCount === 13,
+  `param-hint 共 ${hintCount} 条（一维 7 + 二维 6）`);
+okTrue('圆角的定义写明「是长度、不是角度/弧度」',
+  /不是角度、不是弧度/.test(html));
+okTrue('圆角定义含实际生效值的去向指引',
+  /圆角 R（实际生效）/.test(html));
+okTrue('顶角定义写明是「全角」（避免半角/全角歧义）',
+  /是<b>全角<\/b>/.test(html) || /全角/.test(html));
+okTrue('二维倾角定义写明了与一维顶角的区别',
+  /与一维[\s\S]{0,20}顶角[\s\S]{0,20}不是同一个量/.test(html));
+ok('带单位的参数标签数量（mm/°/个）',
+  (html.match(/class="unit">(mm|°|个|mm · [^<]*)/g) || []).length >= 13,
+  true);
+okTrue('读数新增「圆角 R（实际生效）」一行', /id="s_r"/.test(html) && /id="kv_radius"/.test(html));
+okTrue('prism.js 计算并输出实际生效圆角（geo.rMin/rMax）',
+  /rMin:\s*rMin,\s*rMax:\s*rMax/.test(prism));
+okTrue('圆角被钳位时给出可见告警', /超出该齿形能实现的尺寸/.test(prism));
+okTrue('二维隐藏圆角读数行（金字塔阵列无圆角）',
+  /kvR2\.hidden\s*=\s*true/.test(prism));
+okTrue('.param-hint 显式跨列（.field 是两列网格）',
+  /\.param-hint\s*\{[\s\S]*?grid-column:\s*1\s*\/\s*-1/.test(cssAll));
+okTrue('.warn-box 保留换行（多条告警各占一行）',
+  /\.warn-box\s*\{[\s\S]*?white-space:\s*pre-line/.test(cssAll));
 
 console.log(`\n棱镜板页一致性：通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail === 0 ? 0 : 1);

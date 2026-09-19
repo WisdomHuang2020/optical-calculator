@@ -771,22 +771,82 @@
         <h2><span class="num">1</span>阵列参数 <span class="unit">mm</span></h2>
 
         <div id="params_1d">
-          <div class="field"><label>pitch 齿距</label><input id="p_pitch" type="number" step="0.01" value="1.0"></div>
-          <div class="field"><label>height 齿高</label><input id="p_height" type="number" step="0.01" value="0.25"></div>
-          <div class="field"><label>apex angle 顶角 <span class="unit">°</span></label><input id="p_angle" type="number" step="0.5" value="60"></div>
-          <div class="field"><label>base thickness 基底厚</label><input id="p_base" type="number" step="0.01" value="0.20"></div>
-          <div class="field"><label>radius 圆角</label><input id="p_radius" type="number" step="0.005" value="0.02"></div>
-          <div class="field"><label>teeth 齿数 N</label><input id="p_teeth" type="number" step="1" min="1" value="20"></div>
-          <div class="field"><label>length 板长 <span class="unit">拉伸向</span></label><input id="p_length" type="number" step="1" value="50"></div>
+          <div class="field">
+            <label>pitch 齿距 <span class="unit">mm</span></label>
+            <input id="p_pitch" type="number" step="0.01" value="1.0">
+            <p class="param-hint">相邻两齿中心线的间距（周期）。齿底宽 2b 之外的
+              <b>pitch − 2b</b> 是齿间平台。</p>
+          </div>
+          <div class="field">
+            <label>height 齿高 <span class="unit">mm</span></label>
+            <input id="p_height" type="number" step="0.01" value="0.25">
+            <p class="param-hint">齿顶相对齿根的高度 h（肋的起伏幅度）。</p>
+          </div>
+          <div class="field">
+            <label>apex angle 顶角 <span class="unit">°</span></label>
+            <input id="p_angle" type="number" step="0.5" value="60">
+            <p class="param-hint">齿顶处两条齿面之间的夹角 α，是<b>全角</b>
+              （不是半角 α/2，也不是斜面与底面的夹角）。齿半底宽
+              <b>b = h·tan(α/2)</b>，齿底宽 2b。</p>
+          </div>
+          <div class="field">
+            <label>base thickness 基底厚 <span class="unit">mm</span></label>
+            <input id="p_base" type="number" step="0.01" value="0.20">
+            <p class="param-hint">齿根以下的平板厚度 t。</p>
+          </div>
+          <div class="field">
+            <label>radius 圆角 <span class="unit">mm</span></label>
+            <input id="p_radius" type="number" step="0.005" value="0.02">
+            <p class="param-hint">齿顶与齿根过渡圆弧的<b>半径 R</b>——是<b>长度</b>
+              （mm），不是角度、不是弧度。受齿边长度限制：沿一条齿边，相邻两
+              圆角的切线长之和不得超过该边长，故 R 超过约 0.45×边长后<b>不再
+              生效</b>。实际生效值见下方「圆角 R（实际生效）」。</p>
+          </div>
+          <div class="field">
+            <label>teeth 齿数 N <span class="unit">个</span></label>
+            <input id="p_teeth" type="number" step="1" min="1" value="20">
+            <p class="param-hint">板宽 <b>W = N · pitch</b>。</p>
+          </div>
+          <div class="field">
+            <label>length 板长 <span class="unit">mm · 拉伸向</span></label>
+            <input id="p_length" type="number" step="1" value="50">
+            <p class="param-hint">沿齿长方向的拉伸长度 L。体积 = 截面积 × L。</p>
+          </div>
         </div>
 
         <div id="params_2d" style="display:none">
-          <div class="field"><label>pitch 齿距 <span class="unit">X/Y</span></label><input id="p2_pitch" type="number" step="0.01" value="1.0"></div>
-          <div class="field"><label>height 金字塔高</label><input id="p2_height" type="number" step="0.01" value="0.25"></div>
-          <div class="field"><label>apex angle 斜面倾角 <span class="unit">°</span></label><input id="p2_angle" type="number" step="0.5" value="45"></div>
-          <div class="field"><label>base thickness 基底厚</label><input id="p2_base" type="number" step="0.01" value="0.20"></div>
-          <div class="field"><label>columns X 列数</label><input id="p2_nx" type="number" step="1" min="1" value="20"></div>
-          <div class="field"><label>rows Y 行数</label><input id="p2_ny" type="number" step="1" min="1" value="20"></div>
+          <div class="field">
+            <label>pitch 齿距 <span class="unit">mm · X/Y</span></label>
+            <input id="p2_pitch" type="number" step="0.01" value="1.0">
+            <p class="param-hint">相邻两金字塔中心线的间距（X、Y 相同）。</p>
+          </div>
+          <div class="field">
+            <label>height 金字塔高 <span class="unit">mm</span></label>
+            <input id="p2_height" type="number" step="0.01" value="0.25">
+            <p class="param-hint">塔尖相对底面的高度 h。</p>
+          </div>
+          <div class="field">
+            <label>apex angle 斜面倾角 <span class="unit">°</span></label>
+            <input id="p2_angle" type="number" step="0.5" value="45">
+            <p class="param-hint">金字塔斜面与<b>水平底面</b>的夹角——注意与一维
+              的「顶角」不是同一个量（一维是齿顶两条齿面的夹角）。金字塔半底宽
+              <b>b = h / tan(α)</b>，底面边长 2b。</p>
+          </div>
+          <div class="field">
+            <label>base thickness 基底厚 <span class="unit">mm</span></label>
+            <input id="p2_base" type="number" step="0.01" value="0.20">
+            <p class="param-hint">塔底以下的平板厚度 t。</p>
+          </div>
+          <div class="field">
+            <label>columns X 列数 <span class="unit">个</span></label>
+            <input id="p2_nx" type="number" step="1" min="1" value="20">
+            <p class="param-hint">板宽 <b>Wx = Nx · pitch</b>。</p>
+          </div>
+          <div class="field">
+            <label>rows Y 行数 <span class="unit">个</span></label>
+            <input id="p2_ny" type="number" step="1" min="1" value="20">
+            <p class="param-hint">板宽 <b>Wy = Ny · pitch</b>。</p>
+          </div>
         </div>
 
         <div class="warn-box" id="prism-warn" style="display:none"></div>
@@ -799,6 +859,7 @@
           <div class="kv"><div class="k" id="s_k4">填充率 η = 2b/p</div><div class="v" id="s_beta">-</div></div>
           <div class="kv"><div class="k" id="s_k5">网格点</div><div class="v" id="s_v">-</div></div>
           <div class="kv"><div class="k">体积 <span class="unit">mm³</span></div><div class="v" id="s_vol">-</div></div>
+          <div class="kv" id="kv_radius"><div class="k" id="s_k6">圆角 R（实际生效）</div><div class="v" id="s_r">-</div></div>
         </div>
 
         <h2><span class="num">3</span>导出</h2>
