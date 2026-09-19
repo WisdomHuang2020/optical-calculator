@@ -424,7 +424,7 @@ const verSrc = fs.readFileSync(path.join(ROOT, 'js', 'version.js'), 'utf8');
 const expectedVer = (verSrc.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/) || [])[1];
 okTrue('已从 js/version.js 读到版本号', !!expectedVer, expectedVer);
 const vers = textsByClass(dom, 'app-version');
-ok('版本显示点数量（页头 1 + 分页页脚 4）', vers.length, 5);
+ok('版本显示点数量（页头 1 + 分页页脚 5）', vers.length, 6);
 okTrue('所有显示点均已注入当前版本',
   vers.length > 0 && vers.every(function (v) { return v === expectedVer; }),
   JSON.stringify(vers));

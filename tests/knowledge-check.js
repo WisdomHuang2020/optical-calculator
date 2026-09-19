@@ -59,8 +59,8 @@ okTrue('导航含「棱镜原理」tab', /data-tab="know"[^>]*>棱镜原理</.te
 okTrue('导航含「材料与参考」tab', /data-tab="mats"[^>]*>材料与参考</.test(html));
 okTrue('存在 #view-know 视图', /id="view-know"/.test(html));
 okTrue('存在 #view-mats 视图', /id="view-mats"/.test(html));
-ok('tab 总数（原 4 + 新 2）', (html.match(/class="tab[^"]*" data-tab=/g) || []).length, 6);
-ok('视图总数', (html.match(/class="view[^"]*" id="view-/g) || []).length, 6);
+ok('tab 总数（照度/立体角/公式/棱镜/原理/材料/最优设计）', (html.match(/class="tab[^"]*" data-tab=/g) || []).length, 7);
+ok('视图总数', (html.match(/class="view[^"]*" id="view-/g) || []).length, 7);
 
 /* 脚本顺序：prism.js → prism-knowledge.js → app.js。
    knowledge 模块要在 Prism 之后（读 Prism.params），app.js 要在最后

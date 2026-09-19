@@ -45,6 +45,10 @@ const SUITES = [
      （V−E+F=2 且每条边恰好两个面）、定向体积朝外、晶格归约自洽。
      前三条都是"不报错、只有导进 CAD 才露馅"的静默缺陷，必须显式断言。 */
   { name: '二维形状内核 · 六形状几何与壳闭合', file: 'prism-shapes-check.js' },
+  /* 最优设计方法（v3.9.0）：扩散板×棱镜板耦合模型的单调性/校准/可行性在
+     Node 直跑，页面结构（tab/view/滑块/画布/页脚/脚本）读文件断言；
+     守住 opt 页脚不照搬前 3 页（DIALux 口径）这条本版修复的缺陷。 */
+  { name: '最优设计方法 · 耦合模型与页面结构', file: 'optimal-design-check.js' },
   { name: '计算内核 · 光度学数值断言', file: 'verify.js' },
   { name: '参考算例 · 外部文件复核', file: 'verify-user-file.js' },
   { name: '浏览器冒烟 · 真实渲染', file: 'smoke-render.js' },

@@ -526,6 +526,11 @@
       window.PrismKnowledge.init();
       window.PrismKnowledge.resize();
     }
+    /* 最优设计方法（第 7 个 tab）：2D canvas 散点，同样需容器可见后再绘制。 */
+    if (name === 'opt' && window.OptimalDesignUI) {
+      window.OptimalDesignUI.init();
+      window.OptimalDesignUI.run();
+    }
     return true;
   }
 
@@ -544,7 +549,7 @@
   function applyHash() {
     var h = String(location.hash || '').replace(/^#/, '');
     if (h === 'calc' || h === 'solid' || h === 'theory' || h === 'prism' ||
-        h === 'know' || h === 'mats') activateTab(h);
+        h === 'know' || h === 'mats' || h === 'opt') activateTab(h);
   }
 
   /* =========================================================

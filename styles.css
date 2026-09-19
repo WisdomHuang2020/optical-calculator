@@ -997,3 +997,40 @@ ul.tight li { margin-bottom: 5px; }
   .kn .formulas { grid-template-columns: 1fr; }
   .kn .readout { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ============================================================
+ * 最优设计方法（第 7 个 tab · view-opt）
+ * ============================================================ */
+#view-opt .opt-couple { grid-template-columns: 1.15fr 0.85fr; gap: 26px; align-items: start; }
+#view-opt .opt-couple-text h3 { font-size: 15px; margin: 18px 0 8px; color: var(--text); }
+#view-opt .opt-couple-text h3:first-child { margin-top: 0; }
+#view-opt .opt-list { margin: 0; padding-left: 20px; color: var(--text-2); line-height: 1.75; font-size: 13.5px; }
+#view-opt .opt-list li { margin: 5px 0; }
+#view-opt .opt-list ol { padding-left: 18px; }
+#view-opt .opt-couple-fig { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+#view-opt .svg-lbl { font-size: 11px; fill: var(--text-2); font-family: var(--mono); }
+#view-opt .svg-sub { font-size: 9.5px; fill: var(--text-3); }
+#view-opt .perf-note { margin: 8px 0; font-size: 11px; line-height: 1.6; color: var(--text-3); }
+#view-opt .perf-note b { color: var(--text-2); font-weight: 600; }
+
+#view-opt .opt-ctl { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)) auto; gap: 16px 22px; align-items: end; margin: 22px 0 6px; }
+#view-opt .opt-ctl .field { display: flex; flex-direction: column; gap: 6px; }
+#view-opt .opt-ctl .field label { font-size: 12.5px; color: var(--text-2); }
+#view-opt .opt-ctl .od-out { font-family: var(--mono); font-size: 12px; color: var(--primary-2); }
+#view-opt .opt-ctl .btn { height: 38px; white-space: nowrap; }
+
+#view-opt .opt-result { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr); gap: 22px; margin-top: 18px; align-items: start; }
+#view-opt .opt-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+#view-opt .opt-tbl th, #view-opt .opt-tbl td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: middle; }
+#view-opt .opt-tbl th { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
+#view-opt .opt-tbl td:first-child { color: var(--text-3); white-space: nowrap; }
+#view-opt .opt-tbl td#od_mat { font-weight: 600; color: var(--text); }
+#view-opt .opt-plot { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+#view-opt .opt-plot canvas { width: 100%; height: auto; display: block; }
+
+@media (max-width: 1020px) {
+  #view-opt .opt-couple { grid-template-columns: 1fr; }
+  #view-opt .opt-result { grid-template-columns: 1fr; }
+  #view-opt .opt-ctl { grid-template-columns: 1fr 1fr; }
+}
+

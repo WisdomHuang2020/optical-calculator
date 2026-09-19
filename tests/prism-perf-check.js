@@ -98,7 +98,7 @@ okTrue('prism-perf.js 暴露 probe（供无头验证读数）', /probe:\s*functi
  * ============================================================ */
 console.log('\n=== 2. 分页页脚 · 结构与内容 ===');
 const fsets = html.match(/<div class="fset[^"]*" data-for="[^"]*">/g) || [];
-ok('页脚分组数（calc/solid/theory 合一 + prism + know + mats）', fsets.length, 4);
+ok('页脚分组数（calc/solid/theory 合一 + prism + know + mats + opt）', fsets.length, 5);
 okTrue('分组 1 归属 calc solid theory', /data-for="calc solid theory"/.test(html));
 okTrue('分组 2 归属 prism', /data-for="prism"/.test(html));
 okTrue('分组 3 归属 know', /data-for="know"/.test(html));
