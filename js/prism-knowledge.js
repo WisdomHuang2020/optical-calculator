@@ -727,14 +727,24 @@ const REFS = [
      draw 省略时默认 drawAll —— 原先调用处都没传第三个参数，
      于是每次拖动滑块都执行 draw() → TypeError，三个演示全都不联动，
      控制台只留下一句被 file:// 遮成 "Script error." 的报错。 */
-  function bindSlider(id, outId, draw) {
+  function bindSlider(id, outId, draw, fmt) {
     var el = $(id), out = $(outId);
     if (!el) return;
     var redraw = draw || drawAll;
+    /* 填充进度：input[type=range] 的底色由 --pct 驱动（见 styles.css）。
+       不同步的话填充永远停在 CSS 缺省的 20% —— 滑块已到 88°、
+       青色还留在开头，页面全不报错但一眼就看穿。 */
+    function syncPct() {
+      var min = +el.min, max = +el.max;
+      var pct = (max > min ? (+el.value - min) / (max - min) : 0) * 100;
+      el.style.setProperty('--pct', pct.toFixed(2) + '%');
+    }
     el.addEventListener('input', function () {
-      if (out) out.textContent = el.value + '°';
+      if (out) out.textContent = fmt ? fmt(el.value) : el.value + '°';
+      syncPct();
       redraw();
     });
+    syncPct();
   }
 
   function drawAll() {
@@ -759,7 +769,8 @@ const REFS = [
     bindSlider('ray_alpha', 'ray_alpha_v');
     bindSlider('ray_n', 'ray_n_v');
     bindSlider('ray_theta', 'ray_theta_v');
-    bindSlider('ray_x', 'ray_x_v');
+    /* 入射位置的单位是 %（相对齿距），不是 ° —— 原实现按缺省后缀显示成「22°」 */
+    bindSlider('ray_x', 'ray_x_v', null, function (v) { return v + '%'; });
     renderRefs();
     inited = true;
     drawAll();

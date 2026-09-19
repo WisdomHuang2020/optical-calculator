@@ -178,6 +178,16 @@ window.addEventListener('error', function (e) { window.__errs.push(String(e.mess
       r.hero = ink('heroCv'); r.ray = ink('rayCv'); r.fan = ink('fanCv');
       r.view5 = !!(gi('view-know') && gi('view-know').classList.contains('active'));
       r.onlyOneView = document.querySelectorAll('.view.active').length;
+      /* 形状对照章节（v3.8.1）：六种形状名 + 取舍表 */
+      var sh = document.querySelector('#s-shapes');
+      var shTxt = sh ? sh.textContent : '';
+      r.shapeNames = ['四棱锥', '台锥', '圆锥', '球冠', '抛物面帽', '六棱锥']
+        .filter(function (n) { return shTxt.indexOf(n) >= 0; }).length;
+      r.shapeTbl = document.querySelectorAll('#s-shapes table tbody tr').length;
+      /* 滑杆填充进度：初始 syncPct 后再滑动一次，--pct 必须变化
+         （此前 bindSlider 从不设置 --pct，填充永远停在 CSS 缺省 20%） */
+      var ra = gi('ray_alpha');
+      r.pctBefore = ra ? ra.style.getPropertyValue('--pct') : '';
       /* 滑块联动：改一次顶角，读数与画布都要跟着变 */
       var sa = gi('ray_alpha'), sv = sa ? sa.value : null;
       var before = (gi('ray_ro') || {}).textContent || '';
@@ -185,6 +195,7 @@ window.addEventListener('error', function (e) { window.__errs.push(String(e.mess
       setTimeout(function () {
         r.sliderChanged = sv !== null && ((gi('ray_ro') || {}).textContent || '') !== before;
         r.outSync = (gi('ray_alpha_v') || {}).textContent === '60°';
+        r.pctAfter = ra ? ra.style.getPropertyValue('--pct') : '';
         if (sa) { sa.value = sv; sa.dispatchEvent(new Event('input', { bubbles: true })); }
         if (t6) t6.click();
         setTimeout(function () {
@@ -241,6 +252,10 @@ if (m) {
   }
   okTrue('滑块联动：改顶角后读数随之变化', R.sliderChanged === true);
   okTrue('滑块联动：output 同步显示', R.outSync === true);
+  okTrue('形状对照章节存在且六种形状齐全', R.shapeNames === 6, '命中 ' + R.shapeNames + ' 种');
+  okTrue('形状取舍表 6 行', R.shapeTbl === 6, '行数 = ' + R.shapeTbl);
+  okTrue('滑杆填充随滑动更新（--pct 同步）', R.pctAfter !== '' && R.pctAfter !== R.pctBefore,
+    'before=' + R.pctBefore + ' after=' + R.pctAfter);
   okTrue('切到第 6 页后视图激活', R.view6 === true);
   okTrue('一维校核清单已渲染（≥ 3 条）', R.chk1 >= 3, '条目数 = ' + R.chk1);
   okTrue('二维校核清单已渲染（≥ 3 条）', R.chk2 >= 3, '条目数 = ' + R.chk2);

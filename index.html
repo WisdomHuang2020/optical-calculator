@@ -767,7 +767,7 @@
       <div class="card">
         <div class="mode-switch">
           <button class="mode-btn active" data-mode="1d">一维棱镜（肋）</button>
-          <button class="mode-btn" data-mode="2d">二维棱镜（金字塔）</button>
+          <button class="mode-btn" data-mode="2d">二维棱镜（六形）</button>
         </div>
 
         <h2><span class="num">1</span>阵列参数 <span class="unit">mm</span></h2>
@@ -1160,6 +1160,98 @@
             <div class="ro"><div class="k">路径结论</div><div class="v" id="ro_status">—</div></div>
           </div>
           <div class="srcnote">读数口径：φ 与 n·sinφ 取<b>第一次命中斜面</b>时的值（决定该光线是否发生全反射）；此前的版本取的是最后一次界面，会把“先全反射、后折射出射”的光线误读成亚临界的直接出射。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 页 2 · 二维微结构的形状选择（知识） ===== -->
+  <section id="s-shapes">
+    <div class="wrap">
+      <div class="kicker"><span>02</span><span class="en">2D Microstructure Shapes</span></div>
+      <h2 class="sec">二维微结构不止金字塔：六种形状与工程取舍</h2>
+      <p class="lead">「二维棱镜」的形状分两层意思：<strong>截面轮廓</strong>（决定角度变换）与<strong>平面图案</strong>（决定各向同性与填充率）。「棱镜板设计」页的下拉框可在这六种之间切换，光学性能预估内核同步支持。</p>
+
+      <div class="panel" style="padding:20px 18px 12px;margin-bottom:16px;overflow-x:auto">
+        <div class="p-head"><h3>二维棱镜结构形状对照</h3><span class="sub">截面轮廓示意 · 倾角 α 统一指底面边缘切线与水平面的夹角</span></div>
+        <svg viewBox="0 0 900 292" width="100%" style="min-width:760px;display:block" role="img" aria-label="六种二维微结构截面轮廓对照：四棱锥、台锥、圆锥、球冠、抛物面帽、六棱锥">
+          <g stroke="var(--border-2)" stroke-width="2">
+            <line x1="20" y1="210" x2="880" y2="210"/>
+          </g>
+          <g fill="var(--surface-3)" opacity="0.55">
+            <rect x="20" y="210" width="860" height="14"/>
+          </g>
+          <!-- 1 四棱锥 -->
+          <path d="M 87 210 L 142 120 L 197 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <!-- 2 台锥 -->
+          <path d="M 232 210 L 265 152 L 309 152 L 342 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <path d="M 232 210 L 287 120 L 342 210" fill="none" stroke="var(--text-3)" stroke-width="1.4" stroke-dasharray="4 4"/>
+          <!-- 3 圆锥 -->
+          <path d="M 377 210 L 432 120 L 487 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <ellipse cx="432" cy="210" rx="55" ry="11" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="5 4"/>
+          <!-- 4 球冠 -->
+          <path d="M 522 210 Q 577 112 632 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <!-- 5 抛物面帽 -->
+          <path d="M 667 210 C 702 138 752 138 787 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <!-- 6 六棱锥 -->
+          <path d="M 822 210 L 877 120 L 932 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5" transform="translate(-20 0)"/>
+          <path d="M 802 210 L 857 120 L 912 210 Z" fill="none" stroke="none"/>
+          <g font-size="13" font-weight="600" fill="var(--text)" text-anchor="middle" font-family="inherit">
+            <text x="142" y="243">四棱锥</text>
+            <text x="287" y="243">台锥（截头）</text>
+            <text x="432" y="243">圆锥</text>
+            <text x="577" y="243">球冠（微透镜）</text>
+            <text x="727" y="243">抛物面帽</text>
+            <text x="842" y="243">六棱锥</text>
+          </g>
+          <g font-size="11" fill="var(--text-3)" text-anchor="middle">
+            <text x="142" y="261">方形底 · 正交两轴</text>
+            <text x="287" y="261">平顶半宽 k·b · 脱模易</text>
+            <text x="432" y="261">圆形底 · 回转对称</text>
+            <text x="577" y="261">偏扩散 · 均匀度最好</text>
+            <text x="727" y="261">斜率由缓变陡 · 利准直</text>
+            <text x="842" y="261">蜂窝密排 · 无正交条纹</text>
+          </g>
+          <g font-size="11" fill="var(--primary-2)" text-anchor="middle" font-family="var(--mono)">
+            <text x="142" y="280">b = h/tan α</text>
+            <text x="287" y="280">b = h/(tan α·(1−k))</text>
+            <text x="432" y="280">b = h/tan α</text>
+            <text x="577" y="280">b = h·cot(α/2)</text>
+            <text x="727" y="280">b = 2h/tan α</text>
+            <text x="842" y="280">b = h/tan α</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="panel" style="padding:4px 14px;margin-bottom:16px">
+        <table>
+          <thead>
+            <tr><th>形状</th><th>截面 / 图案</th><th>出光增益</th><th>均匀度 / 各向同性</th><th>制造</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>四棱锥（默认）</td><td>四斜面，正方形底</td><td>高</td><td>一般：两轴正交，四角处有差异</td><td>模具易做，尖顶易磨损</td></tr>
+            <tr><td>台锥（截头）</td><td>同上但平顶</td><td class="muted">略低（平顶走平板直通）</td><td>与四棱锥相近</td><td>最好：脱模容易、尖顶不崩</td></tr>
+            <tr><td>圆锥</td><td>回转对称</td><td>高</td><td>最好：单张片两轴同时准直</td><td>车削 / 浇注，尖顶脆弱</td></tr>
+            <tr><td>球冠 / 微透镜阵列</td><td>圆弧面</td><td class="muted">低：几乎不折射改向</td><td>最好：本质是扩散器</td><td>成熟（MLA 复制工艺）</td></tr>
+            <tr><td>抛物面帽</td><td>侧壁斜率渐变的帽</td><td>高</td><td>好</td><td>侧壁可强制 TIR，模具难</td></tr>
+            <tr><td>六棱锥 / 蜂窝</td><td>六斜面，密排</td><td>高</td><td>好</td><td>填充率高、无正交条纹，模具贵</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="cols" style="margin-bottom:14px">
+        <div>
+          <h3>还有三类「不是换形状」的方案</h3>
+          <ul class="pt-list">
+            <li><strong>正交双 V 槽</strong>：两张一维挤出片互成 90° 叠放——现实中最主流。它正好解决一维挤出「面外波矢守恒导致约 1−1/n 的光取不出来」的问题（见上方扇形图口径说明）。不是新形状，是两个一维的组合。</li>
+            <li><strong>蛾眼 / 亚波长结构</strong>：周期小于波长，靠渐变等效折射率抗反射，<strong>不能用几何光学描述</strong>——本站的光线追迹内核不适用。</li>
+            <li><strong>随机纹理</strong>（喷砂、蚀刻、随机微透镜）：只扩散、不改变角分布趋势，便宜、均匀性好、增益低。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>决定性能的其实不是形状名字</h3>
+          <p>是四个量：<strong>侧壁斜率分布</strong>（决定角度变换）、<strong>填充率</strong>（平顶 / 齿根占比就是漏光通道）、<strong>对称性</strong>（决定配光是否各向同性）、<strong>尖顶锐度</strong>（决定能否脱模与尖端 TIR 行为）。同一族形状里改角度，效果差异可能比换形状更大。</p>
+          <p class="heronote" style="margin-top:6px">到「棱镜板设计」页切换形状试试：切到台锥会多出顶面占比 k 输入，切到曲面形状会显示导出件的网格离散度；「性能预估」卡片对六种形状走同一套蒙特卡洛内核（曲面按连续面型追迹）。</p>
         </div>
       </div>
     </div>
