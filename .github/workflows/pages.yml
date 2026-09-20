@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+# 纯静态站，无构建步骤。部署前先跑完整测试套件（含浏览器冒烟），
+# 测试不过则整个部署中止 —— 坏版本不会上线。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署，新推送取消进行中的旧任务
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  # 测试门禁：调用与 CI 完全相同的可复用工作流，不另写一套
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 组装站点（只发布运行时需要的文件）
+        run: |
+          set -e
+          mkdir -p _site
+          cp -r index.html styles.css js preview _site/
+          touch _site/.nojekyll
+          echo "--- 发布内容 ---"
+          find _site -type f | sort
+          # 棱镜板页与棱镜知识页依赖这些文件，缺任一个会导致该页静默失效或白屏。
+          # 上一版工作流用固定清单 cp，新增文件不会自动进站 —— 这里显式校验。
+          for f in js/vendor-three.min.js js/vendor-orbitcontrols.js js/prism.js js/prism-knowledge.js; do
+            test -f "_site/$f" || { echo "✘ 缺失发布文件：$f"; exit 1; }
+          done
+          echo "✔ 棱镜板页 / 知识页依赖文件齐备"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

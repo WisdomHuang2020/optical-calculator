@@ -1,0 +1,90 @@
+name: Test (reusable)
+
+# 可复用工作流：CI 与 Pages 部署都调用它，
+# 保证"CI 跑的那几条"与"部署前跑的那几条"永远一致，不存在两套测试。
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: JS 语法检查
+        run: |
+          set -e
+          n=0
+          for f in $(find js tests tools -name '*.js' -type f | sort); do
+            node --check "$f"
+            n=$((n+1))
+          done
+          echo "已检查 $n 个 JS 文件，语法全部通过"
+
+      - id: chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: 校验 Chrome 输出变量非空
+        # 关键：CHROME_BIN 为空时，早期实现会**静默回退**到系统里的其它浏览器，
+        # 于是测试照样全绿 —— "CI 失败、本地复现不了"就是从这种地方长出来的。
+        # 现在 tests 侧已改为「显式指定不可用即判负」，这里再从源头确认它非空，
+        # 两侧同时守住，不让浏览器定位失配被掩盖。
+        run: |
+          set -e
+          echo "CHROME_BIN=${{ steps.chrome.outputs.chrome-path }}"
+          if [ -z "${{ steps.chrome.outputs.chrome-path }}" ]; then
+            echo "✘ setup-chrome 未产出 chrome-path，浏览器相关套件将无法可信运行"
+            exit 1
+          fi
+          test -x "${{ steps.chrome.outputs.chrome-path }}" \
+            || { echo "✘ chrome-path 指向的文件不可执行"; exit 1; }
+          echo "✔ Chrome 路径已确认可用"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装 OpenCascade Python 绑定（STEP 内核读回校验）
+        # tests/step-export.js 的第 ③ 步要用真实内核读回导出的 STEP。
+        # 没有它那一步会 SKIP —— 于是"文件能被内核读成一个有效实体"
+        # 这条最重要的性质在 CI 上无人看守。装上前把它变成硬门禁。
+        run: |
+          set -e
+          python -m pip install --upgrade pip
+          python -m pip install cadquery-ocp
+          python -c "import OCP; print('OCP 就绪')"
+
+      - name: 环境体检（先证明环境可用，再谈断言）
+        # 单独一步、独立可见。CI 上某步失败时，一眼就能把"环境问题"
+        # 与"代码问题"分开，省掉一整轮猜测。
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+          REQUIRE_CHROME: '1'
+          REQUIRE_OCP: '1'
+        run: node tests/env-probe.js
+
+      - name: 全部测试套件
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+          REQUIRE_CHROME: '1'
+          REQUIRE_OCP: '1'
+        # tee 保留完整输出；失败时把 FAIL 行转成 GitHub 注解。
+        # 这一步的意义：Actions 的**日志接口需要认证**（实测未认证返回 403），
+        # 而注解是公开可读的 —— 失败原因因此能直接挂在 check run 上，
+        # 不必再去要日志。本项目之前就在"拿不到日志"上耗了很久。
+        run: |
+          set +e
+          node tests/run-all.js 2>&1 | tee /tmp/run-all.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            node tests/annotate.js /tmp/run-all.log
+            echo "::error::测试未全部通过（退出码 $code）"
+          fi
+          exit $code

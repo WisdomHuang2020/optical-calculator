@@ -1,0 +1,385 @@
+/* ============================================================
+ * charts.js — Canvas 绘图
+ *   Charts.drawCurve(...)    照度—半径 曲线
+ *   Charts.drawHeatmap(...)  被照面伪彩照度分布
+ * ============================================================ */
+(function (global) {
+  'use strict';
+
+  /* 配色：与 styles.css 里的 --c-* 变量一一对应（深色主题）。
+     改主题时两边都要改，tests/theme-check.js 会断言两者一致。 */
+  var C = {
+    grid:    '#262626',                  // --c-grid
+    axis:    '#404040',                  // --c-axisline
+    text:    '#8a8a8a',                  // --c-label-dim（刻度小字）
+    text2:   '#a3a3a3',                  // --c-label（轴标题）
+    curve:   '#14b8a6',                  // --c-curve
+    fillTop: 'rgba(20,184,166,.22)',
+    fillBot: 'rgba(20,184,166,.02)',
+    marker:  '#f59e0b',                  // --c-r50
+    marker2: '#a78bfa',                  // --c-r10
+    teal:    '#5eead4',                  // --c-eavg
+    pointFill:   '#0a0a0a',              // 关键点填充：深色底上形成彩色环
+    heatBorder:  '#6b6b6b',              // 伪彩图外框：深色底上需可见
+    /* 伪彩照度图横跨深蓝→青→黄→红整个色域，其上叠加的参考圆与文字
+       必须自带底衬或描边 —— 任何单一文字色都必然在某些区域对比度不足。
+       实测缺陷：白色半透明文字压在青绿区上看不清（用户反馈）。 */
+    heatMark:     '#ffffff',             // 参考圆线 与 标注文字
+    heatMarkHalo: 'rgba(0,0,0,.60)',     // 参考圆的深色描边（先描深再描白）
+    heatLabelBg:  'rgba(8,8,8,.80)',     // 标注文字底衬
+    heatCross:    'rgba(255,255,255,.95)' // 中心十字
+  };
+
+  function setup(canvas) {
+    var dpr = Math.min(global.devicePixelRatio || 1, 2);
+    var w = canvas.clientWidth || canvas.parentNode.clientWidth || 600;
+    var h = canvas.clientHeight || 260;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function fmt(v, d) {
+    if (!isFinite(v)) return '—';
+    if (d === undefined) {
+      var a = Math.abs(v);
+      d = a >= 1000 ? 0 : a >= 100 ? 1 : a >= 10 ? 2 : 3;
+    }
+    return v.toFixed(d);
+  }
+  function fmtInt(v) {
+    if (!isFinite(v)) return '—';
+    return Math.round(v).toLocaleString('en-US');
+  }
+
+  /* ---------------------------------------------------------
+   * 照度—半径 曲线
+   * cfg = { pts:[{r,E}], rMax, Emax, Eavg, Emin, rMin, r50, r10 }
+   * ------------------------------------------------------- */
+  function drawCurve(canvas, cfg) {
+    var s = setup(canvas), ctx = s.ctx, W = s.w, H = s.h;
+    var pad = { l: 62, r: 16, t: 16, b: 38 };
+    var pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+    if (pw <= 10 || ph <= 10) return;
+
+    var pts = cfg.pts;
+    var rMax = cfg.rMax;
+    var yMax = cfg.Emax * 1.12 || 1;
+
+    function X(r) { return pad.l + (r / rMax) * pw; }
+    function Y(E) { return pad.t + ph - (E / yMax) * ph; }
+
+    // 网格
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = C.grid;
+    ctx.font = '10px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = C.text;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i <= 4; i++) {
+      var yv = yMax * i / 4;
+      var y = Y(yv);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
+      ctx.fillText(fmtInt(yv), pad.l - 8, y);
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (var j = 0; j <= 5; j++) {
+      var rv = rMax * j / 5;
+      var x = X(rv);
+      ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ph); ctx.stroke();
+      ctx.fillText(rv.toFixed(rv < 10 ? 2 : 1), x, pad.t + ph + 8);
+    }
+
+    // 坐标轴
+    ctx.strokeStyle = C.axis;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph); ctx.lineTo(pad.l + pw, pad.t + ph);
+    ctx.stroke();
+
+    // 面积填充
+    var grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ph);
+    grad.addColorStop(0, C.fillTop);
+    grad.addColorStop(1, C.fillBot);
+    ctx.beginPath();
+    ctx.moveTo(X(pts[0].r), Y(pts[0].E));
+    for (var k = 1; k < pts.length; k++) ctx.lineTo(X(pts[k].r), Y(pts[k].E));
+    ctx.lineTo(X(pts[pts.length - 1].r), pad.t + ph);
+    ctx.lineTo(X(pts[0].r), pad.t + ph);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 曲线
+    ctx.beginPath();
+    ctx.moveTo(X(pts[0].r), Y(pts[0].E));
+    for (var m2 = 1; m2 < pts.length; m2++) ctx.lineTo(X(pts[m2].r), Y(pts[m2].E));
+    ctx.strokeStyle = C.curve;
+    ctx.lineWidth = 2.2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // 平均照度水平线
+    if (cfg.Eavg > 0 && cfg.Eavg < yMax) {
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = C.teal;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, Y(cfg.Eavg)); ctx.lineTo(pad.l + pw, Y(cfg.Eavg));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 光斑参考竖线（半光强 / 10%）
+    function vline(r, color, label) {
+      if (!(r > 0) || r > rMax) return;
+      ctx.save();
+      ctx.setLineDash([3, 4]);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = .65;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(X(r), pad.t); ctx.lineTo(X(r), pad.t + ph);
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = .9;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(label, X(r) + 4, pad.t + 2);
+      ctx.globalAlpha = 1;
+    }
+    vline(cfg.r50, C.marker, '½·Imax');
+    vline(cfg.r10, C.marker2, '10%·Imax');
+
+    // 关键点
+    function dot(r, E, color) {
+      if (!(r >= 0) || r > rMax) return;
+      ctx.beginPath();
+      ctx.arc(X(r), Y(E), 4, 0, 6.2832);
+      ctx.fillStyle = C.pointFill;
+      ctx.fill();
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+    dot(0, cfg.Emax, C.curve);
+    dot(cfg.rMin, cfg.Emin, C.marker2);
+
+    // 轴标题
+    ctx.fillStyle = C.text2;
+    ctx.font = '11px -apple-system, "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('距光轴落点的水平距离 r  (m)', pad.l + pw / 2, pad.t + ph + 22);
+    ctx.save();
+    ctx.translate(14, pad.t + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('照度 E  (lx)', 0, 0);
+    ctx.restore();
+  }
+
+  /* ---------------------------------------------------------
+   * 伪彩照度分布
+   * ------------------------------------------------------- */
+
+  // 蓝 → 青 → 绿 → 黄 → 橙 → 红  （照度高 = 暖色，与照明设计软件一致）
+  // 深色主题下低值端比浅色主题略作提亮：原本的 (6,28,82) 与 #1e1e1e 画布底
+  // 明度太接近，伪彩图边界会看不出来。色相顺序与语义不变。
+  var STOPS = [
+    [0.00, [ 18,  42, 104]],
+    [0.16, [ 14,  86, 158]],
+    [0.34, [ 24, 158, 176]],
+    [0.52, [ 90, 200,  96]],
+    [0.70, [240, 206,  48]],
+    [0.86, [242, 140,  32]],
+    [1.00, [206,  38,  32]]
+  ];
+
+  function colormap(t, out) {
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    for (var i = 1; i < STOPS.length; i++) {
+      if (t <= STOPS[i][0]) {
+        var a = STOPS[i - 1], b = STOPS[i];
+        var f = (t - a[0]) / (b[0] - a[0]);
+        out[0] = a[1][0] + (b[1][0] - a[1][0]) * f;
+        out[1] = a[1][1] + (b[1][1] - a[1][1]) * f;
+        out[2] = a[1][2] + (b[1][2] - a[1][2]) * f;
+        return out;
+      }
+    }
+    out[0] = 206; out[1] = 38; out[2] = 32;
+    return out;
+  }
+
+  function heatColor(t) { return colormap(t, [0, 0, 0]); }
+
+  /**
+   * cfg = {
+   *   model, h, shape, Emax,
+   *   r50,               // 半光强光斑半径（画参考圆）
+   *   unitLabel
+   * }
+   * 使用径向剖面查表，逐像素只需一次 sqrt + 查表，性能可控
+   */
+  function drawHeatmap(canvas, cfg) {
+    var s = setup(canvas), ctx = s.ctx, W = s.w, H = s.h;
+    var pad = 18;
+    var availW = W - pad * 2, availH = H - pad * 2 - 34;
+    if (availW <= 20 || availH <= 20) return;
+
+    var shape = cfg.shape;
+    var halfW = shape.type === 'rect' ? shape.L / 2 : shape.R;
+    var halfH = shape.type === 'rect' ? shape.W / 2 : shape.R;
+    var scale = Math.min(availW / (halfW * 2), availH / (halfH * 2));
+    var pw = halfW * 2 * scale, ph = halfH * 2 * scale;
+    var ox = pad + (availW - pw) / 2;
+    var oy = pad + (availH - ph) / 2;
+
+    var rMax = Math.hypot(halfW, halfH);
+    var prof = cfg.profile || global.Optics.makeProfile(cfg.model, cfg.h, rMax, 900);
+
+    // 低分辨率光栅 → 放大平滑
+    var RW = 300, RH = Math.max(8, Math.round(RW * ph / pw));
+    var off = document.createElement('canvas');
+    off.width = RW; off.height = RH;
+    var octx = off.getContext('2d');
+    var img = octx.createImageData(RW, RH);
+    var data = img.data;
+    var rgb = [0, 0, 0];
+    var Emax = cfg.Emax > 0 ? cfg.Emax : 1;
+
+    for (var j = 0; j < RH; j++) {
+      // 行内世界坐标（canvas y 向下 → 世界 y 向上，符号不影响照度）
+      var wy = (j + 0.5) / RH * ph / scale - halfH;
+      for (var i = 0; i < RW; i++) {
+        var wx = (i + 0.5) / RW * pw / scale - halfW;
+        var idx = (j * RW + i) * 4;
+        // 形状裁剪
+        var inside = shape.type === 'rect'
+          ? true
+          : (wx * wx + wy * wy) <= halfW * halfW;
+        if (!inside) {
+          data[idx + 3] = 0;
+          continue;
+        }
+        var E = global.Optics.sampleProfile(prof, Math.hypot(wx, wy));
+        colormap(E / Emax, rgb);
+        data[idx]     = rgb[0];
+        data[idx + 1] = rgb[1];
+        data[idx + 2] = rgb[2];
+        data[idx + 3] = 255;
+      }
+    }
+    octx.putImageData(img, 0, 0);
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(off, ox, oy, pw, ph);
+    ctx.restore();
+
+    // 边框（深色主题下用亮灰，否则深色描边在深底上不可见）
+    ctx.strokeStyle = C.heatBorder;
+    ctx.globalAlpha = .55;
+    ctx.lineWidth = 1.2;
+    if (shape.type === 'rect') {
+      ctx.strokeRect(ox, oy, pw, ph);
+    } else {
+      ctx.beginPath();
+      ctx.arc(ox + pw / 2, oy + ph / 2, pw / 2, 0, 6.2832);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 半光强光斑参考圆
+    if (cfg.r50 > 0 && cfg.r50 * scale < Math.max(pw, ph)) {
+      ctx.save();
+      var rpx = cfg.r50 * scale;
+      var ccx = ox + pw / 2, ccy = oy + ph / 2;
+
+      // 参考圆：先描一遍深色粗线再叠白线。
+      // 只描白线时，压在伪彩的高亮区（黄/橙/红）上几乎看不见。
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = C.heatMarkHalo;
+      ctx.lineWidth = 3.8;
+      ctx.beginPath();
+      ctx.arc(ccx, ccy, rpx, 0, 6.2832);
+      ctx.stroke();
+      ctx.strokeStyle = C.heatMark;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      // 标注文字：加深色底衬。伪彩是全色域，文字要么有底衬、要么在某些
+      // 区域必然对比度不足 —— 这是唯一稳妥的做法。
+      ctx.setLineDash([]);
+      ctx.font = '600 10.5px ui-monospace, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var label = '½Imax 光斑  R=' + cfg.r50.toFixed(2) + ' m';
+      var ly = Math.max(oy + 11, ccy - rpx - 11);   // 圆外上方；空间不够时退回圆内
+      var tw = ctx.measureText(label).width;
+      ctx.fillStyle = C.heatLabelBg;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(ccx - tw / 2 - 7, ly - 9.5, tw + 14, 19, 5);
+      else ctx.rect(ccx - tw / 2 - 7, ly - 9.5, tw + 14, 19);
+      ctx.fill();
+      ctx.fillStyle = C.heatMark;
+      ctx.fillText(label, ccx, ly);
+      ctx.restore();
+    }
+
+    // 中心十字
+    ctx.strokeStyle = C.heatCross;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(ox + pw / 2 - 6, oy + ph / 2); ctx.lineTo(ox + pw / 2 + 6, oy + ph / 2);
+    ctx.moveTo(ox + pw / 2, oy + ph / 2 - 6); ctx.lineTo(ox + pw / 2, oy + ph / 2 + 6);
+    ctx.stroke();
+
+    // 色标
+    var barY = H - 22, barH = 9;
+    var barX = 24, barW = W - 48 - 96;
+    if (barW > 40) {
+      var g = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+      // 用整数步进而非浮点累加：t += 0.05 会累出 1.0000000000000002，
+      // 触发 addColorStop 的 IndexSizeError（0~1 越界）
+      var STEPS = 20;
+      for (var si = 0; si <= STEPS; si++) {
+        var t = si / STEPS;
+        var cc = heatColor(t);
+        g.addColorStop(t, 'rgb(' + Math.round(cc[0]) + ',' + Math.round(cc[1]) + ',' + Math.round(cc[2]) + ')');
+      }
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(barX, barY, barW, barH, 3);
+      else ctx.rect(barX, barY, barW, barH);
+      ctx.fill();
+
+      ctx.fillStyle = C.text2;
+      ctx.font = '10px ui-monospace, Consolas, monospace';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText('0 lx', barX, barY + barH + 8);
+      ctx.textAlign = 'right';
+      ctx.fillText('E_max = ' + fmtInt(cfg.Emax) + ' lx', barX + barW, barY + barH + 8);
+    }
+  }
+
+  global.Charts = {
+    drawCurve: drawCurve,
+    drawHeatmap: drawHeatmap,
+    heatColor: heatColor,
+    fmt: fmt,
+    fmtInt: fmtInt
+  };
+
+})(window);

@@ -1,21 +1,26 @@
-# Session credentials
-.session-env.json
-.mcporter/
-.skills/
-.capabilities/
-# Dependencies
-node_modules/
-# Auto-generated
-.workspace-info.md
-.local/share/opencode/
-.cloudbase-mcp/logs
+# 部署/构建产物
+_site/
 
-# >>> tcb-remote-workspace internal ignore rules >>>
-.session-env.json
-.mcporter/
-.skills/
-.capabilities/
-.workspace-info.md
-.local/share/opencode/
-.cloudbase-mcp/logs
-# <<< tcb-remote-workspace internal ignore rules <<<
+# 本地诊断产物（无头浏览器探针、临时目录）
+__probe.html
+__probe*.js
+__index_probe.html
+# 探针 HTML 现在带进程号命名（避免并发/残留互相覆盖），通配兜住全部形式
+__probe-*.html
+__step-probe*.html
+.ck/
+.ck*/
+.tmpcheck/
+
+# 依赖
+node_modules/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+*.swp
+
+# 对账/探针留下的临时产物（API 转储、截图、日志）
+releases.json
+tags.json
+runs.json

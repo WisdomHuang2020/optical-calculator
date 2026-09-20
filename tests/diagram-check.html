@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>图形细节检查</title>
+<style>
+  body { margin: 0; padding: 16px; background: #fff;
+         font: 13px/1.6 "Microsoft YaHei", sans-serif; }
+  .box { border: 1px solid #cbd5e1; border-radius: 10px; margin-bottom: 18px;
+         background: #f8fafc; }
+  .box canvas { display: block; width: 100%; height: 100%; }
+  h3 { margin: 0 0 8px; font-size: 13px; color: #334155; }
+</style>
+</head>
+<body>
+<h3>① 平面轴截面图（θ=19°, α=10.5°, dα=3°）—— 环带在球冠内部</h3>
+<div class="box" style="height:520px;width:960px"><canvas id="c1"></canvas></div>
+
+<h3>② 球面微元方块放大（θ=10.5°, φ₀=0°, dθ=3°, dφ=20°）</h3>
+<div class="box" style="height:400px;width:960px"><canvas id="c2"></canvas></div>
+
+<h3>③ 球面微元方块放大（θ=60°，靠极点会明显变宽）</h3>
+<div class="box" style="height:400px;width:960px"><canvas id="c3"></canvas></div>
+
+<script src="../js/planar.js"></script>
+<script>
+var D = Math.PI / 180;
+window.Planar.drawCrossSection(document.getElementById('c1'),
+  { theta: 19 * D, alpha: 10.5 * D, dAlpha: 3 * D });
+window.Planar.drawPatchZoom(document.getElementById('c2'),
+  { alpha: 10.5 * D, phi0: 0, dAlpha: 3 * D, dPhi: 20 * D });
+window.Planar.drawPatchZoom(document.getElementById('c3'),
+  { alpha: 60 * D, phi0: 0, dAlpha: 3 * D, dPhi: 20 * D });
+</script>
+</body>
+</html>

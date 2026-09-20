@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>光学概念和光学设计 · 照度计算 / 立体角 / 棱镜板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◐</span>
+    <div>
+      <h1>光学概念和光学设计</h1>
+      <p>照度推算 · 立体角 · 棱镜板参数化设计</p>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="calc">照度计算</button>
+    <button class="tab" data-tab="solid">立体角可视化</button>
+    <button class="tab" data-tab="theory">公式与推导</button>
+    <button class="tab" data-tab="prism">棱镜板设计</button>
+    <button class="tab" data-tab="opt">最优设计方法</button>
+    <button class="tab" data-tab="know">棱镜原理</button>
+    <button class="tab" data-tab="mats">材料与参考</button>
+  </nav>
+  <span class="ver app-version">v—</span>
+</header>
+
+<div class="wrap">
+
+  <!-- ============================================================
+       视图 1 —— 照度计算
+  ============================================================ -->
+  <div class="view active" id="view-calc">
+    <div class="layout">
+
+      <!-- 左：输入 -->
+      <div class="sticky-col">
+        <div class="card">
+          <h2><span class="num">1</span>灯具光学参数</h2>
+
+          <div class="field">
+            <label for="model">配光模型</label>
+            <select id="model">
+              <option value="cosN">cosⁿ 余弦幂（LED 投光灯常用）</option>
+              <option value="uniform">均匀锥配光（理想简化）</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="flux">总光通量 Φ <span class="unit">lm</span></label>
+            <input id="flux" type="number" value="9000" min="1" step="100">
+          </div>
+
+          <div class="field">
+            <label for="imax">中心光强 I₀ <span class="unit">cd</span><em>留空 = 自动推导</em></label>
+            <input id="imax" type="number" placeholder="自动推导" min="0" step="50">
+          </div>
+
+          <div class="field">
+            <label for="beam">光束角 2θ½ <span class="unit">°</span><em>半光强全角</em></label>
+            <input id="beam" type="number" value="38" min="1" max="179" step="1">
+            <div class="mini-hint">
+              等价半角 θ½ = <b id="beam-full">19.0°</b>。
+              数据手册若标的是<b>半角</b>（如 19°、12°），请先乘以 2 再填入上面。
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">2</span>被照面几何</h2>
+
+          <div class="field">
+            <label for="height">灯具到被照面的垂直距离 h <span class="unit">m</span></label>
+            <input id="height" type="number" value="3" min="0.01" step="0.1">
+          </div>
+
+          <div class="field">
+            <label>被照面形状</label>
+            <!-- 单选组的标题用 <label> 是标不上的（label 只能关联单个控件）。
+                 这里把组本身标成 radiogroup，读屏会先报「被照面形状」再报选项。 -->
+            <div class="seg" role="radiogroup" aria-label="被照面形状">
+              <label><input type="radio" name="shape" value="circle" checked>圆形 半径 R</label>
+              <label><input type="radio" name="shape" value="rect">矩形 L × W</label>
+            </div>
+          </div>
+
+          <div class="field" id="field-R">
+            <label for="radius">被照面半径 R <span class="unit">m</span><em title="默认自动跟随半光强光斑半径 h·tan θ½；一旦手动修改，就不再被自动覆盖">= h·tan θ½ 自动</em></label>
+            <input id="radius" type="number" value="1.033" min="0.001" step="0.001">
+          </div>
+
+          <div class="field hidden" id="field-rect">
+            <label for="len">长 L × 宽 W <span class="unit">m</span></label>
+            <div class="row">
+              <input id="len" type="number" value="1.2" min="0.001" step="0.1">
+              <span class="sep">×</span>
+              <input id="wid" type="number" value="0.6" min="0.001" step="0.1">
+            </div>
+          </div>
+
+          <div style="margin-top:16px;display:flex;gap:8px">
+            <button class="btn" id="btn-reset-calc">恢复默认</button>
+            <button class="btn solid" onclick="document.querySelector('.tab[data-tab=solid]').click()">看立体角 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：结果 -->
+      <div>
+        <div id="calc-warn" class="note warn hidden" style="margin-top:0;margin-bottom:14px"></div>
+        <div id="render-warn" class="note warn hidden" style="margin-top:0;margin-bottom:14px"></div>
+
+        <div class="stats">
+          <div class="stat hero">
+            <span class="k">最大照度 E<sub>max</sub>（正下方）</span>
+            <span class="v" id="st-emax-v">—</span>
+            <span class="s">E = I₀ / h²</span>
+          </div>
+          <div class="stat avg">
+            <span class="k">平均照度 E<sub>avg</sub></span>
+            <span class="v" id="st-eavg-v">—</span>
+            <span class="s" id="st-eavg-s">—</span>
+          </div>
+          <div class="stat low">
+            <span class="k">最小照度 E<sub>min</sub>（边缘）</span>
+            <span class="v" id="st-emin-v">—</span>
+            <span class="s" id="st-emin-s">—</span>
+          </div>
+          <div class="stat uni">
+            <span class="k">均匀度 U = E<sub>min</sub>/E<sub>avg</sub></span>
+            <span class="v" id="st-uavg-v">—</span>
+            <span class="s">面域均匀度</span>
+          </div>
+          <div class="stat uni">
+            <span class="k">均匀度 U = E<sub>min</sub>/E<sub>max</sub></span>
+            <span class="v" id="st-umax-v">—</span>
+            <span class="s">极值比</span>
+          </div>
+          <div class="stat flux">
+            <span class="k">光通量利用率</span>
+            <span class="v" id="st-util-v">—</span>
+            <span class="s">落入被照面的 Φ / 总 Φ</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">3</span>推导摘要</h2>
+          <div class="summary">
+            <div class="item"><span class="k">配光模型</span><span class="v" id="sum-model">—</span></div>
+            <div class="item"><span class="k">配光指数 n</span><span class="v" id="sum-n">—</span></div>
+            <div class="item"><span class="k">中心光强 I₀ <small>cd</small></span><span class="v" id="sum-imax">—</span></div>
+            <div class="item"><span class="k">I₀ 来源</span><span class="v" id="sum-imaxsrc">—</span></div>
+            <div class="item"><span class="k">半光强全角 2θ½</span><span class="v" id="sum-ghalf">—</span></div>
+            <div class="item"><span class="k">半光强锥立体角 Ω</span><span class="v" id="sum-omega">—</span></div>
+            <div class="item"><span class="k">占全球面比例</span><span class="v" id="sum-omegapct">—</span></div>
+            <div class="item"><span class="k">半光强光斑 R½</span><span class="v" id="sum-r50">—</span></div>
+            <div class="item"><span class="k">10% 光斑 R₁₀</span><span class="v" id="sum-r10">—</span></div>
+            <div class="item"><span class="k">等效总光通量 <small>lm</small></span><span class="v" id="sum-fluxcheck">—</span></div>
+          </div>
+          <div id="calc-note" class="note info"></div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">4</span>照度—半径 曲线</h2>
+          <div class="canvas-box" style="height:300px">
+            <canvas id="canvas-curve"></canvas>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--c-curve)"></i>E(r) 严格式（含余弦）</span>
+            <span><i class="dot" style="background:var(--c-emax)"></i>E_max</span>
+            <span><i class="dot" style="background:var(--c-emin)"></i>E_min</span>
+            <span><i style="background:var(--c-eavg);opacity:.7"></i>E_avg</span>
+            <span><i style="background:var(--c-r50);opacity:.7"></i>R½</span>
+            <span><i style="background:var(--c-r10);opacity:.7"></i>R₁₀</span>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--text-3)" id="curve-caption"></p>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">5</span>被照面照度分布（俯视伪彩）</h2>
+          <div class="canvas-box" style="height:330px">
+            <canvas id="canvas-heat"></canvas>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--text-3)">
+            颜色按 E/E<sub>max</sub> 归一化后映射，暖色 = 照度高。虚线圆为半光强光斑边界 R½。
+          </p>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">6</span>径向剖面数据</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>r (m)</th>
+                  <th>γ (°)</th>
+                  <th>斜距 d (m)</th>
+                  <th>I (cd)</th>
+                  <th>E 严格 (lx)</th>
+                  <th>E=I/d² (lx)</th>
+                  <th>E/E_max</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-profile"></tbody>
+            </table>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--text-3)">
+            末行（高亮）为被照面最远点，即 E<sub>min</sub> 所在。倒数第二列为忽略入射余弦的
+            简化式 E = I/d²，它是严格式的 1/cos γ 倍（恒 ≥ 1，必然高估），可用于快速判断
+            "能不能省这一步"。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       视图 2 —— 立体角可视化
+  ============================================================ -->
+  <div class="view" id="view-solid">
+    <div class="solid-layout">
+
+      <div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="canvas-box canvas-3d" style="border:0;border-radius:0">
+            <canvas id="sa-canvas"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="legend" style="margin-top:0">
+            <span><i style="background:var(--c-cap)"></i>球冠 —— 被锥截出的球面面积 A</span>
+            <span><i style="background:var(--c-ring)"></i>微圆环 —— 带宽 dα 的环带 dA</span>
+            <span><i style="background:var(--c-cone)"></i>锥面线 —— 光源到球冠边缘的母线</span>
+            <span><i style="background:var(--c-axis)"></i>光轴</span>
+          </div>
+          <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
+            <b>拖动画面可自由旋转视角</b>；默认缓慢自转。把视角转到侧面，可以看到微圆环的
+            半径就是 r·sinα（纬圆半径）、带宽是 r·dα —— 这就是
+            <code style="font-family:var(--mono)">dA = 2πr²·sinα·dα</code> 里每一项的几何来源。
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <div class="card readout">
+          <h2><span class="num">Ω</span>立体的立体角</h2>
+
+          <div class="formula">
+            Ω = ∫<sub>0</sub><sup>θ</sup> 2π·sinα·dα = <b>2π(1 − cos θ)</b>
+          </div>
+
+          <div class="slider-row" style="margin-bottom:16px">
+            <span style="font-size:12.5px;color:var(--text-2);min-width:52px">半顶角 θ</span>
+            <input type="range" id="sa-theta" min="1" max="89" step="0.5" value="19">
+            <span class="slider-val" id="sa-theta-val">19°</span>
+          </div>
+
+          <div class="bigval">
+            <span class="num" id="sa-omega-v">0.3423</span>
+            <span class="u">sr</span>
+          </div>
+          <div class="bar"><i id="sa-bar" style="width:2.7%"></i></div>
+          <div class="bar-label">
+            占全球面 4π (12.5664 sr) 的 <b id="sa-pct-v">2.72%</b>
+          </div>
+
+          <div class="field">
+            <label for="sa-flux">锥内光通量 Φ<sub>cone</sub> <span class="unit">lm</span></label>
+            <input id="sa-flux" type="number" value="9000" min="0" step="100">
+          </div>
+          <div class="summary" style="grid-template-columns:1fr 1fr">
+            <div class="item">
+              <span class="k">锥内平均光强 Φ/Ω <small>cd</small></span>
+              <span class="v" id="sa-imax-v">—</span>
+            </div>
+            <div class="item">
+              <span class="k">全锥顶角 2θ</span>
+              <span class="v" id="sa-theta-deg">38.0°</span>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:14px">
+            <label for="sa-ring">微圆环极角 α <span class="unit">= 微元的极角 θ</span></label>
+            <div class="slider-row">
+              <input type="range" id="sa-ring" min="1" max="89" step="0.5" value="10.5">
+              <span class="slider-val" id="sa-ring-val">10.5°</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="sa-ringw">环带带宽 dα <span class="unit">= 微元的 dθ</span></label>
+            <div class="slider-row">
+              <input type="range" id="sa-ringw" min="0.5" max="20" step="0.5" value="3">
+              <span class="slider-val" id="sa-ringw-val">3.0°</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="sa-phi">微元方位角 φ₀</label>
+            <div class="slider-row">
+              <input type="range" id="sa-phi" min="0" max="360" step="5" value="0">
+              <span class="slider-val" id="sa-phi-val">0°</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="sa-dphi">微元方位跨度 dφ</label>
+            <div class="slider-row">
+              <input type="range" id="sa-dphi" min="2" max="90" step="1" value="20">
+              <span class="slider-val" id="sa-dphi-val">20°</span>
+            </div>
+          </div>
+
+          <div class="toggles" style="margin:6px 0 16px">
+            <button class="tg" id="tg-cap">球冠</button>
+            <button class="tg amber" id="tg-ring">微圆环</button>
+            <button class="tg violet" id="tg-patch">微元方块</button>
+            <button class="tg" id="tg-cone">锥面线</button>
+            <button class="tg" id="tg-sphere">球面线框</button>
+            <button class="tg" id="tg-rotate">自动旋转</button>
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="btn-sa-reset">复位视角</button>
+            <button class="btn" id="btn-sa-sync">同步光束角</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">dΩ</span>微圆环的立体角</h2>
+          <div class="summary" style="grid-template-columns:1fr 1fr;gap:8px">
+            <div class="item">
+              <span class="k">精确值 Ω(α+dα/2)−Ω(α−dα/2)</span>
+              <span class="v" id="sa-domega-exact">—</span>
+            </div>
+            <div class="item">
+              <span class="k">近似 dΩ = 2π·sinα·dα</span>
+              <span class="v" id="sa-domega-approx">—</span>
+            </div>
+            <div class="item">
+              <span class="k">近似偏差</span>
+              <span class="v" id="sa-domega-err">—</span>
+            </div>
+            <div class="item">
+              <span class="k">当前 α / dα</span>
+              <span class="v"><span id="sa-alpha-deg">19°</span> / <span id="sa-dalpha-deg">6°</span></span>
+            </div>
+          </div>
+          <div class="deriv" style="margin-top:12px">
+            半径为 r 的球面上，极角 α 处的纬圆半径是 <code>r·sinα</code>、周长是
+            <code>2πr·sinα</code>；环带宽度是 <code>r·dα</code>。两者相乘得环带面积<br>
+            <code>dA = 2πr²·sinα·dα</code><br>
+            立体角 <code>dΩ = dA / r² = 2π·sinα·dα</code> —— 半径 r 被约掉，
+            <b>立体角只与角度有关</b>。整个球冠积分即 <code>Ω = 2π(1 − cosθ)</code>。
+            <br><br>
+            把 dα 调大即可看到近似偏差如何上升：dα 需足够小，<code>2π·sinα·dα</code>
+            才等于精确差值。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 第二行：平面轴截面图 + 推导过程 ============ -->
+    <div class="solid-layout" style="margin-top:18px">
+
+      <div>
+        <div class="card">
+          <h2><span class="num">§</span>平面轴截面图（过光轴的截面）</h2>
+          <div class="canvas-box" style="height:430px">
+            <canvas id="planar-canvas"></canvas>
+          </div>
+          <div class="legend" style="margin-top:12px">
+            <span><i style="background:var(--c-cap)"></i>球冠弧（±θ）</span>
+            <span><i style="background:var(--c-ring)"></i>微圆环轴截面（角宽 dα）</span>
+            <span><i style="background:var(--c-lat)"></i>纬圆半径 r·sinα</span>
+            <span><i style="background:var(--c-radius)"></i>半径 r</span>
+            <span><i style="background:var(--c-axis)"></i>光轴</span>
+          </div>
+          <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
+            拖动上方的 θ、α、dα 滑块，本图与三维视图同步变化。
+            图上每一项都与推导式里的符号一一对应：
+            <b>绿线</b>是纬圆半径 <code>r·sinα</code>，
+            <b>橙弧</b>是带宽 <code>r·dα</code>，
+            两者相乘再乘周长 <code>2πr·sinα</code> 即为环带面积 <code>dA</code>。
+            <br>
+            其中绿色虚线是纬圈在<b>切面中的投影弦</b>，完整长度 <code>2r·sinα</code>；
+            它把左右两端的橙色小弧连了起来——那两段弧其实是<b>同一个微圆环的两个截面</b>。
+            轴上那一点到圆周的右半段，就是这个纬圈的半径 <code>r·sinα</code>。
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2><span class="num">∫</span>推导过程</h2>
+          <ol class="steps" id="deriv-steps">
+            <li>
+              <div class="t">立体角的定义</div>
+              <div class="f">Ω = A / r²&nbsp;&nbsp;<span style="color:var(--text-3)">[sr]</span></div>
+              <div class="n">球面上面积 A 对球心张成的立体角。它是面积与半径平方之比，无量纲。</div>
+            </li>
+            <li>
+              <div class="t">在极角 α 处取环带微元</div>
+              <div class="f">纬圆半径 = r·sinα = <b id="dv-sin">—</b>&nbsp;r</div>
+              <div class="f">纬圆周长 = 2πr·sinα = <b id="dv-circ">—</b>&nbsp;r</div>
+              <div class="n">环带的走向是"绕光轴一圈"，所以取一圈的周长。</div>
+            </li>
+            <li>
+              <div class="t">环带的宽度（沿母线方向）</div>
+              <div class="f">带宽 = r·dα&nbsp;&nbsp;其中 dα = <b id="dv-da">—</b>&nbsp;rad</div>
+              <div class="n">球面上沿大圆的弧长 = 半径 × 角宽。dα 取得越小，环带越窄、近似越准。</div>
+            </li>
+            <li>
+              <div class="t">环带面积 = 周长 × 带宽</div>
+              <div class="f">dA = 2πr·sinα · r·dα = <b>2πr²·sinα·dα</b></div>
+              <div class="f">（取 r = 1 归一化）dA = <b id="dv-dA">—</b></div>
+              <div class="n">2πr·sinα 是"圈长"，r·dα 是"圈宽"，相乘即这一圈的面积。</div>
+            </li>
+            <li>
+              <div class="t">除以 r²，得到立体角微元</div>
+              <div class="f">dΩ = dA / r² = <b>2π·sinα·dα</b></div>
+              <div class="f">dΩ = <b id="dv-dOm">—</b>&nbsp;sr</div>
+              <div class="n"><b>r 被完全约掉</b> —— 立体角只由角度决定，与球半径无关。这正是它能描述"方向分布"的原因。</div>
+            </li>
+            <li>
+              <div class="t">从 α = 0 积分到 α = θ</div>
+              <div class="f">Ω = ∫<sub>0</sub><sup>θ</sup> 2π·sinα dα = 2π·[−cosα]<sub>0</sub><sup>θ</sup></div>
+              <div class="f">= 2π(1 − cosθ)</div>
+              <div class="n">这一整步的几何含义：把所有"圈"从球冠顶点累加到边缘，就拼出了整个球冠。</div>
+            </li>
+            <li>
+              <div class="t">代入当前 θ</div>
+              <div class="f">Ω = 2π(1 − cos <b id="dv-theta">—</b>°) = <b id="dv-omega">—</b>&nbsp;sr</div>
+              <div class="f">占全球面 4π = <b id="dv-pct">—</b></div>
+              <div class="n">
+                数值自检：差分精确值 <b id="dv-exact">—</b>，微分近似 2π·sinα·dα = <b id="dv-approx">—</b>，
+                相对偏差 <b id="dv-err">—</b>。dα → 0 时偏差趋于 0。
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 第三行：微元方块（弯曲矩形）+ 二重积分 ============ -->
+    <div class="solid-layout" style="margin-top:18px">
+
+      <div>
+        <div class="card">
+          <h2><span class="num">dA</span>球面微元方块（弯曲矩形，放大）</h2>
+          <div class="canvas-box" style="height:320px">
+            <canvas id="patch-canvas"></canvas>
+          </div>
+          <div class="legend" style="margin-top:12px">
+            <span><i style="background:var(--c-theta)"></i>θ 方向边（沿经线）R·dθ</span>
+            <span><i style="background:var(--c-phi)"></i>φ 方向边（沿纬圈）R·sinθ·dφ</span>
+          </div>
+          <p style="margin-top:10px;font-size:12.5px;color:var(--text-2)">
+            把球面上 (θ, φ) 附近的一个微元单独放大。注意两条边的弯曲程度<b>不一样</b>：
+            θ 方向的边走的是半径 R 的大圆，几乎笔直；φ 方向的边走的是半径 R·sinθ 的纬圈，
+            明显更弯。<b>这条边长差就是 sinθ 因子的几何来源</b>——离光轴越近，纬圈越小，
+            φ 方向的边长越短，到极点归零。
+            <span id="patch-caption" style="display:block;margin-top:8px;color:var(--amber-ink)"></span>
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2><span class="num">∫∫</span>推导过程 · 球面微元二重积分</h2>
+          <div class="note info" style="margin:0 0 14px">
+            <b>记号说明：</b>本页三维图与平面图把"微元所在极角"记作 <b>α</b>、
+            把"锥的半顶角"记作 <b>θ</b>。下面沿用常见教材写法，把<b>极角直接记作 θ</b>、
+            方位角记作 <b>φ</b>，积分上限即锥的半顶角。两种写法完全等价：<b>α ↔ θ</b>。
+          </div>
+          <ol class="steps" id="deriv2-steps">
+            <li>
+              <div class="t">在球面上取一个"弯曲矩形"微元</div>
+              <div class="n">过球心作两条经线（夹角 dφ）和两条纬线（夹角 dθ），它们在球面上围出一个小四边形。球面是弯的，所以四条边都是弧——这就是它叫"弯曲矩形"的原因。</div>
+              <div class="f">沿 θ 方向边长 = R·dθ = <b id="dq-a">—</b></div>
+              <div class="f">沿 φ 方向边长 = R·sinθ·dφ = <b id="dq-b">—</b></div>
+            </li>
+            <li>
+              <div class="t">为什么 φ 方向的边长要乘 sinθ</div>
+              <div class="n">φ 方向是"绕光轴转一圈"的方向，它走的那一圈是纬圈，而<b>纬圈半径是 R·sinθ，不是 R</b>。θ 越小（越靠近光轴）纬圈越小，边长越短；θ = 0 时纬圈缩成一个点，边长归零——所以极点附近没有面积。</div>
+              <div class="f">纬圈半径 = R·sinθ = <b id="dq-sin">—</b>&nbsp;R</div>
+            </li>
+            <li>
+              <div class="t">微元面积 = 两条边长相乘</div>
+              <div class="f">dA = (R·dθ)(R·sinθ·dφ) = <b>R²·sinθ·dθ·dφ</b></div>
+              <div class="f">（取 R = 1 归一化）dA = <b id="dq-dA">—</b></div>
+            </li>
+            <li>
+              <div class="t">除以 R²，得立体角微元</div>
+              <div class="f">dΩ = dA / R² = <b>sinθ·dθ·dφ</b></div>
+              <div class="f">dΩ = <b id="dq-dOm">—</b>&nbsp;sr</div>
+              <div class="n"><b>R² 被完全约掉</b>，立体角元素里只剩纯角度量，与球的大小无关。</div>
+            </li>
+            <li>
+              <div class="t">对整个球冠做二重积分</div>
+              <div class="f">Ω = ∫<sub>0</sub><sup>2π</sup> ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ·dφ</div>
+              <div class="n">θ 是极角（0 → 锥的半顶角 θₘ），φ 是方位角（0 → 2π，绕光轴整整一圈）。</div>
+            </li>
+            <li>
+              <div class="t">先对 φ 积分</div>
+              <div class="f">∫<sub>0</sub><sup>2π</sup> dφ = <b>2π</b></div>
+              <div class="f">Ω = 2π ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ</div>
+              <div class="n">这一步的几何含义就是把"弯曲矩形"沿 φ 方向首尾相接、拼成一整圈环带，于是二重积分退化成一重积分——<b>这正是上面"环带积分"法的来历</b>。两法同源。</div>
+            </li>
+            <li>
+              <div class="t">再对 θ 积分</div>
+              <div class="f">∫ sinθ·dθ = −cosθ</div>
+              <div class="f">Ω = 2π·[−cosθ]<sub>0</sub><sup>θₘ</sup> = <b>2π(1 − cos θₘ)</b></div>
+              <div class="n">与环带法得到的结果完全一致——这是一次独立的交叉验证。</div>
+            </li>
+            <li>
+              <div class="t">代入当前半顶角</div>
+              <div class="f">θₘ = <b id="dq-theta">—</b>°，cos θₘ = <b id="dq-cos">—</b></div>
+              <div class="f">Ω = 2π(1 − <b id="dq-cos2">—</b>) = <b id="dq-omega">—</b>&nbsp;sr</div>
+              <div class="f">占全球面 4π = <b id="dq-pct">—</b></div>
+              <div class="n">边界自检：θₘ = 90° → cos = 0 → Ω = 2π（半球）；θₘ = 180° → cos = −1 → Ω = 4π（整球）。与立体角的取值范围吻合。</div>
+            </li>
+          </ol>
+          <div class="note info" style="margin-top:14px">
+            <b>数值自检 · 微分近似有多准：</b>该微元的精确立体角有闭式解
+            <br><code style="font-family:var(--mono)">Ω = Δφ · (cos θ₁ − cos θ₂)</code>
+            &nbsp;（θ₁、θ₂ 为微元的两个边界极角）
+            <br>精确值 = <b id="dq-exact">—</b> sr；微分近似 <code>sinθ·dθ·dφ</code> = <b id="dq-dOm2">—</b> sr；
+            相对偏差 <b id="dq-err">—</b>。
+            <br>
+            本工具把微元<b>取在 θ 区间中点</b>，因此微分近似是<b>二阶精度</b>：
+            即使把 dθ 拉到 20°，偏差仍 &lt; 1%。若把微元取在区间<b>起点</b>（不少资料的写法），
+            精度退化成一阶——同一组参数下偏差会掉到 −10%（dθ = 8°）、
+            甚至 −70%（θ 很小且 dθ 很大时）。把 dθ 滑块拉大即可亲眼看到偏差如何变化。
+          </div>
+          <div class="note warn" style="margin-top:14px">
+            <b>为什么方块法才是"最一般"的形式：</b>圆环法暗含了一个前提——配光绕光轴<b>旋转对称</b>，
+            所以才能先把 φ 积成 2π。一旦配光不是圆的（例如<b>矩形配光</b>的洗墙灯、方形泛光灯），
+            光斑在 (θ, φ) 平面上不是一块"球冠"，而是任意形状的区域，圆环法直接失效；
+            而方块法只需把二重积分的上下限换成该区域的边界即可：
+            <br><code style="font-family:var(--mono)">Ω = ∬<sub>区域</sub> sinθ·dθ·dφ</code>
+            <br>本页的照度计算器目前只支持<b>旋转对称</b>配光（cosⁿ 模型），
+            所以矩形配光灯具请勿直接套用——需要按上面这个二重积分另算。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       视图 3 —— 公式与推导
+  ============================================================ -->
+  <div class="view" id="view-theory">
+    <div class="card theory">
+
+      <section>
+        <h3><span class="n">1</span>光强 · 光通量 · 立体角</h3>
+        <p>三者是光度学的定义性关系，没有"推导"，只有定义：</p>
+        <div class="eq">
+          立体角   Ω = A / r²        单位 sr（球面度）
+          <br>光通量   Φ = ∫ I dΩ        单位 lm（流明）
+          <br>光强     I = dΦ / dΩ      单位 cd = lm/sr
+        </div>
+        <p>
+          立体角是无量纲量的平方比，所以 1 sr 相当于"从球心看过去、面积等于半径平方的那块球面"。
+          整球 = 4π ≈ 12.5664 sr，半球 = 2π ≈ 6.2832 sr。
+        </p>
+        <p>圆锥（半顶角 θ）截出的球冠所张立体角：</p>
+        <div class="eq">
+          Ω = ∫<sub>0</sub><sup>θ</sup> 2π·sinα·dα = 2π(1 − cos θ)
+        </div>
+        <p>
+          推导：球面上极角 α 处的纬圆周长是 2πr·sinα，环带宽度是 r·dα，
+          故环带面积 dA = 2πr²·sinα·dα；除以 r² 得 dΩ = 2π·sinα·dα，积分即得。
+          <b>r 被完全约掉</b>——这是立体角"只看方向、不看距离"的本质。
+        </p>
+
+        <h4 style="margin:20px 0 8px;font-size:13.5px;color:var(--primary-ink)">
+          等价写法：球面微元（弯曲矩形）+ 二重积分
+        </h4>
+        <p>
+          上面那种算法是"先对 φ 积分、把微元拼成一整圈环带"。也可以不拼，
+          直接在球面上取一个二维微元算——这就是常见的教材写法，更基本也更直观：
+        </p>
+        <div class="eq">
+          在 (θ, φ) 处取微元：两条边分别是沿经线的一段弧与沿纬圈的一段弧
+          <br><br>沿 θ 方向边长 = R·dθ          <span class="c">（走半径 R 的大圆）</span>
+          <br>沿 φ 方向边长 = R·sinθ·dφ     <span class="c">（走半径 R·sinθ 的纬圈）</span>
+          <br><br>dA = (R·dθ)(R·sinθ·dφ) = R²·sinθ·dθ·dφ
+          <br>dΩ = dA / R² = sinθ·dθ·dφ        <span class="c">（R² 约掉）</span>
+        </div>
+        <p><b>为什么 φ 方向要乘 sinθ：</b>φ 方向是绕光轴转的方向，它走的圈是纬圈，
+          而纬圈半径是 R·sinθ 而不是 R。θ → 0（靠近光轴极点）时纬圈缩成一点，
+          该方向边长归零——所以极点附近没有贡献面积。</p>
+        <p>对球冠做二重积分（θ：0 → 半顶角 θₘ；φ：0 → 2π）：</p>
+        <div class="eq">
+          Ω = ∫<sub>0</sub><sup>2π</sup> ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ·dφ
+          <br>&nbsp;&nbsp;&nbsp;= ∫<sub>0</sub><sup>2π</sup> dφ · ∫<sub>0</sub><sup>θₘ</sup> sinθ·dθ
+          <br>&nbsp;&nbsp;&nbsp;= 2π · [−cosθ]<sub>0</sub><sup>θₘ</sup>
+          <br>&nbsp;&nbsp;&nbsp;= <b>2π(1 − cos θₘ)</b>
+        </div>
+        <p>
+          先积 φ 得到 2π —— 这一步的几何含义就是"把弯曲矩形沿 φ 方向首尾相接拼成一整圈环带"，
+          二重积分退化成一重积分。所以<b>环带法与二重积分法同源</b>，只是积分次序不同。
+          本工具首页给出两条路径，可作为彼此的交叉验证。
+        </p>
+        <div class="note info">
+          <b>记号提醒：</b>立体角可视化页的 3D 图与平面轴截面图把"微元所在极角"记作 α、
+          "锥的半顶角"记作 θ；上面这套二重积分写法把极角直接记作 θ、方位角记作 φ、
+          半顶角记作 θₘ。两者是同一个量的不同记号：<b>α ↔ θ</b>。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">2</span>半光强光束角 → 配光曲线指数</h3>
+        <p>
+          <b>记号约定：</b>γ 表示"光线与光轴的夹角"这个<b>变量</b>；
+          <b>θ½</b> 表示<b>半光强半角</b>——光强降到峰值 50% 处与光轴的夹角；
+          <b>2θ½</b> 表示<b>半光强全角</b>——两个 50% 方向之间的夹角，
+          也就是数据手册上写的"光束角"，它是 θ½ 的两倍。
+          本工具按行业惯例直接接收<b>全角 2θ½</b>，内部除以 2 换算为 θ½ 参与计算。
+        </p>
+        <p>用余弦幂模型逼近配光（LED 投光灯最常用的解析近似）：</p>
+        <div class="eq">
+          I(γ) = I_max · cos<sup>n</sup> γ
+          <br>cos<sup>n</sup>(θ½) = 0.5  ⟹  n = ln 0.5 / ln(cos θ½)
+        </div>
+        <p>
+          例：手册标"光束角 38°"实为全角 ⟹ θ½ = 19° ⟹ n = ln0.5 / ln(cos19°) = <b>12.3728</b>
+          （cos<sup>12.3728</sup>19° = 0.500000，定义自洽）。
+          θ½ 越小，n 越大，配光越集中。
+        </p>
+        <div class="note info">
+          <b>限制：</b>cosⁿ 是单参数解析近似，只能保证在 θ½ 处准确降到 50%。
+          真实灯具的配光曲线需查 <b>IES / LDT 配光文件</b> 或实测光强分布，
+          本工具不替代配光文件。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">3</span>由总光通量求中心光强（关键一步）</h3>
+        <p>cosⁿ 配光在半球内的积分闭式：</p>
+        <div class="eq">
+          Φ = ∫<sub>0</sub><sup>2π</sup>∫<sub>0</sub><sup>π/2</sup> I₀ cos<sup>n</sup>γ · sinγ dγ dφ
+             = 2π·I₀ / (n + 1)
+          <br><br>⟹  I₀ = Φ (n + 1) / (2π)
+        </div>
+        <p>
+          以 Φ = 9000 lm、θ½ = 19°（n = 12.3728，n+1 = 13.3728）代入：
+          I₀ = 9000 × 13.3728 / 6.283185 ≈ <b>19 155 cd</b>。
+        </p>
+        <div class="note warn">
+          <b>直谏：Φ/Ω ≠ 中心光强。</b>
+          很多资料（含本工具参考的演示图）直接写 I = Φ/Ω，把总光通量除以半光强锥立体角
+          Ω = 0.34232 sr 得到 <b>26 291 cd</b>。这个数比真实峰值 19 155 cd 高 <b>37.2%</b>，
+          因为它隐含了"全部光通量都落在半光强锥内"的假设——实际上 cosⁿ 配光只有
+          <b>52.72%</b> 的光通量在这个锥内，另外 47.28% 分布在锥外。
+          Φ/Ω 算出的是"假想均匀分布时的锥内平均光强"，该锥内的真实平均光强其实只有
+          <b>13 862 cd</b>。用 Φ/Ω 反推照度会系统性高估。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">4</span>点光源照度：平方反比 + 余弦定律</h3>
+        <p>灯具到被照面上某点的斜距为 d，光线与被照面法线夹角为 γ：</p>
+        <div class="eq">
+          E = I(γ) · cos γ / d²        <span class="c">（点光源照度公式）</span>
+        </div>
+        <p>
+          被照面水平、灯具垂直向下、到面距离 h，面上某点距光轴落点水平距离 r，则
+          d = √(h² + r²)、cos γ = h/d。代入 cosⁿ 配光：
+        </p>
+        <div class="eq">
+          E(r) = I₀ · h<sup>n+1</sup> / (h² + r²)<sup>(n+3)/2</sup>
+          <br><br>r = 0（正下方）⟹  E<sub>max</sub> = I₀ / h²
+        </div>
+        <div class="note">
+          E(r) 关于 r <b>严格单调递减</b>（分母指数 3&nbsp;>&nbsp;0），
+          所以被照面上离光轴最远的点就是 E<sub>min</sub>：
+          圆形取边缘 r = R；矩形取角点 r = √((L/2)² + (W/2)²)。
+          <br>
+          注意：<b>E = I/d² 是错的</b>（除非被照面处处垂直于光线）。它是严格式的
+          1/cos γ 倍，恒 ≥ 1，即必然高估；γ 越大偏差越快发散（γ = 60° 时已高估一倍）。
+          本工具在剖面表里单列了这一列供对照。
+        </div>
+      </section>
+
+      <section>
+        <h3><span class="n">5</span>面域平均照度——不是取样平均</h3>
+        <p>
+          E<sub>avg</sub> 的正确定义是<b>该面域接收到的总光通量除以面积</b>，
+          而不是取几个点算术平均（那样会严重偏大）：
+        </p>
+        <div class="eq">
+          E<sub>avg</sub> = Φ<sub>A</sub> / A
+        </div>
+        <p><b>圆形面域</b>（半径 R，中心在光轴正下方）：圆盘张开的半顶角 γ<sub>R</sub> = arctan(R/h)，落在盘上的光通量等于该锥内的光通量：</p>
+        <div class="eq">
+          Φ<sub>A</sub> = 2π I₀ [1 − cos<sup>n+1</sup>γ<sub>R</sub>] / (n + 1)
+          <br>E<sub>avg</sub> = Φ<sub>A</sub> / (πR²)
+        </div>
+        <p><b>矩形面域</b>：无闭式解，本工具用 200×200 中点法数值积分
+          Φ<sub>A</sub> = Σ E(x,y)·ΔA。</p>
+        <p>
+          <b>均匀度</b>：U<sub>max</sub> = E<sub>min</sub>/E<sub>max</sub>，
+          U<sub>avg</sub> = E<sub>min</sub>/E<sub>avg</sub>。
+          国标道路/体育照明常用 U<sub>avg</sub> 口径，需注明是哪一个。
+        </p>
+      </section>
+
+      <section>
+        <h3><span class="n">6</span>默认算例（可用于交叉验算）</h3>
+        <div class="eq">
+          输入：Φ = 9000 lm，光束角 2θ½ = 38°（即半角 θ½ = 19°，n = 12.3728），h = 3 m，
+                被照面 = 圆盘 R = h·tan19° = 1.0330 m，Ω(19°) = 0.34232 sr
+          <br><br>I₀      = Φ(n+1)/(2π) = 9000×13.3728/6.283185 = 19 155 cd
+          <br>E_max   = 19155 / 3²                    = 2 128 lx
+          <br>E_min   = 边缘 γ = 19°，I = 9578 cd，d = 3.1730 m
+          <br>        = 9578 × 0.94552 / 10.0677     = 899.5 lx
+          <br>Φ_A     = 2π×19155×[1 − cos<sup>13.3728</sup>19°]/13.3728 = 4 745 lm
+          <br>        （占 52.72%，即锥外还有 4 255 lm）
+          <br>E_avg   = 4745 / (π×1.0330²)          = 1 415.5 lx
+          <br>U(E_min/E_max) = 42.3%   U(E_min/E_avg) = 63.5%
+          <br>光通量利用率     = 4745 / 9000 = 52.7%
+          <br><br>对照：若误用 I₀ = Φ/Ω = 26 291 cd，则 E_max 会算成 2 921 lx（高估 37.2%）
+        </div>
+        <p>
+          注意 E_min/E_max 只有 42%：尽管边缘点光强已降到峰值一半（照 50% 定标），
+          再叠加 cos γ = 0.9455 的余弦衰减与更远的斜距，照度就掉到 42%。
+          这解释了为什么窄光束投光灯要"多灯叠加"才能拿到好看的面域均匀度。
+        </p>
+      </section>
+
+      <section>
+        <h3><span class="n">7</span>模型边界（诚实声明）</h3>
+        <ul class="tight">
+          <li><b>点光源近似</b>：要求受照距离 ≥ 5 倍发光面尺寸。近距离（＜1 m）大面阵灯具误差显著，应改用面光源或实测配光。</li>
+          <li><b>单一灯具</b>：不叠加多灯，不含墙面/顶棚的相互反射。</li>
+          <li><b>无遮挡</b>：不考虑灯具自身遮挡、灯罩、遮光罩、被照物阴影。</li>
+          <li><b>被照面水平且垂直于光轴</b>：不支持倾斜灯具（下照角 ≠ 90°）或竖直墙面。</li>
+          <li><b>配光为解析近似</b>：cosⁿ 单参数模型，不能复现真实配光的非对称性、旁瓣溢出光。</li>
+          <li><b>配光必须旋转对称</b>：cosⁿ 模型绕光轴各向同性，因此只能处理圆形光斑。
+              若灯具是<b>矩形/方形配光</b>（洗墙灯、方形泛光灯等），光斑在 (θ, φ) 平面上不是球冠，
+              Φ = 2π∫I dγ 与 Ω = 2π(1−cosθ) 这两步都不成立，必须改用
+              <code style="font-family:var(--mono)">Ω = ∬<sub>区域</sub> sinθ·dθ·dφ</code>
+              在非圆形区域上积分，并同步改掉光通量积分。本工具不覆盖此情形。</li>
+          <li><b>不含维护系数</b>：实际设计需再乘 LLD（光源光衰）× LDD（灯具积尘）× 其他损失系数，通常取 0.7~0.8。</li>
+          <li><b>不含法规判定</b>：是否满足照度标准（如 GB 50034、CJJ 45）需另按标准核对，本工具只给计算值。</li>
+        </ul>
+      </section>
+
+    </div>
+  </div>
+
+<!-- ============================================================
+     视图 4 —— 棱镜板设计
+     由 MLA_Prism.html 并入。Three.js 与 OrbitControls 已本地化到
+     js/vendor-*.js（原文件走 CDN，离线/被墙时白屏）。
+     画布高度约束在 .prism-stage，避免原文件"容器未布局就初始化
+     WebGL"导致画布停在 20px 高的问题。
+============================================================ -->
+<div class="view" id="view-prism">
+  <div class="prism-layout">
+
+    <!-- 左：参数 -->
+    <div>
+      <div class="card">
+        <div class="mode-switch">
+          <button class="mode-btn active" data-mode="1d">一维棱镜（肋）</button>
+          <button class="mode-btn" data-mode="2d">二维棱镜（六形）</button>
+        </div>
+
+        <h2><span class="num">1</span>阵列参数 <span class="unit">mm</span></h2>
+
+        <div id="params_1d">
+          <div class="field">
+            <label for="p_shape">shape 肋条截面形状</label>
+            <select id="p_shape">
+              <option value="tri" selected>三角形肋（V 型）</option>
+              <option value="trap">梯形肋（平顶 / 截头）</option>
+              <option value="cyl">半圆柱脊（柱面微透镜）</option>
+              <option value="saw">锯齿肋（非对称斜肋）</option>
+              <option value="sine">正弦波脊</option>
+              <option value="para">抛物面脊</option>
+            </select>
+            <p class="param-hint" id="p_shape_hint"></p>
+          </div>
+          <div class="field" id="p_top_field" style="display:none">
+            <label for="p_top">top ratio 顶面半宽占比 k <span class="unit">0–0.95</span></label>
+            <input id="p_top" type="number" step="0.05" min="0" max="0.95" value="0.35">
+            <p class="param-hint">平顶半宽 = k·b。k = 0 即普通三角肋；k 越大越接近平条
+              （平顶不参与角度变换，只增加脱模余量与耐刮面积）。</p>
+          </div>
+          <div class="field">
+            <label for="p_pitch">pitch 齿距 <span class="unit">mm</span></label>
+            <input id="p_pitch" type="number" step="0.01" value="1.0">
+            <p class="param-hint">相邻两齿中心线的间距（周期）。齿底宽 2b 之外的
+              <b>pitch − 2b</b> 是齿间平台。</p>
+          </div>
+          <div class="field">
+            <label for="p_height">height 齿高 <span class="unit">mm</span></label>
+            <input id="p_height" type="number" step="0.01" value="0.25">
+            <p class="param-hint">齿顶相对齿根的高度 h（肋的起伏幅度）。</p>
+          </div>
+          <div class="field">
+            <label for="p_angle" id="p_angle_label">apex angle 顶角 <span class="unit">°</span></label>
+            <input id="p_angle" type="number" step="0.5" value="60">
+            <p class="param-hint" id="p_angle_hint">齿顶处两条齿面之间的夹角 α，是<b>全角</b>
+              （不是半角 α/2，也不是斜面与底面的夹角）。齿半底宽
+              <b>b = h·tan(α/2)</b>，齿底宽 2b。</p>
+          </div>
+          <div class="field">
+            <label for="p_base">base thickness 基底厚 <span class="unit">mm</span></label>
+            <input id="p_base" type="number" step="0.01" value="0.20">
+            <p class="param-hint">齿根以下的平板厚度 t。</p>
+          </div>
+          <div class="field">
+            <label for="p_radius">radius 圆角 <span class="unit">mm</span></label>
+            <input id="p_radius" type="number" step="0.005" value="0.02">
+            <p class="param-hint">齿顶与齿根过渡圆弧的<b>半径 R</b>——是<b>长度</b>
+              （mm），不是角度、不是弧度。受齿边长度限制：沿一条齿边，相邻两
+              圆角的切线长之和不得超过该边长，故 R 超过约 0.45×边长后<b>不再
+              生效</b>。实际生效值见下方「圆角 R（实际生效）」。</p>
+          </div>
+          <div class="field">
+            <label for="p_teeth">teeth 齿数 N <span class="unit">个</span></label>
+            <input id="p_teeth" type="number" step="1" min="1" value="20">
+            <p class="param-hint">板宽 <b>W = N · pitch</b>。</p>
+          </div>
+          <div class="field">
+            <label for="p_length">length 板长 <span class="unit">mm · 拉伸向</span></label>
+            <input id="p_length" type="number" step="1" value="50">
+            <p class="param-hint">沿齿长方向的拉伸长度 L。体积 = 截面积 × L。</p>
+          </div>
+        </div>
+
+        <div id="params_2d" style="display:none">
+          <div class="field">
+            <label for="p2_shape">shape 微结构形状</label>
+            <select id="p2_shape">
+              <option value="pyramid" selected>四棱锥（正方形底）</option>
+              <option value="frustum">台锥（截头四棱锥）</option>
+              <option value="cone">圆锥（回转对称）</option>
+              <option value="sphere">球冠 / 微透镜</option>
+              <option value="parabola">抛物面帽</option>
+              <option value="hexpyr">六棱锥（蜂窝密排）</option>
+            </select>
+            <p class="param-hint" id="p2_shape_hint"></p>
+          </div>
+          <div class="field" id="p2_top_field" style="display:none">
+            <label for="p2_top">top ratio 顶面半宽占比 k <span class="unit">0–0.95</span></label>
+            <input id="p2_top" type="number" step="0.05" min="0" max="0.95" value="0.35">
+            <p class="param-hint">平顶半宽 = k·b，b = h/(tanα·(1−k))。k = 0 即普通
+              四棱锥；k 越大越接近平板（平顶不参与角度变换，只增加脱模余量）。</p>
+          </div>
+          <div class="field">
+            <label for="p2_pitch">pitch 中心间距 <span class="unit">mm</span></label>
+            <input id="p2_pitch" type="number" step="0.01" value="1.0">
+            <p class="param-hint">相邻两个结构<b>中心线</b>的间距（方形晶格 X/Y 相同；
+              蜂窝晶格为相邻中心距离，行距 = √3/2·pitch）。</p>
+          </div>
+          <div class="field">
+            <label for="p2_height">height 结构高 <span class="unit">mm</span></label>
+            <input id="p2_height" type="number" step="0.01" value="0.25">
+            <p class="param-hint">顶点相对底面的高度 h。</p>
+          </div>
+          <div class="field">
+            <label for="p2_angle">angle 倾角 α <span class="unit">°</span></label>
+            <input id="p2_angle" type="number" step="0.5" value="45">
+            <p class="param-hint">与<b>水平底面</b>的夹角——注意与一维的「顶角」
+              不是同一个量（一维是齿顶两条齿面的夹角）。平面面型的 α 就是面倾角；
+              球冠 / 抛物面是<b>底面边缘处的切线倾角</b>（曲面斜率逐点变化）。
+              半底宽公式见下方「几何量」一栏，随形状切换。</p>
+          </div>
+          <div class="field">
+            <label for="p2_base">base thickness 基底厚 <span class="unit">mm</span></label>
+            <input id="p2_base" type="number" step="0.01" value="0.20">
+            <p class="param-hint">结构底面以下的平板厚度 t。</p>
+          </div>
+          <div class="field">
+            <label for="p2_nx">columns X 列数 <span class="unit">个</span></label>
+            <input id="p2_nx" type="number" step="1" min="1" value="20">
+            <p class="param-hint">板宽 <b>Wx = Nx · pitch</b>（蜂窝晶格含半齿距偏移）。</p>
+          </div>
+          <div class="field">
+            <label for="p2_ny">rows Y 行数 <span class="unit">个</span></label>
+            <input id="p2_ny" type="number" step="1" min="1" value="20">
+            <p class="param-hint">板宽 <b>Wy = Ny · pitch</b>（蜂窝晶格为 Ny·√3/2·pitch）。</p>
+          </div>
+        </div>
+
+        <div class="warn-box" id="prism-warn" style="display:none"></div>
+
+        <h2><span class="num">2</span>几何量</h2>
+        <div class="stat-grid">
+          <div class="kv"><div class="k" id="s_k1">板宽 W = N·pitch</div><div class="v" id="s_w">-</div></div>
+          <div class="kv"><div class="k" id="s_k2">总高 H = t+h</div><div class="v" id="s_h">-</div></div>
+          <div class="kv"><div class="k" id="s_k3">半底宽 b = h·tan(α/2)</div><div class="v" id="s_half">-</div></div>
+          <div class="kv"><div class="k" id="s_k4">填充率 η = 2b/p</div><div class="v" id="s_beta">-</div></div>
+          <div class="kv"><div class="k" id="s_k5">网格点</div><div class="v" id="s_v">-</div></div>
+          <div class="kv"><div class="k">体积 <span class="unit">mm³</span></div><div class="v" id="s_vol">-</div></div>
+          <div class="kv" id="kv_tess"><div class="k">网格离散度</div><div class="v" id="s_tess">-</div></div>
+          <div class="kv" id="kv_radius"><div class="k" id="s_k6">圆角 R（实际生效）</div><div class="v" id="s_r">-</div></div>
+        </div>
+
+        <h2><span class="num">3</span>光学性能预估 <span class="unit">对比纯平板</span></h2>
+        <p class="perf-note" style="margin-bottom:8px">
+          导出 STEP 之前先做一次筛选性估算：几何光学光线追迹（斯涅尔 + 菲涅耳
+          + 全反射 + 腔体回收），与<b>同总高 H 的理想纯平板</b>对照。
+          这是<b>理想几何上限</b>，不含材料吸收、粗糙面散射、膜层干涉与制造偏差，
+          不能替代 LightTools / LiteTrace。
+        </p>
+        <div class="perf-ctl">
+          <label>入射工况
+            <select id="perf_coupling">
+              <option value="coupled">光学耦合 · 内部各向同性</option>
+              <option value="air">空气耦合 · 内部角 ≤ θc</option>
+            </select>
+          </label>
+          <label>折射率 n
+            <input id="perf_n" type="number" step="0.001" min="1.3" max="2.6" value="1.49">
+          </label>
+          <label>腔体回收率 ρ
+            <input id="perf_rho" type="number" step="0.01" min="0" max="1" value="0.85">
+          </label>
+          <label>视角半角 θv <span class="unit">°</span>
+            <input id="perf_thetav" type="number" step="1" min="5" max="89" value="60">
+          </label>
+          <label>均匀度门限 <span class="unit">%</span>
+            <input id="perf_umin" type="number" step="1" min="5" max="100" value="70">
+          </label>
+        </div>
+        <p class="perf-note">n：PMMA 1.49 / PC 1.586 / PS 1.59。
+          ρ 是退回腔体的光被重新利用的比例（含反射片损耗与从底面再进入时的菲涅耳损失）。
+          「工况」选错结论会反号 —— 光学耦合下棱镜板能打破逃逸锥、大幅提高出光效率；
+          空气耦合下平板本来就取出九成，棱镜的收益转为轴上准直而非总通量。</p>
+
+        <table class="perf-tbl">
+          <thead><tr><th>指标</th><th>纯平板</th><th>本设计</th></tr></thead>
+          <tbody>
+            <tr><td>首遇逸出率 p₁</td><td id="pf_p1f">—</td><td id="pf_p1d">—</td></tr>
+            <tr><td>出光效率 η</td><td id="pf_etaf">—</td><td id="pf_etad">—</td></tr>
+            <tr><td>视角均匀度 U</td><td id="pf_uf">—</td><td id="pf_ud">—</td></tr>
+            <tr><td>半高全角 FWHM</td><td id="pf_ff">—</td><td id="pf_fd">—</td></tr>
+          </tbody>
+        </table>
+        <div class="perf-verdict" id="pf_verdict">尚未计算</div>
+        <div class="perf-scan" id="pf_scan"></div>
+        <button class="btn solid" id="pf_btn">开始预估</button>
+        <p class="perf-note" id="pf_meta"></p>
+        <p class="perf-caveat">
+          <b>口径</b>：出光效率 = 从顶面逸出的能量 / 介质内入射能量，含腔体回收；
+          「首遇逸出率」只看第一次遇到顶面就出来的那一份，与循环次数无关，故不含任何
+          数值取舍。「视角均匀度」= ±θv 锥内强度的立体角加权平均 / 峰值强度，
+          看的是<b>配光曲线平不平</b>；<b>面内照度均匀度</b>取决于整个灯具
+          （导光板、扩散板、灯距），本页给不出，必须另行仿真或实测。
+          一维肋的「未逸出」里有一大块是<b>物理</b>限制：挤出几何的面外波矢分量守恒，
+          |k<sub>y</sub>| &gt; 1 的光（各向同性注入时占 1 − 1/n）在任何斜面上都全反射、
+          永远取不出来 —— 这正是背光行业要把两张 BEF 正交交叉使用的原因。
+        </p>
+
+        <h2><span class="num">4</span>导出</h2>
+        <button class="btn solid" id="btn_step">下载 STEP (.step)</button>
+        <button class="btn" id="btn_build123d">下载 build123d 脚本 (.py)</button>
+        <button class="btn" id="btn_cq">下载 CADQuery 脚本 (.py)</button>
+        <button class="btn" id="btn_stl">预览用 STL (.stl)</button>
+      </div>
+    </div>
+
+    <!-- 右：3D 视口 -->
+    <div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="prism-stage">
+          <canvas id="gl"></canvas>
+          <div class="prism-overlay">拖动旋转 · 滚轮缩放 · 右键平移</div>
+          <div class="prism-tools">
+            <button id="btn_reset">复位视角</button>
+            <button id="btn_defaults">重置参数</button>
+            <button id="btn_xray">半透明</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="num">§</span>生成脚本</h2>
+        <div class="prism-codebar">
+          <div class="head">
+            <span class="tab active" data-lang="build123d">build123d.py</span>
+            <span class="tab" data-lang="cq">cadquery.py</span>
+            <span class="sp"></span>
+            <button id="btn_copy">复制代码</button>
+          </div>
+          <pre id="codeview"></pre>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--text-3)">
+          脚本与 STEP 由同一套参数生成，可直接在 Python 环境（<code style="font-family:var(--mono)">pip install build123d</code>
+          或 <code style="font-family:var(--mono)">pip install cadquery</code>）中重跑以复现模型。
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+<!-- ===== 第 5 个页面 · 最优设计方法（扩散板 × 棱镜板平衡）===== -->
+<div class="view" id="view-opt">
+  <section id="s-opt-method">
+    <div class="wrap">
+      <div class="kicker"><span class="en">Optimal Design Method</span></div>
+      <h2 class="sec">最优设计方法：扩散板与棱镜板如何取得平衡</h2>
+      <p class="lead">
+        面板灯这类面光源要同时拿到<strong>高发光面均匀度 U</strong>与<strong>高出光效率 η</strong>，
+        靠的是两块光学件的分工：<b>扩散板</b>把 LED 阵列的灯影「抹平」成均匀发光面，
+        <b>棱镜板</b>把漫射光「收拢」进观看锥、把出光效率提上去。两者不各自为战——
+        雾度、混光距离、灯数、厚度预算牵一发动全身。本页给出一条<b>可复核的闭环方法</b>：
+        给定目标与约束，自动扫出扩散板材料（透过率 / 雾度 / 板厚）与棱镜（形状 / 关键角度）
+        的平衡最优组合，并把每一步的物理来路都摊开给你看。
+      </p>
+
+      <!-- ========== ① 流程图 ========== -->
+      <div class="card opt-flow">
+        <h2><span class="num">§1</span>设计流程（闭环，十步）</h2>
+        <svg class="opt-flow-svg" viewBox="0 0 1040 700" role="img" aria-label="最优设计方法流程图">
+          <defs>
+            <marker id="odArw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="var(--primary)"></path>
+            </marker>
+            <marker id="odArwD" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="var(--c-amber)"></path>
+            </marker>
+          </defs>
+
+          <!-- ① -->
+          <rect class="fbox" x="40" y="26" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="56" y="48">① 需求与目标量化</text>
+          <text class="fsub" x="56" y="66">目标发光面均匀度 U*、目标出光效率 η*</text>
+          <text class="fsub" x="56" y="82">观看半锥 θv、整机厚度预算 Hb</text>
+          <text class="fsub" x="56" y="98">评议口径：有效面 min/max · mean/max · 9/13 点法</text>
+
+          <!-- ② -->
+          <rect class="fbox" x="570" y="26" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="586" y="48">② 系统与边界条件</text>
+          <text class="fsub" x="586" y="66">发光面开口 W×H、LED 阵列密度 N、一次配光 p</text>
+          <text class="fsub" x="586" y="82">边框反射率 ρw、板面细结构特征间距 q</text>
+          <text class="fsub" x="586" y="98">扩散板厚度候选 t、成本偏好（省成本 / 留余量 / 均衡）</text>
+
+          <path class="flink" d="M470 70 L562 70" marker-end="url(#odArw)"></path>
+
+          <!-- ③ -->
+          <rect class="fbox" x="40" y="152" width="430" height="104" rx="8"></rect>
+          <text class="ftitle" x="56" y="174">③ 扩散板候选（材料 × 雾度）</text>
+          <text class="fsub" x="56" y="192">材料 PC / PMMA / PS：n、本体透过率 Tsub、雾度上限</text>
+          <text class="fsub" x="56" y="208">雾度 Hd → 散射光学厚度 τ = −ln(1−Hd)</text>
+          <text class="fsub" x="56" y="224">透过率 Td = Tsub·(1 − 0.085·Hd^1.4)，板内横向展宽 σ = 0.35·t·tanΘ</text>
+          <text class="fsub" x="56" y="242">→ 决定「抹得掉什么」：细结构抹得掉，大间距灯影抹不掉</text>
+
+          <!-- ④ -->
+          <rect class="fbox" x="570" y="152" width="430" height="104" rx="8"></rect>
+          <text class="ftitle" x="586" y="174">④ 棱镜候选（形状 × 侧壁角）</text>
+          <text class="fsub" x="586" y="192">六形状 × α × 覆盖率；α ≤ 拔模 / 复制保真上限</text>
+          <text class="fsub" x="586" y="208">覆盖率 = 1 − 尖端 / 谷底复制圆角占比（平台 = 漏光通道）</text>
+          <text class="fsub" x="586" y="224">棱镜代理：收敛半角 β、萃取效率 ηx（与棱镜板设计页 MC 校准）</text>
+          <text class="fsub" x="586" y="242">→ 只改出光角度，几乎不改发光面空间分布</text>
+
+          <path class="flink" d="M255 114 L255 144" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 114 L785 144" marker-end="url(#odArw)"></path>
+
+          <!-- ⑤ -->
+          <rect class="fbox fbox-a" x="40" y="296" width="430" height="120" rx="8"></rect>
+          <text class="ftitle" x="56" y="318">⑤ 前向模型 A：空间混光 → U</text>
+          <text class="fsub" x="56" y="336">单灯足迹 E ∝ (1 + (r/OD)²)^(−p)，其汉克尔变换有闭式解</text>
+          <text class="fsub" x="56" y="352">阵列第 (m,n) 阶谐波被压到 M(2π·(OD/p)·√(m²+n²))</text>
+          <text class="fsub" x="56" y="368">镜像源法计入边框 ρw 回收 → 场积分 = 采光利用率 φconf</text>
+          <text class="fsub" x="56" y="384">叠加细结构残余对比 → 逐像素 / 取样两种 U 口径</text>
+          <text class="fsub" x="56" y="404"><tspan class="fkey">判据：OD/p ≳ 0.8 才谈得上无灯影</tspan></text>
+
+          <!-- ⑥ -->
+          <rect class="fbox fbox-a" x="570" y="296" width="430" height="120" rx="8"></rect>
+          <text class="ftitle" x="586" y="318">⑥ 前向模型 B：回收 + 角度 → η</text>
+          <text class="fsub" x="586" y="336">η = Td · ηx,plate · φconf　（整半球出光效率）</text>
+          <text class="fsub" x="586" y="352">ηx,plate = 覆盖率·ηx + (1−覆盖率)·ηflat　（平台 = 漏光通道）</text>
+          <text class="fsub" x="586" y="368">角度分布 = (1−Hd)·cos(ms·θ) + Hd·cos(md·θ)</text>
+          <text class="fsub" x="586" y="384">锥内占比 C = ∫(0..θv) L·sinθ dθ / ∫(0..π/2) L·sinθ dθ</text>
+          <text class="fsub" x="586" y="404"><tspan class="fkey">锥内出光效率 = η·C</tspan></text>
+
+          <path class="flink" d="M255 256 L255 288" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 256 L785 288" marker-end="url(#odArw)"></path>
+
+          <!-- ⑦ -->
+          <rect class="fbox fbox-b" x="40" y="456" width="910" height="86" rx="8"></rect>
+          <text class="ftitle" x="56" y="478">⑦ 双目标筛选 + 硬约束校核</text>
+          <text class="fsub" x="56" y="496">U ≥ U* 且 η ≥ η*；同时过：整机厚度 ≤ 预算 · α ≤ 拔模上限 · 覆盖率 ≥ 80% · OD/p ≥ 0.8 · 无可辨灯影</text>
+          <text class="fsub" x="56" y="512">任一不过即判为不可行，并报缺口：还差多少、卡在哪一条（不是简单地说「无解」）</text>
+          <text class="fsub" x="56" y="532">约束不可行的方向就是设计要动的方向：加厚度 → 加 OD；加灯数 → 降 p；换配光 → 加宽足迹</text>
+
+          <path class="flink" d="M255 416 L255 446" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 416 L785 446" marker-end="url(#odArw)"></path>
+
+          <!-- ⑧ -->
+          <rect class="fbox" x="40" y="582" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="56" y="604">⑧ Pareto 前沿 + 加权评分</text>
+          <text class="fsub" x="56" y="622">先取 (U, η) 互不支配的前沿，再按成本 / 性能余量 / 均衡打分</text>
+          <text class="fsub" x="56" y="638">成本指数含：LED 数量、材料用量、模具难度、雾度配方、整机厚度</text>
+          <text class="fsub" x="56" y="654">同一前沿上多花 1 分钱换几个点 U，这里给得清清楚楚</text>
+
+          <!-- ⑨ -->
+          <rect class="fbox" x="570" y="582" width="430" height="88" rx="8"></rect>
+          <text class="ftitle" x="586" y="604">⑨ 敏感性 / 公差分析</text>
+          <text class="fsub" x="586" y="622">α ±3°、Hd ±0.05、OD −15%、灯数每边 −2 各自打一遍</text>
+          <text class="fsub" x="586" y="638">谁最敏感，谁的公差就要收得最紧（模具与批次管控的落点）</text>
+          <text class="fsub" x="586" y="654">别把公差平均分配——那是最贵的做法</text>
+
+          <path class="flink" d="M255 542 L255 574" marker-end="url(#odArw)"></path>
+          <path class="flink" d="M785 542 L785 574" marker-end="url(#odArw)"></path>
+
+          <!-- 反馈闭环 -->
+          <path class="flink flink-d" d="M470 626 C 520 626 520 276 470 276" marker-end="url(#odArwD)"></path>
+          <path class="flink flink-d" d="M570 626 C 520 626 520 676 40 676 L 40 300" marker-end="url(#odArwD)"></path>
+          <text class="fdash" x="250" y="694">实测不符 → 回到候选集（材料 / 雾度 / 形状 / α / 灯数）重跑，不是拍脑袋改一个数</text>
+        </svg>
+        <p class="perf-note">
+          图中③~⑥是本页的<b>前向模型</b>：给定一组设计参数，算出 (U, η)。⑦~⑨是<b>反问题</b>：
+          在参数空间里搜索满足目标的组合。二者分开写，模型改一处不会把搜索逻辑也带歪。
+        </p>
+      </div>
+
+      <!-- ========== ② 三个物理模型卡 ========== -->
+      <div class="grid opt-model">
+        <div class="card">
+          <h3>空间混光：灯影凭什么被抹掉</h3>
+          <p class="opt-p">
+            一颗 LED 是朗伯点源，在距离 OD 的扩散板平面上留下照度足迹
+            <code>E(r) ∝ (1 + (r/OD)²)<sup>−p</sup></code>。它的<b>零阶汉克尔变换有闭式解</b>，
+            于是周期为 p<sub>LED</sub> 的阵列，第 (m,n) 阶空间谐波会被压低到
+            <code>M(2π·(OD/p<sub>LED</sub>)·√(m²+n²))</code>——这定量给出了那句经验法则
+            「<b>OD/p ≳ 0.8 灯影才消失</b>」，而不是靠感觉。
+          </p>
+          <p class="opt-p">
+            关键推论：<b>雾度抹不抹得掉，取决于结构尺度</b>。板内横向散射展宽
+            σ<sub>scat</sub> 只有 0.1~1.1 mm，所以雾化能轻易抹平 sub-mm~mm 级的网点与细缺陷
+            （残余对比随雾度指数下降），却<b>抹不平几十毫米级的灯影</b>——后者只能靠
+            OD/p 或加密阵列。把「灯影」和「网点可见」当一回事，是这类设计最常见的误判。
+          </p>
+        </div>
+        <div class="card">
+          <h3>侧墙回收：厚度是怎么吃掉效率的</h3>
+          <p class="opt-p">
+            混光距离越大越均匀，但光斑也越容易铺到边框之外。真实灯具边框内侧有反射片
+            （白反射 ρ≈0.90~0.95，ESR 可达 0.98），这里用<b>镜像源法</b>计入：
+            每条边把源镜像出去、按 ρ<sup>反射次数</sup> 衰减，矩形腔两轴镜像做笛卡尔积，
+            角落反射自动带上 ρ<sup>m+n</sup>。
+          </p>
+          <p class="opt-p">
+            落在开口内的光通占比就是<b>采光利用率 φ<sub>conf</sub></b>，它随 OD 增大而下降——
+            <b>这正是「均匀度」与「效率」之间那根真正拉扯的绳子</b>：想均匀就得加厚，
+            加厚就有一部分光被边框吃掉了。φ<sub>conf</sub> 直接进效率表达式，
+            不藏在经验系数里。
+          </p>
+        </div>
+        <div class="card">
+          <h3>棱镜：只改角度，不改空间分布</h3>
+          <p class="opt-p">
+            出光效率写成 <code>η = T<sub>d</sub> · η<sub>x,plate</sub> · φ<sub>conf</sub></code>，
+            其中 <code>η<sub>x,plate</sub> = 覆盖率·η<sub>x</sub> + (1−覆盖率)·η<sub>flat</sub></code>——
+            <b>平台占比就是漏光通道</b>，直接进效率，而不是当作均匀度的经验惩罚。
+            锥内再乘 <code>C</code>：把出射角分布
+            <code>(1−H<sub>d</sub>)·cos<sup>m_s</sup>θ + H<sub>d</sub>·cos<sup>m_d</sup>θ</code>
+            在 ±θ<sub>v</sub> 上积分得到。
+          </p>
+          <p class="opt-p">
+            于是雾度的两副面孔就清楚了：它<b>抬高 U</b>（抹平细结构），
+            又<b>压低 C</b>（散射份更难被棱镜收拢）。现代扩散板高雾不太掉透过率，
+            所以真正的代价不在 T<sub>d</sub>，而在<b>准直被破坏</b>这一头。
+          </p>
+        </div>
+      </div>
+
+      <!-- ========== ③ 设计输入 ========== -->
+      <div class="opt-console">
+        <div class="card">
+          <h2><span class="num">§2</span>设计输入与约束</h2>
+          <div class="opt-matpick" id="od_matpick"></div>
+
+          <div class="opt-ctl">
+            <div class="field">
+              <label for="od_u">目标均匀度 U* <span class="unit">%</span></label>
+              <input id="od_u" type="range" min="40" max="95" step="1" value="75">
+              <output id="od_u_v" class="od-out">75%</output>
+            </div>
+            <div class="field">
+              <label for="od_e">目标出光效率 η* <span class="unit">%</span></label>
+              <input id="od_e" type="range" min="20" max="60" step="1" value="42">
+              <output id="od_e_v" class="od-out">42%</output>
+            </div>
+            <div class="field">
+              <label for="od_tv">观看半锥 θ<sub>v</sub> <span class="unit">°</span></label>
+              <input id="od_tv" type="range" min="15" max="60" step="1" value="35">
+              <output id="od_tv_v" class="od-out">35°</output>
+            </div>
+            <div class="field">
+              <label for="od_budget">整机厚度预算 <span class="unit">mm</span></label>
+              <input id="od_budget" type="range" min="12" max="60" step="1" value="30">
+              <output id="od_budget_v" class="od-out">30mm</output>
+            </div>
+            <div class="field">
+              <label for="od_udef">U 评议口径</label>
+              <select id="od_udef"></select>
+            </div>
+            <div class="field">
+              <label for="od_src">LED 一次配光</label>
+              <select id="od_src"></select>
+            </div>
+            <div class="field">
+              <label for="od_n">LED 阵列密度</label>
+              <select id="od_n">
+                <option value="0">自动（由优化器决定）</option>
+                <option value="4">4 × 4</option>
+                <option value="6">6 × 6</option>
+                <option value="8">8 × 8</option>
+                <option value="10">10 × 10</option>
+                <option value="12">12 × 12</option>
+                <option value="14">14 × 14</option>
+                <option value="16">16 × 16</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="od_t">扩散板厚度 <span class="unit">mm</span></label>
+              <select id="od_t">
+                <option value="0">自动（由优化器决定）</option>
+                <option value="1">1.0</option>
+                <option value="1.5">1.5</option>
+                <option value="2">2.0</option>
+                <option value="2.5">2.5</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="od_rho">边框反射率 ρ<sub>w</sub></label>
+              <input id="od_rho" type="range" min="60" max="98" step="1" value="93">
+              <output id="od_rho_v" class="od-out">0.93</output>
+            </div>
+            <div class="field">
+              <label for="od_prefer">优化偏好</label>
+              <select id="od_prefer">
+                <option value="balanced">均衡</option>
+                <option value="cost">成本优先</option>
+                <option value="margin">性能余量优先</option>
+              </select>
+            </div>
+            <div class="field opt-chk">
+              <label class="chk"><input id="od_hotspot" type="checkbox"> 灯影必须不可辨（残余对比 ≤ 15%，即 U ≥ 85%）</label>
+            </div>
+          </div>
+
+          <div class="opt-run">
+            <button id="od_btn" class="btn solid">求解最优组合</button>
+            <span id="od_meta" class="perf-note"></span>
+          </div>
+        </div>
+
+        <div class="card" id="od_mat_card">
+          <h2><span class="num">§3</span>材料：PC / PMMA / PS</h2>
+          <div id="od_mat_detail"></div>
+        </div>
+      </div>
+
+      <!-- ========== ④ 结果 ========== -->
+      <div id="od_verdict" class="perf-verdict">设定目标与约束后点「求解最优组合」。</div>
+
+      <div class="opt-result">
+        <div class="card">
+          <h3>推荐方案</h3>
+          <table class="opt-tbl" id="od_out_tbl">
+            <thead><tr><th>项目</th><th>取值</th><th>说明 / 来路</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>发光面亮度分布</h3>
+          <div class="opt-figbar">
+            <span class="seg">
+              <button class="segbtn active" data-view="opt">推荐方案</button>
+              <button class="segbtn" data-view="base">低配基线对照</button>
+            </span>
+            <span class="sp"></span>
+            <span id="od_field_meta" class="perf-note"></span>
+          </div>
+          <div class="opt-fieldwrap">
+            <canvas id="od_field" width="320" height="320" role="img" aria-label="发光面亮度伪彩图"></canvas>
+            <canvas id="od_bar" width="60" height="320" aria-label="色标"></canvas>
+          </div>
+          <p class="perf-note">
+            伪彩 = 正面亮度（归一化到均值 1）。图上标出 LED 位置与取样点；
+            虚线框为量测排除的 5% 压边区。<b>基线</b>取同厚度预算下的低配做法（6×6 阵列、H<sub>d</sub>=0.35），
+            用来说明「少花钱买来的就是这些灯影」。
+          </p>
+        </div>
+      </div>
+
+      <div class="opt-result">
+        <div class="card">
+          <h3>中心剖面亮度</h3>
+          <canvas id="od_slice" width="470" height="190" role="img" aria-label="发光面水平中线亮度剖面"></canvas>
+          <p class="perf-note">
+            实线为推荐方案、虚线为基线。阴影带是 ±5% 目视可辨区间；
+            落在带内的起伏人眼看不出来，超出即被判为灯影。
+          </p>
+        </div>
+        <div class="card">
+          <h3>出射角分布与观看锥</h3>
+          <canvas id="od_ang" width="470" height="230" role="img" aria-label="出射光强角分布"></canvas>
+          <p class="perf-note">
+            红区是目标观看锥 ±θ<sub>v</sub>；锥内占半球的比例就是 C。
+            灰色虚线是无棱镜、同雾度扩散板的朗伯出射——两条线之间的面积差，
+            就是棱镜板替你「收拢」回来的光。
+          </p>
+        </div>
+      </div>
+
+      <div class="opt-result">
+        <div class="card">
+          <h3>(U, η) 权衡与 Pareto 前沿</h3>
+          <canvas id="od_scatter" width="470" height="340" role="img" aria-label="U-η 权衡散点图"></canvas>
+          <p class="perf-note">
+            每个点是过硬约束的一组候选（颜色区分棱镜形状），虚线框是目标区，
+            折线是 Pareto 前沿，★ 是选出的最优组合。前沿上往右上方走，
+            每一步都要拿厚度 / 灯数 / 成本去换。
+          </p>
+        </div>
+        <div class="card">
+          <h3>约束校核</h3>
+          <table class="opt-tbl" id="od_checks">
+            <thead><tr><th>约束</th><th>实测 / 计算</th><th>限值</th><th>判定</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div id="od_why" class="perf-note"></div>
+        </div>
+      </div>
+
+      <div class="opt-result">
+        <div class="card">
+          <h3>三材料对照（同一目标、同一约束）</h3>
+          <table class="opt-tbl" id="od_matcmp">
+            <thead><tr><th>材料</th><th>η</th><th>U</th><th>推荐 H<sub>d</sub></th><th>棱镜</th><th>成本指数</th><th>一句话结论</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>敏感性与公差落点</h3>
+          <table class="opt-tbl" id="od_sens">
+            <thead><tr><th>扰动</th><th>来自</th><th>ΔU</th><th>Δη</th><th>处置</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="perf-note opt-caveat">
+        <b>口径与诚实声明。</b>
+        ① 空间混光与边框回收是<b>半解析</b>：足迹用闭式汉克尔变换、边框用镜像源法，
+        与独立实现的直接二维求和交叉验证一致（偏差 &lt; 0.01%）。
+        ② 棱镜的收敛半角 β 与萃取效率 η<sub>x</sub> 是与「棱镜板设计」页蒙特卡洛在
+        金字塔 α=45°、n=1.49 参考点校准的<b>代理模型</b>，其余形状 / 角度靠单调形状因子外推，
+        <b>不做逐点验证</b>；折射率 n 的影响取 ±2% 的一阶趋势，同样标注为弱趋势。
+        ③ η 定义为「进入扩散板的光通中最终从出光面射出的比例」，<b>不含 LED 到扩散板的耦合损失</b>，
+        故绝对值偏保守，横向对比有效。
+        ④ 本页用于方案筛选与趋势判断；正式设计请用 LightTools / LiteTrace 加实测复核。
+      </p>
+    </div>
+  </section>
+</div>
+
+<div class="footer" id="app-footer">
+  <div class="fset active" data-for="calc solid theory">
+    <div>
+      光学概念和光学设计 <b class="app-version">v—</b> —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
+      E = I·cosγ/d²），cosⁿ 配光为解析近似，非实测配光文件。
+    </div>
+    <div>
+      计算核心见 <code>js/optics.js</code>，可脱离页面单独复核；
+      立体角三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法）。
+    </div>
+    <div>
+      本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
+      灯具 IES 文件复核。数值仅供参考，不构成设计依据。
+    </div>
+  </div>
+
+  <div class="fset" data-for="prism">
+    <div>
+      棱镜板设计 <b class="app-version">v—</b> —— 几何按参数化解析式生成：一维齿半底宽
+      <code>b = h·tan(α/2)</code>；二维提供<b>六种面阵微结构</b>（四棱锥 / 台锥 / 圆锥 /
+      球冠 / 抛物面帽 / 六棱锥蜂窝密排），各自的半底宽公式与足迹面积见
+      <code>js/prism-shapes.js</code>，b 超过晶格上限时自动封顶并告警。
+    </div>
+    <div>
+      二维的预览网格、STL、STEP 共用<b>同一份顶点与面</b>（焊接后顶点去重，保证
+      STEP 的壳闭合）；圆锥 / 球冠 / 抛物面帽的<b>导出件</b>是按「网格离散度」一格
+      给出的方位角 × 环数离散的多面体近似，而性能预估走的是连续曲面，不受影响。
+    </div>
+    <div>
+      设计核心见 <code>js/prism.js</code>（Three.js 已本地化到 <code>js/vendor-*.js</code>）；
+      光学性能预估见 <code>js/prism-perf.js</code>（几何光学蒙特卡洛，含菲涅耳与腔体回收）；
+      光学校核清单在「材料与参考」页。
+    </div>
+    <div>
+      导出件是<b>理想几何</b>：不含圆角以外的工艺偏差、材料吸收、膜层干涉、散射与莫尔效应。
+      正式光学结果请用 LightTools / LiteTrace 复核；本页预估的用途是方案筛选与趋势判断。
+    </div>
+  </div>
+
+  <div class="fset" data-for="know">
+    <div>
+      棱镜原理 <b class="app-version">v—</b> —— 演示为二维截面几何光学：斯涅尔定律 + 全反射 + 菲涅耳，
+      光线追迹见 <code>js/prism-knowledge.js</code>；三个演示都是 Canvas 2D，不引入 WebGL。
+    </div>
+    <div>
+      角度口径：θ<sub>in</sub> 是<b>材料内部角</b>，相对板面法线 +z（朝出光侧为正）；
+      光线扇形图的入射角上限是临界角 θ<sub>c</sub> = arcsin(1/n)，超出部分物理上不存在
+      （朗伯光经平板折射进入材料后不可能超过它）。
+    </div>
+    <div>
+      三维图与扇形图都是<b>二维截面模型</b>（强迫面外分量为 0），会显著低估三维下的全反射占比 ——
+      n = 1.49 时二维只有约 0.5%，真实三维约 46%。定量结论请以三维光线追迹或实测为准。
+    </div>
+  </div>
+
+  <div class="fset" data-for="mats">
+    <div>
+      材料与参考 <b class="app-version">v—</b> —— 折射率与临界角为标准值；典型规格取自公开论文与
+      经销商页面，属<b>二手来源</b>，3M 官方产品数据表在本环境未能取得，故不作为权威值使用。
+    </div>
+    <div>
+      设计校核直接读取「棱镜板设计」页的<b>实时参数与几何</b>（<code>js/prism.js</code>），不另设判据 ——
+      两处各写一套判据，必然给出互相矛盾的结论。
+    </div>
+    <div>
+      本页数字用于方案筛选与选材初判；选材、报价与法规符合性请以厂商正式数据表与标准原文为准。
+    </div>
+  </div>
+
+  <div class="fset" data-for="opt">
+    <div>
+      最优设计方法 <b class="app-version">v—</b> —— 扩散板（材料 PC / PMMA / PS、板厚 t、雾度 Hd）与棱镜板
+      （六形状、关键角度 α）在总厚度预算下的耦合平衡：扩散板管发光面空间均匀度 U，棱镜板管出光角度收敛
+      与萃取效率 η，二者在雾度上彼此拉扯——雾度上去，U 变好但透过率 Td 掉、出光被拉回朗伯，η 变差。
+    </div>
+    <div>
+      空间场不再用高斯近似，而是按单次配光footprint E(r) ∝ (1+(r/OD)²)<sup>−p</sup> 对 N×N 阵列做<b>逐点精确求和</b>
+      （与暴力求和逐格偏差 0.0000%）；边框与侧壁回收用镜像源法计入（权重 ρ<sup>阶数</sup>），折算为采光利用率 φ_conf。
+      出光角分布取 (1−Hd)·cos(m<sub>s</sub>θ) + Hd·cos(m<sub>d</sub>θ)，效率链 η = Td·ηx,plate·φ_conf，
+      视锥内份额单独积分。雾度→透过率、散射角、扩散半宽均有经验式（Td = T_sub·(1−0.085·Hd<sup>1.4</sup>)）。
+    </div>
+    <div>
+      棱镜代理（收敛半角 β、萃取效率 ηx）与「棱镜板设计」页的几何光学蒙特卡洛在金字塔 α=45°、n=1.49
+      参考点校准（ηx≈0.59），其余形状 / 角度按形状因子单调外推——<b>外推区仍是代理，不是实测</b>。
+      本模型为<b>半解析筛选级</b>：趋势与量级可信，可用于方案排序与参数寻优；正式量产设计请用
+      LightTools / LiteTrace 或第三方蒙特卡洛复核，尤其是非金字塔形状与 α 远离 45° 的工况。
+    </div>
+    <div>
+      硬约束（不可越界）：总厚度 ≤ 预算、α ≤ 该形状刀具可达角、棱镜填充率 ≥ 70%（含刀尖圆角复形损失）、
+      可选「无灯影热点」（纹波 ≤ 12%）。软目标：U ≥ U*、η ≥ η*、视锥内效率 ≥ η*_cone，三者均不可达时
+      按「欠额惩罚 + 成本 + 裕量」的目标函数在过硬约束解里取最优，而不是简单报错。
+      均匀度口径支持四种（有效面最值 / 均值 / 九点 / 十三点），并带亮度计光阑平均（半径 0.35×节距，≤18 mm）。
+    </div>
+    <div>
+      真正决定棱镜性能的是四个量：侧壁斜率分布、填充率、对称性、尖顶锐度——同一族形状里改角度，
+      效果差异可能比换形状更大；本页优化器把 α 设为主变量、形状作为对称性 / 尖顶锐度的工艺权衡次变量。
+    </div>
+  </div>
+</div>
+
+<!-- ===== 第 6 个页面 · 棱镜原理（概览 + 光学原理）===== -->
+<div class="view kn" id="view-know">
+  <!-- ===== 页 0 · 概览（知识） ===== -->
+  <header class="hero">
+    <div class="wrap">
+      <div class="grid">
+        <div>
+          <div class="kicker">Prism Sheet Engineering<small> · 光学设计与参数化建模</small></div>
+          <h1>一维与二维<span class="thin">棱镜板</span><br>参数化设计与导出</h1>
+          <p class="sub">面向背光模组（BEF）与导光微结构设计：<strong>从光学原理到几何建模</strong>，覆盖棱柱阵列（一维）与金字塔阵列（二维），内置参数校验、三维预览与 <strong>STEP / build123d / CADQuery / STL</strong> 导出。</p>
+          <div class="stats">
+            <div class="statcard"><div class="v">90<small>°</small></div><div class="k">BEF 经典顶角（BEF II / III 90-50）<span class="num"> [2][3]</span></div></div>
+            <div class="statcard"><div class="v">50<small>μm</small></div><div class="k">BEF II 90/50 标称齿距<span class="num"> [3]</span></div></div>
+            <div class="statcard"><div class="v">20–50<small>μm</small></div><div class="k">微结构齿高常见范围<span class="num"> [2][5]</span></div></div>
+            <div class="statcard"><div class="v">≈46<small>%</small></div><div class="k">全反射回收光线占比（三维追迹）<span class="num"> [7]</span></div></div>
+          </div>
+          <p class="heronote">
+            <b>口径与来源说明：</b>规格数值取自公开论文与经销商页面，3M 官方一手数据表在本环境未能取得，故不作为权威值使用（详见「参考资料」页逐条核查标注）。<br>
+            <b>≈46% 的准确口径</b>：三维严格追迹（周期表面蒙特卡洛，30 万条光线）在 90° 顶角、n≈1.49、无谷最密排、朗伯输入下，首次入射即发生全反射的光线占比 ≈46.3%；文献 [7] 原文的 46.3% 语境为<b>两层正交棱镜膜</b>背光方案的整体原理描述，并非单层专属值。<b>本页下方「光线扇形图」是二维截面模型（面外分量为 0），其全反射占比只有约 0.5%</b>，不能用它来读这个 46%。
+          </p>
+        </div>
+        <div class="demo">
+          <div class="head">
+            <span class="dot"></span><span>准直原理演示 · 实时光线追迹</span><span class="sp"></span><span class="tag">α · n · 入射角</span>
+          </div>
+          <canvas id="heroCv" width="720" height="420" role="img" aria-label="准直原理演示：光线经棱镜斜面折射准直与全反射回收的实时光线追迹"></canvas>
+          <div class="ctrl">
+            <label>顶角 α <input type="range" id="hero_alpha" min="60" max="110" step="1" value="90"><output id="hero_alpha_v">90°</output></label>
+            <label>折射率 n <input type="range" id="hero_n" min="1.40" max="1.70" step="0.01" value="1.49"><output id="hero_n_v">1.49</output></label>
+            <label>入射角 θ_in <input type="range" id="hero_theta" min="-45" max="45" step="1" value="0"><output id="hero_theta_v">0°</output></label>
+          </div>
+          <div class="note">
+            <span class="legend"><span><i style="background:var(--c-ray-refract)"></i>折射出射（折向法线）</span><span><i style="background:var(--c-ray-tir)"></i>全反射 / 回收</span><span><i style="background:var(--c-ray-blocked)"></i>超出材料内可达域（灰色）</span></span>
+            <div style="margin-top:4px">θ_in 为<b>材料内部角</b>（相对板面法线 +z，图中朝上为出光侧），正值偏向右侧斜面；朗伯光从空气进入平板后内部角不可能超过 θ<sub>c</sub>=arcsin(1/n)，超出部分画成灰色虚线。滑块为中心角，演示按中心角 ±24° 展开成扇形。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== 页 1 · 光学原理（知识） ===== -->
+  <section id="s-principle">
+    <div class="wrap">
+      <div class="kicker"><span>01</span><span class="en">Optical Principles</span></div>
+      <h2 class="sec">增亮与准直：光线如何被棱镜板“收拢”</h2>
+      <p class="lead">背光模组中扩散片出射的是近似朗伯分布的漫射光。棱镜板用一排排微棱镜，通过<strong>折射</strong>把大角度光线折向法线方向（准直），通过<strong>全反射</strong>把无法出射的光线送回背光腔回收再利用——法线方向的亮度因此显著提升。</p>
+
+      <div class="cols">
+        <div>
+          <h3>两类工作方式</h3>
+          <ul class="pt-list">
+            <li><strong>折射型（棱向上）</strong>：光线自平面侧入射，在棱镜斜面发生折射后出射，出射方向被压向法线，形成“垂直增亮”。<span class="hint">（本页工具按棱向上建模。）</span></li>
+            <li><strong>棱向下布置</strong>：棱镜面朝向导光板时，斜面先对大角度光全反射改向再折回。<span class="hint">注：这不是背光行业的公认分类术语，公开资料中也无统一判据；实际产品以棱向上为主，本页不做该形态的建模。</span></li>
+            <li><strong>回收机制（light recycling）</strong>：超过临界角的光线在斜面全反射回背光腔，经底部反射片二次反射后重新入射，多次利用提高总效率。</li>
+            <li><strong>双层正交</strong>：两片棱镜膜以 90° 交叉叠放，分别收拢 X / Y 两个方向的光，增益进一步叠加。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>两个基本定律</h3>
+          <div class="formulas" style="grid-template-columns:1fr;margin:0">
+            <div class="formula">
+              <div class="f-name">斯涅尔定律（折射）</div>
+              <div class="f-expr">n₁ sin θ₁ = n₂ sin θ₂</div>
+              <div class="f-note">θ₁ / θ₂ 为光线与界面法线的夹角；由光密介质进入光疏介质时，出射角增大。注：本页滑块/坐标轴中的 θ_in 指光线与板面法线 +z 的夹角，与界面法线夹角不同。</div>
+            </div>
+            <div class="formula">
+              <div class="f-name">全反射临界角</div>
+              <div class="f-expr">θ<sub>c</sub> = arcsin(n₂ / n₁)&nbsp;&nbsp;（n₂ &lt; n₁）</div>
+              <div class="f-note">入射角 &gt; θ<sub>c</sub> 时界面发生全反射。PMMA(n≈1.49)：θ<sub>c</sub>≈42.2°；PC(n≈1.59)：θ<sub>c</sub>≈39.1°。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo2">
+        <div>
+          <div class="panel" style="padding:16px">
+            <div class="p-head"><h3>单棱镜光线追迹</h3><span class="sub">等腰三角形齿截面 · 光自下方背光腔射入 · θ_in 为<b>材料内部角</b>，相对板面法线 +z（图中朝上＝出光侧），正值为偏向右侧</span></div>
+            <canvas id="rayCv" width="520" height="360" role="img" aria-label="单棱镜光线追迹演示：等腰三角形齿截面上的矢量光线追迹"></canvas>
+            <div class="sliders" style="margin-top:12px">
+              <div class="sl"><label for="ray_alpha">顶角 α</label><input type="range" id="ray_alpha" min="40" max="160" step="1" value="90"><output id="ray_alpha_v">90°</output></div>
+              <div class="sl"><label for="ray_n">折射率 n</label><input type="range" id="ray_n" min="1.40" max="1.70" step="0.01" value="1.49"><output id="ray_n_v">1.49</output></div>
+              <div class="sl"><label for="ray_theta">入射角 θ_in</label><input type="range" id="ray_theta" min="-60" max="60" step="1" value="-20"><output id="ray_theta_v">-20°</output></div>
+              <div class="sl"><label for="ray_x">入射位置</label><input type="range" id="ray_x" min="5" max="45" step="1" value="22"><output id="ray_x_v">22%</output></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="p-head"><h3>光线扇形图：一束光经过棱镜后去哪了</h3><span class="sub">每个方向入射一条光（材料内部角，物理可达范围 ±θ<sub>c</sub>），追踪它经过棱镜后的真实去向 · <b>二维截面模型</b></span></div>
+          <canvas id="fanCv" width="520" height="340" style="width:100%;height:340px;display:block;border-radius:10px" role="img" aria-label="光线扇形图：不同角度入射光经过棱镜后的折射出射与全反射回收去向"></canvas>
+          <div class="chartnote" style="margin:8px 4px 10px;font-size:11px;line-height:1.7">
+            <b style="color:var(--c-ray-refract)">青色</b>＝向上折射出射、贡献正面增亮；<b style="color:var(--c-ray-tir)">琥珀色</b>＝全反射后回到背光腔被回收（由底部反射片再次利用）；<b style="color:var(--c-ray-graze)">红色</b>＝<b>向下掠射出射（损失）</b>——它确实折射出了界面，但方向朝下，属于损失而非回收；<b style="color:var(--c-ray-active)">高亮白线</b>＝左侧滑块当前角度。<br>
+            <b style="color:var(--c-ray-tir)">重要口径</b>：本图是<b>二维截面模型</b>（强迫面外分量为 0）。二维下“首遇斜面即全反射”只取决于内部角 |θ| ≤ 45° − θ<sub>c</sub> ≈ 2.85°（n=1.49），因此该通道按通量权重仅约 <b>0.5%</b>——远低于真实三维的 ≈46%。<b>请不要用本图去读首屏的 46%。</b><br>
+            角度轴只画到 ±θ<sub>c</sub>：朗伯光从空气经平板折射进入材料后，内部角不可能超过临界角（θ<sub>c</sub>=arcsin(1/n)），超出部分物理上不存在。可见中等角度的光被压向法线方向出射（收拢准直），这就是棱镜板增亮的原理。本图入射点固定取齿斜面中点的典型位置，不随左侧「入射位置」滑块变化。
+          </div>
+          <div class="readout" id="ray_ro">
+            <div class="ro"><div class="k">临界角 θc</div><div class="v" id="ro_crit">—</div></div>
+            <div class="ro"><div class="k">首界面入射角 φ（相对斜面法线）</div><div class="v" id="ro_phi">—</div></div>
+            <div class="ro"><div class="k">首界面 n·sin φ</div><div class="v" id="ro_ns">—</div></div>
+            <div class="ro"><div class="k">出射角 θ_out（相对板面法线）</div><div class="v" id="ro_out">—</div></div>
+            <div class="ro"><div class="k">全反射次数</div><div class="v" id="ro_bnc">—</div></div>
+            <div class="ro"><div class="k">路径结论</div><div class="v" id="ro_status">—</div></div>
+          </div>
+          <div class="srcnote">读数口径：φ 与 n·sinφ 取<b>第一次命中斜面</b>时的值（决定该光线是否发生全反射）；此前的版本取的是最后一次界面，会把“先全反射、后折射出射”的光线误读成亚临界的直接出射。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 页 2 · 二维微结构的形状选择（知识） ===== -->
+  <section id="s-shapes">
+    <div class="wrap">
+      <div class="kicker"><span>02</span><span class="en">2D Microstructure Shapes</span></div>
+      <h2 class="sec">二维微结构不止金字塔：六种形状与工程取舍</h2>
+      <p class="lead">「二维棱镜」的形状分两层意思：<strong>截面轮廓</strong>（决定角度变换）与<strong>平面图案</strong>（决定各向同性与填充率）。「棱镜板设计」页的下拉框可在这六种之间切换，光学性能预估内核同步支持。</p>
+
+      <div class="panel" style="padding:20px 18px 12px;margin-bottom:16px;overflow-x:auto">
+        <div class="p-head"><h3>二维棱镜结构形状对照</h3><span class="sub">截面轮廓示意 · 倾角 α 统一指底面边缘切线与水平面的夹角</span></div>
+        <svg viewBox="0 0 900 292" width="100%" style="min-width:760px;display:block" role="img" aria-label="六种二维微结构截面轮廓对照：四棱锥、台锥、圆锥、球冠、抛物面帽、六棱锥">
+          <g stroke="var(--border-2)" stroke-width="2">
+            <line x1="20" y1="210" x2="880" y2="210"/>
+          </g>
+          <g fill="var(--surface-3)" opacity="0.55">
+            <rect x="20" y="210" width="860" height="14"/>
+          </g>
+          <!-- 1 四棱锥（中心 92） -->
+          <path d="M 37 210 L 92 120 L 147 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <!-- 2 台锥 -->
+          <path d="M 180 210 L 213 152 L 257 152 L 290 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <path d="M 180 210 L 235 120 L 290 210" fill="none" stroke="var(--text-3)" stroke-width="1.4" stroke-dasharray="4 4"/>
+          <!-- 3 圆锥 -->
+          <path d="M 323 210 L 378 120 L 433 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <ellipse cx="378" cy="210" rx="55" ry="11" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="5 4"/>
+          <!-- 4 球冠 -->
+          <path d="M 467 210 Q 522 112 577 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <!-- 5 抛物面帽 -->
+          <path d="M 610 210 C 640 138 690 138 720 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <!-- 6 六棱锥 -->
+          <path d="M 753 210 L 808 120 L 863 210 Z" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2.5"/>
+          <g font-size="13" font-weight="600" fill="var(--text)" text-anchor="middle" font-family="inherit">
+            <text x="92" y="243">四棱锥</text>
+            <text x="235" y="243">台锥（截头）</text>
+            <text x="378" y="243">圆锥</text>
+            <text x="522" y="243">球冠（微透镜）</text>
+            <text x="665" y="243">抛物面帽</text>
+            <text x="808" y="243">六棱锥</text>
+          </g>
+          <g font-size="11" fill="var(--text-3)" text-anchor="middle">
+            <text x="92" y="261">方形底 · 正交两轴</text>
+            <text x="235" y="261">平顶半宽 k·b · 脱模易</text>
+            <text x="378" y="261">圆形底 · 回转对称</text>
+            <text x="522" y="261">偏扩散 · 均匀度最好</text>
+            <text x="665" y="261">斜率由缓变陡 · 利准直</text>
+            <text x="808" y="261">蜂窝密排 · 无正交条纹</text>
+          </g>
+          <g font-size="11" fill="var(--primary-2)" text-anchor="middle" font-family="var(--mono)">
+            <text x="92" y="280">b = h/tan α</text>
+            <text x="235" y="280">b = h/(tan α·(1−k))</text>
+            <text x="378" y="280">b = h/tan α</text>
+            <text x="522" y="280">b = h·cot(α/2)</text>
+            <text x="665" y="280">b = 2h/tan α</text>
+            <text x="808" y="280">b = h/tan α</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="panel" style="padding:4px 14px;margin-bottom:16px">
+        <table>
+          <thead>
+            <tr><th>形状</th><th>截面 / 图案</th><th>出光增益</th><th>均匀度 / 各向同性</th><th>制造</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>四棱锥（默认）</td><td>四斜面，正方形底</td><td>高</td><td>一般：两轴正交，四角处有差异</td><td>模具易做，尖顶易磨损</td></tr>
+            <tr><td>台锥（截头）</td><td>同上但平顶</td><td class="muted">略低（平顶走平板直通）</td><td>与四棱锥相近</td><td>最好：脱模容易、尖顶不崩</td></tr>
+            <tr><td>圆锥</td><td>回转对称</td><td>高</td><td>最好：单张片两轴同时准直</td><td>车削 / 浇注，尖顶脆弱</td></tr>
+            <tr><td>球冠 / 微透镜阵列</td><td>圆弧面</td><td class="muted">低：几乎不折射改向</td><td>最好：本质是扩散器</td><td>成熟（MLA 复制工艺）</td></tr>
+            <tr><td>抛物面帽</td><td>侧壁斜率渐变的帽</td><td>高</td><td>好</td><td>侧壁可强制 TIR，模具难</td></tr>
+            <tr><td>六棱锥 / 蜂窝</td><td>六斜面，密排</td><td>高</td><td>好</td><td>填充率高、无正交条纹，模具贵</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="cols" style="margin-bottom:14px">
+        <div>
+          <h3>还有三类「不是换形状」的方案</h3>
+          <ul class="pt-list">
+            <li><strong>正交双 V 槽</strong>：两张一维挤出片互成 90° 叠放——现实中最主流。它正好解决一维挤出「面外波矢守恒导致约 1−1/n 的光取不出来」的问题（见上方扇形图口径说明）。不是新形状，是两个一维的组合。</li>
+            <li><strong>蛾眼 / 亚波长结构</strong>：周期小于波长，靠渐变等效折射率抗反射，<strong>不能用几何光学描述</strong>——本站的光线追迹内核不适用。</li>
+            <li><strong>随机纹理</strong>（喷砂、蚀刻、随机微透镜）：只扩散、不改变角分布趋势，便宜、均匀性好、增益低。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>决定性能的其实不是形状名字</h3>
+          <p>是四个量：<strong>侧壁斜率分布</strong>（决定角度变换）、<strong>填充率</strong>（平顶 / 齿根占比就是漏光通道）、<strong>对称性</strong>（决定配光是否各向同性）、<strong>尖顶锐度</strong>（决定能否脱模与尖端 TIR 行为）。同一族形状里改角度，效果差异可能比换形状更大。</p>
+          <p class="heronote" style="margin-top:6px">到「棱镜板设计」页切换形状试试：切到台锥会多出顶面占比 k 输入，切到曲面形状会显示导出件的网格离散度；「性能预估」卡片对六种形状走同一套蒙特卡洛内核（曲面按连续面型追迹）。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ===== 第 7 个页面 · 材料与参考（设计要点与材料 + 参考资料）===== -->
+<div class="view kn" id="view-mats">
+  <!-- ===== 页 4 · 设计要点与材料（知识） ===== -->
+  <div>
+  <!-- ===== 04 设计校核 ===== -->
+  <section id="s-check">
+    <div class="wrap">
+      <div class="kicker"><span class="en">Design Verification</span></div>
+      <h2 class="sec">设计校核：自动检查当前参数</h2>
+      <p class="lead">校核结果随上方两个工具的参数实时更新。判据均来自几何约束，可在导出前拦截无效设计。</p>
+      <div class="check-grid">
+        <div class="check-card">
+          <h3>一维棱镜校核</h3>
+          <div class="c-sub">依据当前一维工具参数</div>
+          <div id="chk_1d"></div>
+        </div>
+        <div class="check-card">
+          <h3>二维棱镜校核</h3>
+          <div class="c-sub">依据当前二维工具参数</div>
+          <div id="chk_2d"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 05 材料与规格 ===== -->
+  <section id="s-material">
+    <div class="wrap">
+      <div class="kicker"><span>05</span><span class="en">Materials &amp; Specifications</span></div>
+      <h2 class="sec">材料、临界角与典型规格</h2>
+      <p class="lead">微结构层常用高透过率光学树脂，基材多用 PET。折射率决定临界角，进而决定全反射回收的入射角范围。</p>
+
+      <div class="table-scroll">
+      <table class="tbl" style="min-width:720px">
+        <caption>常用光学材料（折射率典型值，随牌号/工艺略有差异）</caption>
+        <colgroup><col style="width:16%"><col style="width:18%"><col style="width:18%"><col style="width:30%"><col style="width:18%"></colgroup>
+        <thead><tr><th>材料</th><th>折射率 n</th><th>临界角 θc</th><th>特点</th><th>典型用途</th></tr></thead>
+        <tbody>
+          <tr><td><b>PMMA</b></td><td class="n">≈1.491</td><td class="n">42.1°</td><td>高透过、耐候好、成本低</td><td>UV 固化棱镜层、导光板</td></tr>
+          <tr><td><b>PC</b></td><td class="n">≈1.586</td><td class="n">39.1°</td><td>耐热、机械强度高、双折射略大</td><td>车载/耐温背光膜</td></tr>
+          <tr><td><b>PS</b></td><td class="n">≈1.590</td><td class="n">39.0°</td><td>低吸水、易脆</td><td>一般光学膜层</td></tr>
+          <tr><td><b>PET 基材</b></td><td class="n">1.57–1.65</td><td class="n">39.6°–37.3°</td><td>尺寸稳定、耐弯折；折射率随取向度变化</td><td>棱镜膜/扩散膜基材</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="table-scroll" style="margin-top:28px">
+      <table class="tbl" style="min-width:720px">
+        <caption>显示背光棱镜膜典型规格（已逐条核查来源；无支撑的数字已撤下并注明）</caption>
+        <colgroup><col style="width:15%"><col style="width:15%"><col style="width:14%"><col style="width:44%"><col style="width:12%"></colgroup>
+        <thead><tr><th>项目</th><th>典型值</th><th>范围</th><th>说明 / 核查结论</th><th>来源</th></tr></thead>
+        <tbody>
+          <tr><td><b>顶角 α</b></td><td class="n">90°</td><td class="n">—</td>
+              <td>[2] 原文 “tip angle of 90˚”。<span class="q">原列的 [1] 在本环境无法读取、[6] 通篇未提顶角，已撤下；「80°–110°」无来源，同样撤下。</span></td><td class="src">[2][3]</td></tr>
+          <tr><td><b>齿距 p</b></td><td class="n">50 μm</td><td class="n">—</td>
+              <td>“90/50”是 3M BEF II 的标准版本名（3M 文档 [9]：<i>available in the standard 90/50 version, and a 90/24 version</i>），其中 50 指节距 50 μm。<span class="q">原列「20–100 μm」在可核查来源中找不到依据，已撤下。</span></td><td class="src">[3][9]</td></tr>
+          <tr><td><b>微结构层高</b></td><td class="n">≈23 μm</td><td class="n">20–50 μm</td>
+              <td>[2] 实测 BEF II 90/50 结构高 23 μm；而 <b>h = p/2 = 25 μm</b> 是“90° 顶角 + 无谷最密排”的理论关系。<span class="q">这是两件事，原表把 23 与 25 混写成一个区间，已分开陈述。</span></td><td class="src">[2][5]</td></tr>
+          <tr><td><b>单层增益</b></td><td class="n">+57–60%</td><td class="n">—</td>
+              <td>经销商页面标称值：[3] 该 SKU 59%，[4] 正文「高达 60%」而同页规格表写 57%。<span class="q">3M 一手数据表未取得，原表「50–60%」的 [1] 不可核实，已按可读到的实际数值改写。</span></td><td class="src">[3][4]</td></tr>
+          <tr><td><b>总膜厚</b></td><td class="n">约 0.06–0.22 mm</td><td class="n">—</td>
+              <td>第三方来源给出的棱镜膜总厚度跨度：薄型 TBEF 约 60–65 μm，常规含 PET 基材约 100–220 μm。<span class="q">原列「0.21 mm / 0.115–0.275 mm」出自 RINA TECH 自有产品线（该页通篇不提 3M），不是 BEF 的膜厚数据；3M 官方文档只给相对厚度（TBEF &lt; ½ BEF III），未给绝对值。</span></td><td class="src">[5][8]</td></tr>
+          <tr><td><b>出射视锥</b></td><td class="n">≤35°</td><td class="n">—</td>
+              <td>[6] 原文为 “fino a 35 gradi”（<b>至多</b> 35° 的视锥），未写 “±”、也未定义为半角。<span class="q">原表的「±35°」是本页此前的推演，已按原文口径改为 ≤35°。</span></td><td class="src">[6]</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="tblnote">
+        <b>关于这些数字的可信度：</b>本页所有规格均来自公开论文、经销商商品页与厂商博客，属<b>二手来源</b>；3M 官方产品数据表（<span class="num">multimedia.3m.com</span> 上的 TDS/PDF）在本环境无法取得。<br>
+        可核查的一手/半一手材料只有 3M《Application Guidelines》98-0440-0037-4（见 [9]），它给出了 BEF II / BEF III / TBEF 的代际与版本命名，但<b>没有</b>绝对膜厚与增益数值。<br>
+        <b>「BEF3」不是 3M 的正式写法</b>（官方为 BEF II / BEF III / TBEF），且 BEF III 采用 randomized prism pattern（随机化棱镜图案），把它与固定几何「90/50」绑定本身就有疑问。
+      </div>
+
+      <div class="cols" style="margin-top:30px">
+        <div>
+          <h3>制造工艺</h3>
+          <ul class="pt-list">
+            <li><strong>微复制（micro-replication）</strong>：钻石车削/激光雕刻母模 → 电铸镍模 → UV 树脂辊压复制到 PET 基材，显示膜主流工艺。</li>
+            <li><strong>注塑 / 挤出</strong>：用于较厚棱镜板或导光结构，材料多为 PMMA / PC。</li>
+            <li><strong>成型约束</strong>：圆角过小则模具寿命短；斜面角过陡则脱模困难，需结合拔模角评估。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>验证方法</h3>
+          <ul class="pt-list">
+            <li><strong>几何</strong>：本页校核清单 + 三维预览 + STEP 导入 CAD 测量。</li>
+            <li><strong>光学</strong>：光线追迹软件（LightTools / TracePro）建 BSDF 模型，测亮度计 0° 增益与视角曲线。</li>
+            <li><strong>外观</strong>：显微形貌（SEM / 白光干涉）核对齿形与圆角；莫尔纹目检。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  </div>
+
+  <!-- ===== 页 5 · 参考资料（知识） ===== -->
+  <div>
+  <!-- ===== 06 参考资料 ===== -->
+  <section id="s-refs">
+    <div class="wrap">
+      <div class="kicker"><span>06</span><span class="en">References</span></div>
+      <h2 class="sec">参考资料</h2>
+      <ol class="refs" id="kn_refs"></ol>
+    </div>
+  </section>
+  </div>
+</div>
+
+<script src="js/version.js"></script>
+<script src="js/optics.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/solidangle.js"></script>
+<script src="js/planar.js"></script>
+<script src="js/vendor-three.min.js"></script>
+<script src="js/vendor-orbitcontrols.js"></script>
+<script src="js/prism-shapes.js"></script>
+<script src="js/prism-shapes1d.js"></script>
+<script src="js/prism.js"></script>
+<script src="js/prism-perf.js"></script>
+<script src="js/optimal-design.js"></script>
+<script src="js/optimal-design-ui.js"></script>
+<script src="js/prism-knowledge.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
