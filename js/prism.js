@@ -789,6 +789,13 @@
     resize();
     window.addEventListener('resize', resize);
     inited = true;
+    /* 修复：renderer 就绪即强制把渲染循环置为运行态。
+       启动期 boot()→syncAnim('calc')→pauseAnim() 已把 animPaused 置 true；
+       首次进入棱镜页时 syncAnim('prism')→resumeAnim() 因 renderer 尚不存在
+       提前返回，animPaused 没被复位——若这里不兜底，initThree 末尾的
+       animate() 会因 animPaused===true 直接 return，rAF 循环永不启动，
+       controls.update() 永不被调用，3D 就只能看不能转/缩放（仅首点才坏的时序坑）。 */
+    animPaused = false;
     animate();
   }
 

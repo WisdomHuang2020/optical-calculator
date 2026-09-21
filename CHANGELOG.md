@@ -11,6 +11,23 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v3.11.1] - 2026-09-21
+
+### 修复：棱镜板设计页「首点进入」时 3D 无法旋转/平移/缩放
+
+启动期 `boot()→syncAnim('calc')→pauseAnim()` 会把 `animPaused` 置为 `true`；
+首次进入棱镜页时 `activateTab('prism')` **先**调 `resumeAnim()`（此时 renderer 尚未
+创建，提前返回），**后**调 `init()`，`animPaused` 一直没被复位。于是
+`initThree()` 末尾的 `animate()` 因 `animPaused===true` 直接 `return`，rAF 渲染循环
+**永不启动**。`controls.update()` 永不被调用，OrbitControls 累积的拖拽/滚轮增量
+永远套不到相机上——表现为 3D 定格、只能看不能转/缩放（**仅首次进入才坏**的时序坑，
+再点一次因 renderer 已存在就正常了）。
+
+修复：在 `initThree()` 启动渲染循环前显式 `animPaused = false`，使 renderer 就绪即
+强制开循环，与 `activateTab` 内 `syncAnim`/`init` 的先后顺序解耦。无头 Chrome 复现
+「首点棱镜→合成拖拽→不调用 spin()」已确定性通过：相机位移 `camDelta≈8.96`，证明
+循环在跑、拖拽/旋转/缩放恢复正常。
+
 ## [v3.11.0] - 2026-09-19
 
 ### 一维棱镜（肋条）截面形状：从唯一 V 形扩到六种

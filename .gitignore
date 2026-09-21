@@ -15,6 +15,10 @@ __step-probe*.html
 # 依赖
 node_modules/
 
+# 本地部署凭据 / TAT 执行器（绝不进库，含 AK/SK）
+.cvm/
+.cvm/*
+
 # 编辑器 / 系统
 .DS_Store
 Thumbs.db
