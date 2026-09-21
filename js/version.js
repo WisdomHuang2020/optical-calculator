@@ -5,8 +5,15 @@
  * tests/version-check.js 会断言两处一致，防止漂移。
  * 页脚显示（index.html 中 id="app-version"）由 app.js 注入。
  *
- * 注意：index.html 内**不得**再出现硬编码版本号 —— version-check.js
+ * 注意：index.html 内**不得**再出现【用于显示的】硬编码版本号 —— version-check.js
  * 会断言这一点。此前页脚写死 v1.0.0 而实际已迭代到 v2.0.1，页面显示的
  * 版本与实际版本各说各话，这是真实发生过的缺陷。
+ *
+ * 例外（且是强制项）：资源 URL 上的缓存戳 ?v=<版本号去掉前导 v>。
+ * 本站资源文件名不带内容哈希，服务器也未下发 Cache-Control，浏览器会按
+ * 启发式规则缓存旧副本 —— 2026-09-21 就因此出现"部署成功、用户却看不到更新"
+ * （线上已是 v3.11.1，用户浏览器仍显示 v3.11.0）。故 index.html 中每个本地
+ * .js/.css 引用都必须带 ?v=，且数值与这里的版本一致。升版本后重跑
+ * `node tools/add-cache-buster.js` 即可；version-check.js 第 5 条会断言齐备。
  * ============================================================ */
-window.APP_VERSION = 'v3.11.1';
+window.APP_VERSION = 'v3.11.2';

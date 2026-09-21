@@ -42,7 +42,11 @@ function okTrue(name, cond, extra) {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name.padEnd(48)} ${extra === undefined ? '' : extra}`);
 }
 
-const html = read('index.html');
+/* 资源引用可能带缓存戳 ?v=<版本>（v3.11.2 起为强制项）。本套件关心的是
+   「引用了哪个文件、以什么顺序」，与查询串无关，故统一先剔除再匹配 ——
+   这样所有精确标签断言都不必逐个改成「可选查询串」形式，也不会再被它绊倒。
+   缓存戳自身的齐备性由 tests/version-check.js 第 5 条断言负责。 */
+const html = read('index.html').replace(/\?v=[^"'&]*/g, '');
 const css = read('styles.css');
 const prism = read('js/prism.js');
 const k1d = read('js/prism-shapes1d.js');
@@ -64,7 +68,8 @@ okTrue('prism.js 内不含 http(s) 外链资源',
 
 /* 加载顺序：vendor 必须在 prism.js 之前，prism.js 在 app.js 之前。
    注意：不能直接 indexOf('js/prism.js') —— 该字符串在页脚说明文字里
-   也出现过一次，会取到错误位置。必须锚定真正的 <script src=...> 标签。 */
+   也出现过一次，会取到错误位置。必须锚定真正的 <script src=...> 标签。
+   （html 已在文件顶部统一剔除资源缓存戳，故此处是无查询串形式。） */
 function scriptPos(file) {
   const m = html.match(new RegExp('<script src="' + file.replace(/\./g, '\\.') + '"></script>'));
   return m ? m.index : -1;

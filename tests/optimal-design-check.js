@@ -22,7 +22,10 @@ function ok(name, cond, extra) {
   else { fail++; fails.push(name + (extra ? '  ' + extra : '')); }
   console.log((cond ? '  ✔ ' : '  ✘ ') + name + (extra ? '  ' + extra : ''));
 }
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+/* 资源引用可能带缓存戳 ?v=<版本>（v3.11.2 起为强制项）。本套件只关心
+   「引用了哪些脚本」，与查询串无关，故先剔除 —— 否则 269 行那种精确匹配
+   会在发版时误报。缓存戳齐备性由 tests/version-check.js 第 5 条负责。 */
+const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').replace(/\?v=[^"'&]*/g, '');
 const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
 const appjs = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
 const ui = fs.readFileSync(path.join(ROOT, 'js', 'optimal-design-ui.js'), 'utf8');
