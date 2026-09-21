@@ -28,3 +28,12 @@ Thumbs.db
 releases.json
 tags.json
 runs.json
+
+# 其它 WorkBuddy 会话的「远端工作区」产物（CloudBase / MCPorter 类）
+# 2026-09-20 曾有一次 CloudBase+CVM 部署会话在此仓库误提交 1830 个文件
+# （提交 38f80cf/99a939f，已由 d77b050 清理）。当时对方只忽略了 .cloudbase-mcp/logs，
+# 没忽略目录本身，故整目录被 add。此处补齐，避免复发。
+.cloudbase-mcp/
+.mcporter/
+.mcporter-schema.json
+.plans/
