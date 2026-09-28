@@ -127,10 +127,39 @@ okTrue('页脚[know] 说明二维截面模型局限', /二维截面模型/.test(
 okTrue('页脚[mats] 声明二手来源', /二手来源/.test(fsetBlock('mats')));
 
 /* v3.6.0 结构缺陷回归：视图不得嵌在页脚内。
-   若 view-know 仍嵌在 .footer 里，它会出现在最后一个 fset（mats）之前。 */
-okTrue('view-know / view-mats 不嵌在页脚内（位于 mats 分组之后）',
-  html.indexOf('id="view-know"') > html.indexOf('data-for="mats"') &&
-  html.indexOf('id="view-mats"') > html.indexOf('data-for="mats"'));
+   v3.11.3 把 #app-footer 移到所有视图之后（修复页脚在「棱镜原理」「材料与参考」
+   两页显示在正文上方的问题），原先「view-know 出现在 data-for="mats" 之后」的
+   间接判据随之失效 —— 它依赖「页脚排在视图之前」这一具体布局，比较的是位置，
+   而不是「视图是否真的落在页脚元素内部」。
+   现改为直接判据：从 id="app-footer" 起做 div 配平扫描取出页脚整块内容，
+   断言块内不含任何 .view。已用 c770c11（改布局前）与工作区（改布局后）
+   两份 index.html 双向验证：旧判据 true→false，新判据 true→true。 */
+function footerBlockOf(s) {
+  const i = s.indexOf('id="app-footer"');
+  if (i < 0) return null;
+  const lt = s.lastIndexOf('<', i);
+  let depth = 0;
+  const tagRe = /<\/?div\b[^>]*>/g;
+  tagRe.lastIndex = lt;
+  let m;
+  while ((m = tagRe.exec(s))) {
+    if (m[0].startsWith('</div')) {
+      depth--;
+      if (depth === 0) return s.slice(lt, m.index + m[0].length);
+    } else {
+      depth++;
+    }
+  }
+  return null;
+}
+const footBlock = footerBlockOf(html);
+okTrue('页脚块可完整解析（div 配平）', !!footBlock);
+okTrue('视图不嵌在页脚内（页脚块内不含 .view）',
+  !!footBlock && !/class="view[\s"]/.test(footBlock),
+  footBlock ? '页脚块 ' + footBlock.length + ' 字符' : '未取到页脚块');
+okTrue('页脚位于所有视图之后（v3.11.3 起）',
+  html.indexOf('id="app-footer"') > html.indexOf('id="view-mats"') &&
+  html.indexOf('id="view-mats"') > html.indexOf('id="view-know"'));
 
 /* 切换逻辑：app.js 按 data-for 名单 toggle .active */
 okTrue('app.js 按 data-for 切换页脚分组',
