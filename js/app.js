@@ -547,22 +547,49 @@
     return true;
   }
 
+  /* 页签名单：既是深链合法性判据，也是从 pathname 里剥 tab 段时的识别标志。
+     顺序无关紧要，但必须与 index.html 的 data-tab 一一对应。 */
+  var TAB_NAMES = ['calc', 'solid', 'theory', 'prism', 'opt', 'know', 'mats'];
+
+  /** 站点根路径（含尾斜杠）。
+   *  自有域名下是 '/'，GitHub Pages 子路径下是 '/optical-calculator/'。
+   *  必须自己算 —— 写死 '/' 会让 Pages 上的深链跳到域名根去（该站部署在子路径）。 */
+  function siteBase() {
+    var segs = String(location.pathname || '/').split('/').filter(Boolean);
+    if (segs.length && TAB_NAMES.indexOf(segs[segs.length - 1]) >= 0) segs.pop();
+    return '/' + (segs.length ? segs.join('/') + '/' : '');
+  }
+
+  /** 当前路径末段对应的页签名；不是合法深链时返回 ''（保持默认首屏）。 */
+  function currentTabFromPath() {
+    var seg = String(location.pathname || '').replace(/\/+$/, '').split('/').pop() || '';
+    return TAB_NAMES.indexOf(seg) >= 0 ? seg : '';
+  }
+
   function bindTabs() {
     document.querySelectorAll('.tab').forEach(function (t) {
       t.addEventListener('click', function () {
         activateTab(t.dataset.tab);
+        /* v3.11.5：写真实路径而非 hash。replaceState 不产生历史记录，
+           与原行为一致；浏览器前进/后退交给 popstate 处理。
+           依赖服务器把未知路径 fallback 到 index.html（nginx 与 Pages 均已配）。 */
         if (window.history && history.replaceState) {
-          history.replaceState(null, '', '#' + t.dataset.tab);
+          try {
+            history.replaceState(null, '', siteBase() + t.dataset.tab);
+          } catch (e) {
+            /* 受限环境不允许改写 pathname —— 例如用 file:// 直接打开页面时 origin 为 null，
+               浏览器会抛 SecurityError。URL 同步只是增强（切页本身已在上一步完成），
+               失败不该让点击处理器中断，这里忽略即可。 */
+          }
         }
       });
     });
   }
 
-  /** 支持深链：#calc / #solid / #theory / #prism / #know / #mats */
-  function applyHash() {
-    var h = String(location.hash || '').replace(/^#/, '');
-    if (h === 'calc' || h === 'solid' || h === 'theory' || h === 'prism' ||
-        h === 'know' || h === 'mats' || h === 'opt') activateTab(h);
+  /** 支持深链（真实路径）：/calc /solid /theory /prism /opt /know /mats */
+  function applyPath() {
+    var h = currentTabFromPath();
+    if (h) activateTab(h);
   }
 
   /* =========================================================
@@ -582,7 +609,7 @@
     $('sa-flux').value = 9000;
     recompute();
     updateSolidReadout(viz);
-    applyHash();
+    applyPath();
 
     var rt;
     window.addEventListener('resize', function () {
@@ -592,8 +619,8 @@
         if (window.Prism) window.Prism.resize();
       }, 160);
     });
-    window.addEventListener('hashchange', applyHash);
-    /* 深链可能已切页（applyHash），也可能仍停在默认首屏。无论哪种，
+    window.addEventListener('popstate', applyPath);
+    /* 深链可能已切页（applyPath），也可能仍停在默认首屏。无论哪种，
        动画预算都要按**最终**激活的页签对齐，否则首屏是 calc 时立体角
        的自转会在后台空转。 */
     var activeTab = document.querySelector('.tab.active');

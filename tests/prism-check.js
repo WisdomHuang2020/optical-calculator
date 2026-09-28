@@ -183,8 +183,8 @@ okTrue('tab「棱镜板设计」已加入导航',
 okTrue('每个 tab 都有对应视图',
   tabNames.every((t) => viewNames.indexOf(t) >= 0),
   'tabs=' + tabNames.join(',') + ' views=' + viewNames.join(','));
-okTrue('app.js 的 hash 白名单含 prism',
-  /h === 'theory' \|\| h === 'prism'/.test(app));
+okTrue('app.js 的页签白名单含 prism（深链 /prism 可直达）',
+  /TAB_NAMES\s*=\s*\[[^\]]*'prism'/.test(app));
 
 /* ---------- 6. 导出功能接线 ---------- */
 console.log('\n=== 6. 导出与参数控件接线 ===');

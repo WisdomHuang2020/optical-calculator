@@ -72,8 +72,17 @@ okTrue('脚本顺序 prism.js → prism-knowledge.js → app.js',
   iPrism > 0 && iKn > iPrism && iApp > iKn,
   `prism=${iPrism} knowledge=${iKn} app=${iApp}`);
 
-okTrue('app.js 的 hash 白名单含 know', /h === 'know'/.test(app));
-okTrue('app.js 的 hash 白名单含 mats', /h === 'mats'/.test(app));
+/* v3.11.5 起深链由 URL hash 改为真实路径，白名单集中为 TAB_NAMES 数组。
+   判据随之改为检验「名单里含该页签」—— 这才是原本就想守住的性质；
+   旧写法 /h === 'know'/ 绑定的是 `h === 'xxx'` 这个具体实现，实现一改即失效。 */
+okTrue('app.js 的页签白名单含 know（深链 /know 可直达）',
+  /TAB_NAMES\s*=\s*\[[^\]]*'know'/.test(app));
+okTrue('app.js 的页签白名单含 mats（深链 /mats 可直达）',
+  /TAB_NAMES\s*=\s*\[[^\]]*'mats'/.test(app));
+okTrue('app.js 深链改由 pathname 解析（不再用 location.hash）',
+  /function currentTabFromPath/.test(app) &&
+  /location\.pathname/.test(app) &&
+  !/location\.hash/.test(app));
 okTrue('app.js 在切到知识页时初始化并重绘', /PrismKnowledge\.init\(\)[\s\S]{0,80}PrismKnowledge\.resize\(\)/.test(app));
 
 /* ============================================================

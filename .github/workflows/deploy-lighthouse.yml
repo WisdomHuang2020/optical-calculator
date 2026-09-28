@@ -76,6 +76,10 @@ jobs:
           rm -rf _site
           mkdir -p _site
           cp -r index.html styles.css js preview _site/
+          # 页签深链由 hash 改为真实路径（v3.11.5）后，直接访问 /prism 这类地址
+          # 会真的向服务器请求该路径。自有域名侧由 nginx 的 try_files fallback 兜住；
+          # 这里一并产出 404.html，是为了让自有域名与 Pages 两个通道的产物保持一致。
+          cp _site/index.html _site/404.html
           touch _site/.nojekyll
           echo "--- 发布内容 ---"
           find _site -type f | sort

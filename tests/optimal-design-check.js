@@ -272,7 +272,11 @@ ok('页脚 fset data-for="opt" 存在', /class="fset" data-for="opt"/.test(html)
 ok('脚本 optimal-design.js / -ui.js 已引入',
    /src="js\/optimal-design\.js"/.test(html) && /src="js\/optimal-design-ui\.js"/.test(html));
 ok('app.js：activateTab 处理 opt', /name === 'opt' && window\.OptimalDesignUI/.test(appjs));
-ok('app.js：深链白名单含 opt', /h === 'mats' \|\| h === 'opt'/.test(appjs));
+/* v3.11.5 起深链由 URL hash 改为真实路径，白名单集中为 TAB_NAMES 数组。
+   判据相应改为「名单里含 opt」—— 这才是原本要守的性质；旧写法
+   /h === 'mats' || h === 'opt'/ 绑的是具体实现，实现一改即失效。 */
+ok('app.js：页签白名单含 opt（深链 /opt 可直达）',
+   /TAB_NAMES\s*=\s*\[[^\]]*'opt'/.test(appjs));
 ok('styles.css：#view-opt 样式存在', /#view-opt \.opt-ctl/.test(css));
 
 console.log('== ⑨ 流程图 SVG（v3.10 重写，防回归） ==');

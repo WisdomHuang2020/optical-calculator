@@ -33,6 +33,10 @@ jobs:
           set -e
           mkdir -p _site
           cp -r index.html styles.css js preview _site/
+          # GitHub Pages 无服务端重写能力：把 index.html 复制为 404.html，
+          # 让 /prism 这类真实路径（v3.11.5 起页签深链由 hash 改为路径）落到 SPA 入口。
+          # 注意 Pages 会返回 404 状态码但内容正确 —— 这是该 hack 的固有代价，浏览器无感。
+          cp _site/index.html _site/404.html
           touch _site/.nojekyll
           echo "--- 发布内容 ---"
           find _site -type f | sort

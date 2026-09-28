@@ -11,6 +11,44 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v3.11.5] - 2026-09-28
+
+### 变更：页签深链由 URL hash 改为真实路径
+
+**改动前**：点击页签时 URL 变成 `#prism` 这类 fragment，深链形如
+`https://optical.power-knowledge.tech/#prism`。
+
+**改动后**：改用**真实路径**，深链形如 `https://optical.power-knowledge.tech/prism`，
+与站群其余三站（widget / AHB / interleaved-pfc）一致，对爬虫也更友好。
+
+**三层配套（缺一即坏）**：
+
+1. **代码**（`js/app.js`）：页签名单集中为 `TAB_NAMES`；新增 `siteBase()` 与
+   `currentTabFromPath()`；写入改用 `siteBase() + tab`，读取解析 `location.pathname`，
+   监听由 `hashchange` 改为 `popstate`。
+2. **nginx**：`try_files $uri $uri/ =404` → `$uri $uri/ /index.html`；
+   否则直接访问 `/prism` 会被判 404。
+3. **Pages**：组装时把 `index.html` 复制为 `404.html`。Pages 无服务端重写能力，
+   靠它把未知路径落到 SPA 入口（返回 404 状态码但内容正确，浏览器无感，SEO 会视为 404）。
+
+### 踩到的两个坑（均已修，记此备查）
+
+- **`file://` 下改写 pathname 会抛 `SecurityError`**：origin 为 null 时浏览器拒绝把
+  `replaceState` 指向真实路径（`A history state object with URL 'file:///C:/know'
+  cannot be created in a document with origin 'null'`）。旧实现只改 fragment，不受此限。
+  → `replaceState` 已包 `try/catch`：URL 同步只是增强，失败不该中断点击处理器。
+  该限制只在**本地用 `file://` 直接打开页面**时出现，HTTP 部署不受影响。
+- **`siteBase()` 必须自己算**：本站在 GitHub Pages 上部署于子路径
+  （`/optical-calculator/`），把 base 写死为 `'/'` 会让深链跳到域名根。
+  现从 `location.pathname` 剥掉已知页签段反推站点根。
+
+### 测试判据同步更正（3 处）
+
+`knowledge-check` / `prism-check` / `optimal-design-check` 里原先断言
+`/h === 'know'/`、`/h === 'theory' \|\| h === 'prism'/` 这类**具体实现写法**。
+改为断言「页签白名单含 X」—— 这才是它们原本就想守住的性质；
+绑定实现细节的判据，实现一改即失效，不是好判据。
+
 ## [v3.11.4] - 2026-09-28
 
 ### 新增：页脚免责声明（工程决策 + 知识产权）
