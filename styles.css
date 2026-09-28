@@ -522,6 +522,10 @@ ul.tight li { margin-bottom: 5px; }
    原来只有一份全局文案，内容是光度学公式与 DIALux 复核 —— 对棱镜三页完全不适用。 */
 .footer .fset { display: none; }
 .footer .fset.active { display: block; }
+/* ICP 备案号：位于 .fset 之外，任何 tab 下恒显示 */
+.footer .beian { margin-top: 10px; }
+.footer .beian a { color: var(--text-3); }
+.footer .beian a:hover { color: var(--text-2); }
 
 /* 推导步骤 */
 .steps { counter-reset: st; list-style: none; margin: 0; padding: 0; }

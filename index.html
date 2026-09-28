@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3.11.2">
+<link rel="stylesheet" href="styles.css?v=3.11.3">
 </head>
 <body>
 
@@ -1373,106 +1373,6 @@
   </section>
 </div>
 
-<div class="footer" id="app-footer">
-  <div class="fset active" data-for="calc solid theory">
-    <div>
-      光学概念和光学设计 <b class="app-version">v—</b> —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
-      E = I·cosγ/d²），cosⁿ 配光为解析近似，非实测配光文件。
-    </div>
-    <div>
-      计算核心见 <code>js/optics.js</code>，可脱离页面单独复核；
-      立体角三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法）。
-    </div>
-    <div>
-      本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
-      灯具 IES 文件复核。数值仅供参考，不构成设计依据。
-    </div>
-  </div>
-
-  <div class="fset" data-for="prism">
-    <div>
-      棱镜板设计 <b class="app-version">v—</b> —— 几何按参数化解析式生成：一维齿半底宽
-      <code>b = h·tan(α/2)</code>；二维提供<b>六种面阵微结构</b>（四棱锥 / 台锥 / 圆锥 /
-      球冠 / 抛物面帽 / 六棱锥蜂窝密排），各自的半底宽公式与足迹面积见
-      <code>js/prism-shapes.js</code>，b 超过晶格上限时自动封顶并告警。
-    </div>
-    <div>
-      二维的预览网格、STL、STEP 共用<b>同一份顶点与面</b>（焊接后顶点去重，保证
-      STEP 的壳闭合）；圆锥 / 球冠 / 抛物面帽的<b>导出件</b>是按「网格离散度」一格
-      给出的方位角 × 环数离散的多面体近似，而性能预估走的是连续曲面，不受影响。
-    </div>
-    <div>
-      设计核心见 <code>js/prism.js</code>（Three.js 已本地化到 <code>js/vendor-*.js</code>）；
-      光学性能预估见 <code>js/prism-perf.js</code>（几何光学蒙特卡洛，含菲涅耳与腔体回收）；
-      光学校核清单在「材料与参考」页。
-    </div>
-    <div>
-      导出件是<b>理想几何</b>：不含圆角以外的工艺偏差、材料吸收、膜层干涉、散射与莫尔效应。
-      正式光学结果请用 LightTools / LiteTrace 复核；本页预估的用途是方案筛选与趋势判断。
-    </div>
-  </div>
-
-  <div class="fset" data-for="know">
-    <div>
-      棱镜原理 <b class="app-version">v—</b> —— 演示为二维截面几何光学：斯涅尔定律 + 全反射 + 菲涅耳，
-      光线追迹见 <code>js/prism-knowledge.js</code>；三个演示都是 Canvas 2D，不引入 WebGL。
-    </div>
-    <div>
-      角度口径：θ<sub>in</sub> 是<b>材料内部角</b>，相对板面法线 +z（朝出光侧为正）；
-      光线扇形图的入射角上限是临界角 θ<sub>c</sub> = arcsin(1/n)，超出部分物理上不存在
-      （朗伯光经平板折射进入材料后不可能超过它）。
-    </div>
-    <div>
-      三维图与扇形图都是<b>二维截面模型</b>（强迫面外分量为 0），会显著低估三维下的全反射占比 ——
-      n = 1.49 时二维只有约 0.5%，真实三维约 46%。定量结论请以三维光线追迹或实测为准。
-    </div>
-  </div>
-
-  <div class="fset" data-for="mats">
-    <div>
-      材料与参考 <b class="app-version">v—</b> —— 折射率与临界角为标准值；典型规格取自公开论文与
-      经销商页面，属<b>二手来源</b>，3M 官方产品数据表在本环境未能取得，故不作为权威值使用。
-    </div>
-    <div>
-      设计校核直接读取「棱镜板设计」页的<b>实时参数与几何</b>（<code>js/prism.js</code>），不另设判据 ——
-      两处各写一套判据，必然给出互相矛盾的结论。
-    </div>
-    <div>
-      本页数字用于方案筛选与选材初判；选材、报价与法规符合性请以厂商正式数据表与标准原文为准。
-    </div>
-  </div>
-
-  <div class="fset" data-for="opt">
-    <div>
-      最优设计方法 <b class="app-version">v—</b> —— 扩散板（材料 PC / PMMA / PS、板厚 t、雾度 Hd）与棱镜板
-      （六形状、关键角度 α）在总厚度预算下的耦合平衡：扩散板管发光面空间均匀度 U，棱镜板管出光角度收敛
-      与萃取效率 η，二者在雾度上彼此拉扯——雾度上去，U 变好但透过率 Td 掉、出光被拉回朗伯，η 变差。
-    </div>
-    <div>
-      空间场不再用高斯近似，而是按单次配光footprint E(r) ∝ (1+(r/OD)²)<sup>−p</sup> 对 N×N 阵列做<b>逐点精确求和</b>
-      （与暴力求和逐格偏差 0.0000%）；边框与侧壁回收用镜像源法计入（权重 ρ<sup>阶数</sup>），折算为采光利用率 φ_conf。
-      出光角分布取 (1−Hd)·cos(m<sub>s</sub>θ) + Hd·cos(m<sub>d</sub>θ)，效率链 η = Td·ηx,plate·φ_conf，
-      视锥内份额单独积分。雾度→透过率、散射角、扩散半宽均有经验式（Td = T_sub·(1−0.085·Hd<sup>1.4</sup>)）。
-    </div>
-    <div>
-      棱镜代理（收敛半角 β、萃取效率 ηx）与「棱镜板设计」页的几何光学蒙特卡洛在金字塔 α=45°、n=1.49
-      参考点校准（ηx≈0.59），其余形状 / 角度按形状因子单调外推——<b>外推区仍是代理，不是实测</b>。
-      本模型为<b>半解析筛选级</b>：趋势与量级可信，可用于方案排序与参数寻优；正式量产设计请用
-      LightTools / LiteTrace 或第三方蒙特卡洛复核，尤其是非金字塔形状与 α 远离 45° 的工况。
-    </div>
-    <div>
-      硬约束（不可越界）：总厚度 ≤ 预算、α ≤ 该形状刀具可达角、棱镜填充率 ≥ 70%（含刀尖圆角复形损失）、
-      可选「无灯影热点」（纹波 ≤ 12%）。软目标：U ≥ U*、η ≥ η*、视锥内效率 ≥ η*_cone，三者均不可达时
-      按「欠额惩罚 + 成本 + 裕量」的目标函数在过硬约束解里取最优，而不是简单报错。
-      均匀度口径支持四种（有效面最值 / 均值 / 九点 / 十三点），并带亮度计光阑平均（半径 0.35×节距，≤18 mm）。
-    </div>
-    <div>
-      真正决定棱镜性能的是四个量：侧壁斜率分布、填充率、对称性、尖顶锐度——同一族形状里改角度，
-      效果差异可能比换形状更大；本页优化器把 α 设为主变量、形状作为对称性 / 尖顶锐度的工艺权衡次变量。
-    </div>
-  </div>
-</div>
-
 <!-- ===== 第 6 个页面 · 棱镜原理（概览 + 光学原理）===== -->
 <div class="view kn" id="view-know">
   <!-- ===== 页 0 · 概览（知识） ===== -->
@@ -1782,20 +1682,126 @@
   </div>
 </div>
 
-<script src="js/version.js?v=3.11.2"></script>
-<script src="js/optics.js?v=3.11.2"></script>
-<script src="js/charts.js?v=3.11.2"></script>
-<script src="js/solidangle.js?v=3.11.2"></script>
-<script src="js/planar.js?v=3.11.2"></script>
-<script src="js/vendor-three.min.js?v=3.11.2"></script>
-<script src="js/vendor-orbitcontrols.js?v=3.11.2"></script>
-<script src="js/prism-shapes.js?v=3.11.2"></script>
-<script src="js/prism-shapes1d.js?v=3.11.2"></script>
-<script src="js/prism.js?v=3.11.2"></script>
-<script src="js/prism-perf.js?v=3.11.2"></script>
-<script src="js/optimal-design.js?v=3.11.2"></script>
-<script src="js/optimal-design-ui.js?v=3.11.2"></script>
-<script src="js/prism-knowledge.js?v=3.11.2"></script>
-<script src="js/app.js?v=3.11.2"></script>
+<div class="footer" id="app-footer">
+  <div class="fset active" data-for="calc solid theory">
+    <div>
+      光学概念和光学设计 <b class="app-version">v—</b> —— 全部公式为标准光度学定义（Ω = A/r²、I = dΦ/dΩ、
+      E = I·cosγ/d²），cosⁿ 配光为解析近似，非实测配光文件。
+    </div>
+    <div>
+      计算核心见 <code>js/optics.js</code>，可脱离页面单独复核；
+      立体角三维渲染见 <code>js/solidangle.js</code>（Canvas 2D 手写透视投影 + 画家算法）。
+    </div>
+    <div>
+      本工具出结果用于快速估算与方案比较；正式照明设计请用 DIALux / AGi32 +
+      灯具 IES 文件复核。数值仅供参考，不构成设计依据。
+    </div>
+  </div>
+
+  <div class="fset" data-for="prism">
+    <div>
+      棱镜板设计 <b class="app-version">v—</b> —— 几何按参数化解析式生成：一维齿半底宽
+      <code>b = h·tan(α/2)</code>；二维提供<b>六种面阵微结构</b>（四棱锥 / 台锥 / 圆锥 /
+      球冠 / 抛物面帽 / 六棱锥蜂窝密排），各自的半底宽公式与足迹面积见
+      <code>js/prism-shapes.js</code>，b 超过晶格上限时自动封顶并告警。
+    </div>
+    <div>
+      二维的预览网格、STL、STEP 共用<b>同一份顶点与面</b>（焊接后顶点去重，保证
+      STEP 的壳闭合）；圆锥 / 球冠 / 抛物面帽的<b>导出件</b>是按「网格离散度」一格
+      给出的方位角 × 环数离散的多面体近似，而性能预估走的是连续曲面，不受影响。
+    </div>
+    <div>
+      设计核心见 <code>js/prism.js</code>（Three.js 已本地化到 <code>js/vendor-*.js</code>）；
+      光学性能预估见 <code>js/prism-perf.js</code>（几何光学蒙特卡洛，含菲涅耳与腔体回收）；
+      光学校核清单在「材料与参考」页。
+    </div>
+    <div>
+      导出件是<b>理想几何</b>：不含圆角以外的工艺偏差、材料吸收、膜层干涉、散射与莫尔效应。
+      正式光学结果请用 LightTools / LiteTrace 复核；本页预估的用途是方案筛选与趋势判断。
+    </div>
+  </div>
+
+  <div class="fset" data-for="know">
+    <div>
+      棱镜原理 <b class="app-version">v—</b> —— 演示为二维截面几何光学：斯涅尔定律 + 全反射 + 菲涅耳，
+      光线追迹见 <code>js/prism-knowledge.js</code>；三个演示都是 Canvas 2D，不引入 WebGL。
+    </div>
+    <div>
+      角度口径：θ<sub>in</sub> 是<b>材料内部角</b>，相对板面法线 +z（朝出光侧为正）；
+      光线扇形图的入射角上限是临界角 θ<sub>c</sub> = arcsin(1/n)，超出部分物理上不存在
+      （朗伯光经平板折射进入材料后不可能超过它）。
+    </div>
+    <div>
+      三维图与扇形图都是<b>二维截面模型</b>（强迫面外分量为 0），会显著低估三维下的全反射占比 ——
+      n = 1.49 时二维只有约 0.5%，真实三维约 46%。定量结论请以三维光线追迹或实测为准。
+    </div>
+  </div>
+
+  <div class="fset" data-for="mats">
+    <div>
+      材料与参考 <b class="app-version">v—</b> —— 折射率与临界角为标准值；典型规格取自公开论文与
+      经销商页面，属<b>二手来源</b>，3M 官方产品数据表在本环境未能取得，故不作为权威值使用。
+    </div>
+    <div>
+      设计校核直接读取「棱镜板设计」页的<b>实时参数与几何</b>（<code>js/prism.js</code>），不另设判据 ——
+      两处各写一套判据，必然给出互相矛盾的结论。
+    </div>
+    <div>
+      本页数字用于方案筛选与选材初判；选材、报价与法规符合性请以厂商正式数据表与标准原文为准。
+    </div>
+  </div>
+
+  <div class="fset" data-for="opt">
+    <div>
+      最优设计方法 <b class="app-version">v—</b> —— 扩散板（材料 PC / PMMA / PS、板厚 t、雾度 Hd）与棱镜板
+      （六形状、关键角度 α）在总厚度预算下的耦合平衡：扩散板管发光面空间均匀度 U，棱镜板管出光角度收敛
+      与萃取效率 η，二者在雾度上彼此拉扯——雾度上去，U 变好但透过率 Td 掉、出光被拉回朗伯，η 变差。
+    </div>
+    <div>
+      空间场不再用高斯近似，而是按单次配光footprint E(r) ∝ (1+(r/OD)²)<sup>−p</sup> 对 N×N 阵列做<b>逐点精确求和</b>
+      （与暴力求和逐格偏差 0.0000%）；边框与侧壁回收用镜像源法计入（权重 ρ<sup>阶数</sup>），折算为采光利用率 φ_conf。
+      出光角分布取 (1−Hd)·cos(m<sub>s</sub>θ) + Hd·cos(m<sub>d</sub>θ)，效率链 η = Td·ηx,plate·φ_conf，
+      视锥内份额单独积分。雾度→透过率、散射角、扩散半宽均有经验式（Td = T_sub·(1−0.085·Hd<sup>1.4</sup>)）。
+    </div>
+    <div>
+      棱镜代理（收敛半角 β、萃取效率 ηx）与「棱镜板设计」页的几何光学蒙特卡洛在金字塔 α=45°、n=1.49
+      参考点校准（ηx≈0.59），其余形状 / 角度按形状因子单调外推——<b>外推区仍是代理，不是实测</b>。
+      本模型为<b>半解析筛选级</b>：趋势与量级可信，可用于方案排序与参数寻优；正式量产设计请用
+      LightTools / LiteTrace 或第三方蒙特卡洛复核，尤其是非金字塔形状与 α 远离 45° 的工况。
+    </div>
+    <div>
+      硬约束（不可越界）：总厚度 ≤ 预算、α ≤ 该形状刀具可达角、棱镜填充率 ≥ 70%（含刀尖圆角复形损失）、
+      可选「无灯影热点」（纹波 ≤ 12%）。软目标：U ≥ U*、η ≥ η*、视锥内效率 ≥ η*_cone，三者均不可达时
+      按「欠额惩罚 + 成本 + 裕量」的目标函数在过硬约束解里取最优，而不是简单报错。
+      均匀度口径支持四种（有效面最值 / 均值 / 九点 / 十三点），并带亮度计光阑平均（半径 0.35×节距，≤18 mm）。
+    </div>
+    <div>
+      真正决定棱镜性能的是四个量：侧壁斜率分布、填充率、对称性、尖顶锐度——同一族形状里改角度，
+      效果差异可能比换形状更大；本页优化器把 α 设为主变量、形状作为对称性 / 尖顶锐度的工艺权衡次变量。
+    </div>
+  </div>
+
+  <!-- ICP 备案号：恒显示，不属于任何 .fset，不参与按 tab 切换的内容轮换。
+       工信部要求网站底部展示备案号并链接至工信部官网。 -->
+  <div class="beian">
+    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">苏ICP备2026073104号</a>
+  </div>
+</div>
+
+<script src="js/version.js?v=3.11.3"></script>
+<script src="js/optics.js?v=3.11.3"></script>
+<script src="js/charts.js?v=3.11.3"></script>
+<script src="js/solidangle.js?v=3.11.3"></script>
+<script src="js/planar.js?v=3.11.3"></script>
+<script src="js/vendor-three.min.js?v=3.11.3"></script>
+<script src="js/vendor-orbitcontrols.js?v=3.11.3"></script>
+<script src="js/prism-shapes.js?v=3.11.3"></script>
+<script src="js/prism-shapes1d.js?v=3.11.3"></script>
+<script src="js/prism.js?v=3.11.3"></script>
+<script src="js/prism-perf.js?v=3.11.3"></script>
+<script src="js/optimal-design.js?v=3.11.3"></script>
+<script src="js/optimal-design-ui.js?v=3.11.3"></script>
+<script src="js/prism-knowledge.js?v=3.11.3"></script>
+<script src="js/app.js?v=3.11.3"></script>
 </body>
 </html>
