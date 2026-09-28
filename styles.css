@@ -526,6 +526,10 @@ ul.tight li { margin-bottom: 5px; }
 .footer .beian { margin-top: 10px; }
 .footer .beian a { color: var(--text-3); }
 .footer .beian a:hover { color: var(--text-2); }
+/* 免责声明：同样位于 .fset 之外，恒显示；置于备案号之下 */
+.footer .disclaimer { margin-top: 12px; }
+.footer .disclaimer p { margin: 0 0 6px; }
+.footer .disclaimer b { color: var(--text-2); font-weight: 600; }
 
 /* 推导步骤 */
 .steps { counter-reset: st; list-style: none; margin: 0; padding: 0; }
