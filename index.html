@@ -4,16 +4,33 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>光学概念和光学设计 · 照度计算 / 立体角 / 棱镜板</title>
+<!--
+  favicon：此前本站既无此 link 标签、仓库里也没有图标文件，线上图标长期是浏览器默认。
+  2026-09-29 补齐。造型 = 平行光经凸透镜汇聚于焦点（本站真源图标 Lightbulb 的图形化）。
+
+  注意：本注释内**不得**出现「问号+v+等号」形式的字面量 —— tools/add-cache-buster.js
+  会用全局正则剥掉一切该形式的片段再重加，注释里的会被一并吃掉、连累相邻标签被截断
+  （2026-09-29 实测踩过：注释被截成半句、下面那行 link 标签整行消失）。
+-->
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=3.11.7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3.11.6">
+<link rel="stylesheet" href="styles.css?v=3.11.7">
 </head>
 <body>
 
 <header class="topbar">
   <div class="brand">
-    <span class="logo">◐</span>
+    <span class="logo" aria-hidden="true">
+      <!-- Lightbulb：与主入口站 sites.json 的 icon 真源一致（lucide lightbulb 路径） -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+        <path d="M9 18h6"/>
+        <path d="M10 22h4"/>
+      </svg>
+    </span>
     <div>
       <h1>光学概念和光学设计</h1>
       <p>照度推算 · 立体角 · 棱镜板参数化设计</p>
@@ -1803,20 +1820,20 @@
   </div>
 </div>
 
-<script src="js/version.js?v=3.11.6"></script>
-<script src="js/optics.js?v=3.11.6"></script>
-<script src="js/charts.js?v=3.11.6"></script>
-<script src="js/solidangle.js?v=3.11.6"></script>
-<script src="js/planar.js?v=3.11.6"></script>
-<script src="js/vendor-three.min.js?v=3.11.6"></script>
-<script src="js/vendor-orbitcontrols.js?v=3.11.6"></script>
-<script src="js/prism-shapes.js?v=3.11.6"></script>
-<script src="js/prism-shapes1d.js?v=3.11.6"></script>
-<script src="js/prism.js?v=3.11.6"></script>
-<script src="js/prism-perf.js?v=3.11.6"></script>
-<script src="js/optimal-design.js?v=3.11.6"></script>
-<script src="js/optimal-design-ui.js?v=3.11.6"></script>
-<script src="js/prism-knowledge.js?v=3.11.6"></script>
-<script src="js/app.js?v=3.11.6"></script>
+<script src="js/version.js?v=3.11.7"></script>
+<script src="js/optics.js?v=3.11.7"></script>
+<script src="js/charts.js?v=3.11.7"></script>
+<script src="js/solidangle.js?v=3.11.7"></script>
+<script src="js/planar.js?v=3.11.7"></script>
+<script src="js/vendor-three.min.js?v=3.11.7"></script>
+<script src="js/vendor-orbitcontrols.js?v=3.11.7"></script>
+<script src="js/prism-shapes.js?v=3.11.7"></script>
+<script src="js/prism-shapes1d.js?v=3.11.7"></script>
+<script src="js/prism.js?v=3.11.7"></script>
+<script src="js/prism-perf.js?v=3.11.7"></script>
+<script src="js/optimal-design.js?v=3.11.7"></script>
+<script src="js/optimal-design-ui.js?v=3.11.7"></script>
+<script src="js/prism-knowledge.js?v=3.11.7"></script>
+<script src="js/app.js?v=3.11.7"></script>
 </body>
 </html>

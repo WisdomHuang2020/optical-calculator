@@ -31,10 +31,21 @@ if (!m) { console.error('无法从 js/version.js 读取 APP_VERSION'); process.e
 const stamp = m[1].replace(/^v/, '');
 
 const before = fs.readFileSync(HTML, 'utf8');
-/* 先剥掉已有缓存戳再重新加，保证幂等（重复跑不会叠加） */
-const stripped = before.replace(/\?v=[^"'&]*/g, '');
+/* 先剥掉"属性值内"已有的缓存戳再重新加，保证幂等（重复跑不会叠加）。
+   2026-09-29 修复：原实现是「全文正则会剥掉所有 问号v等号 片段」，
+   会连 HTML 注释里的同形式写法和注释末尾一起吃掉，连累下一行标签被截断
+   （实测：注释被截成半句 + 紧随的 link rel=icon 整行消失，页面结构损坏）。
+   现收窄为只在 src= / href= 的属性值内剥 —— 注释、正文、脚本字符串都不再受影响。 */
+const stripped = before.replace(
+  /((?:src|href)="[^"]*?)\?v=[^"'&]*/g,
+  '$1'
+);
 
-const localRef = /((?:src|href)=")((?!https?:|data:|#)[^"]+\.(?:js|css))(")/g;
+/* 处理 .js / .css / .svg。
+   .svg 于 2026-09-29 纳入：favicon.svg 此前无戳，换了图标浏览器不更新。
+   注意匹配 .svg 只应命中 favicon 这类本地图标；站内其它 svg 若作为内容引用
+   （data: 或内联）不受影响，因为本正则已排除 data:/https:/# 开头的引用。 */
+const localRef = /((?:src|href)=")((?!https?:|data:|#)[^"]+\.(?:js|css|svg))(")/g;
 const files = [];
 const after = stripped.replace(localRef, (all, p1, file, p3) => {
   files.push(file);
@@ -42,9 +53,10 @@ const after = stripped.replace(localRef, (all, p1, file, p3) => {
 });
 
 /* 匹配数兜底：标签写法若被改动（比如加了 integrity 属性），
-   静默漏加会让"看不到更新"以最难排查的形式回归，故宁可硬失败。 */
-if (files.length < 16) {
-  console.error(`只匹配到 ${files.length} 处本地资源引用（应 >= 16），拒绝写入`);
+   静默漏加会让"看不到更新"以最难排查的形式回归，故宁可硬失败。
+   阈值随本地资源数增长而抬高 —— 2026-09-29 新增 favicon.svg 后由 16 调至 17。 */
+if (files.length < 17) {
+  console.error(`只匹配到 ${files.length} 处本地资源引用（应 >= 17），拒绝写入`);
   console.error('请检查 index.html 中 <script src=...> / <link href=...> 的写法');
   process.exit(1);
 }

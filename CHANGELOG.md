@@ -11,6 +11,33 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v3.11.7] - 2026-09-29
+
+### 新增：补齐 favicon（本站此前一直缺失）
+
+**问题**：`index.html` 的 `<head>` 中从来没有 `<link rel="icon">`，
+仓库里也没有图标文件 —— 线上标签页图标长期是浏览器默认（`/favicon.ico` 恒 404）。
+
+**修复**：新增 `favicon.svg` 并在 `<head>` 中引用。造型为「平行光经凸透镜汇聚于焦点」，
+取自本站真源图标 `lightbulb`（与主入口站 `sites.json` 的 `icon` 字段一致）。
+配色遵循站群统一规范：深底 `#0a0a0a` / 主色 teal `#14b8a6` / 强调 amber `#f59e0b`（仅标焦点）。
+
+> 造型选型说明：曾先画「三角棱镜 + 折射光束」，16px 实测退化为「三角形被斜杠划掉」，
+> 形似禁止标志，且三角轮廓与姊妹站 interleaved-pfc 过近。改用透镜汇聚光线后，
+> 笔画为「三横一束」，与 AHB（直角脉冲）/ ipfc（双波）/ LLC（谐振峰）/ widget（等号）均可区分。
+
+### 变更：页头品牌图标由字符 `◐` 改为 Lightbulb SVG
+
+`.logo` 内原为 Unicode 字符 `◐`，现改为内联 SVG（lucide lightbulb 路径），
+与站群其它站点的图标语义对齐。样式上仅新增 `.logo svg { width/height: 19px }`，
+teal 渐变底块与深色描边的对比关系不变。
+
+### 工程：favicon 纳入缓存戳管理
+
+`favicon.svg?v=` 交由 `tools/add-cache-buster.js` 与其它本地资源一并维护
+（该脚本此前只处理 `.js/.css`）。favicon 是浏览器缓存最顽固的资源，
+带内容版本戳才能保证「换了图标立刻生效」。
+
 ## [v3.11.6] - 2026-09-29
 
 ### 修复：ICP 备案号补上序号后缀

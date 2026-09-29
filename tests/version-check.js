@@ -89,12 +89,13 @@ okTrue('version.js 在 app.js 之前加载', iVer >= 0 && iApp >= 0 && iVer < iA
   `version.js@${iVer} < app.js@${iApp}`);
 
 /* 缓存戳齐备性（v3.11.2 起）：漏一个文件，那个文件就继续吃旧缓存，
-   "部署了但看不到更新"会以最难排查的形式回归。 */
-const refs = [...html.matchAll(/(?:src|href)="((?!https?:|data:|#)[^"]+\.(?:js|css))(?:\?v=([^"]*))?"/g)];
+   "部署了但看不到更新"会以最难排查的形式回归。
+   v3.11.7 起把 .svg 纳入 —— favicon 是浏览器缓存最顽固的资源，漏了它最不易察觉。 */
+const refs = [...html.matchAll(/(?:src|href)="((?!https?:|data:|#)[^"]+\.(?:js|css|svg))(?:\?v=([^"]*))?"/g)];
 const noQ = refs.filter((m) => m[2] === undefined).map((m) => m[1]);
 const badQ = refs.filter((m) => m[2] !== undefined && m[2] !== ver.replace(/^v/, ''))
   .map((m) => `${m[1]}?v=${m[2]}`);
-okTrue(`本地资源引用不少于 16 处（1 CSS + 15 JS），实为 ${refs.length} 处`, refs.length >= 16);
+okTrue(`本地资源引用不少于 17 处（1 CSS + 1 SVG + 15 JS），实为 ${refs.length} 处`, refs.length >= 17);
 okTrue('每个本地资源引用都带 ?v= 缓存戳', noQ.length === 0,
   noQ.length ? '缺失：' + JSON.stringify(noQ) : '');
 okTrue('缓存戳数值均等于 js/version.js 的版本', badQ.length === 0,
