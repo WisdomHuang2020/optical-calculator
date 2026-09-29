@@ -32,7 +32,7 @@ jobs:
         run: |
           set -e
           mkdir -p _site
-          cp -r index.html styles.css js preview _site/
+          cp -r index.html styles.css js preview favicon.svg _site/
           # GitHub Pages 无服务端重写能力：把 index.html 复制为 404.html，
           # 让 /prism 这类真实路径（v3.11.5 起页签深链由 hash 改为路径）落到 SPA 入口。
           # 注意 Pages 会返回 404 状态码但内容正确 —— 这是该 hack 的固有代价，浏览器无感。
@@ -42,10 +42,10 @@ jobs:
           find _site -type f | sort
           # 棱镜板页与棱镜知识页依赖这些文件，缺任一个会导致该页静默失效或白屏。
           # 上一版工作流用固定清单 cp，新增文件不会自动进站 —— 这里显式校验。
-          for f in js/vendor-three.min.js js/vendor-orbitcontrols.js js/prism.js js/prism-knowledge.js; do
+          for f in js/vendor-three.min.js js/vendor-orbitcontrols.js js/prism.js js/prism-knowledge.js favicon.svg; do
             test -f "_site/$f" || { echo "✘ 缺失发布文件：$f"; exit 1; }
           done
-          echo "✔ 棱镜板页 / 知识页依赖文件齐备"
+          echo "✔ 棱镜板页 / 知识页依赖文件与图标齐备"
 
       - uses: actions/configure-pages@v5
 

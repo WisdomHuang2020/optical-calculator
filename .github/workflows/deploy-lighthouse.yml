@@ -75,7 +75,7 @@ jobs:
           set -e
           rm -rf _site
           mkdir -p _site
-          cp -r index.html styles.css js preview _site/
+          cp -r index.html styles.css js preview favicon.svg _site/
           # 页签深链由 hash 改为真实路径（v3.11.5）后，直接访问 /prism 这类地址
           # 会真的向服务器请求该路径。自有域名侧由 nginx 的 try_files fallback 兜住；
           # 这里一并产出 404.html，是为了让自有域名与 Pages 两个通道的产物保持一致。
@@ -84,10 +84,10 @@ jobs:
           echo "--- 发布内容 ---"
           find _site -type f | sort
           # 棱镜板页与棱镜知识页依赖这些文件，缺任一个会导致该页静默失效或白屏。
-          for f in js/vendor-three.min.js js/vendor-orbitcontrols.js js/prism.js js/prism-knowledge.js; do
+          for f in js/vendor-three.min.js js/vendor-orbitcontrols.js js/prism.js js/prism-knowledge.js favicon.svg; do
             test -f "_site/$f" || { echo "✘ 缺失发布文件：$f"; exit 1; }
           done
-          echo "✔ 棱镜板页 / 知识页依赖文件齐备"
+          echo "✔ 棱镜板页 / 知识页依赖文件与图标齐备"
 
       - name: Deploy to server over SSH
         if: steps.cfg.outputs.ready == 'true'
