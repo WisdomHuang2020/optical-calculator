@@ -16,4 +16,4 @@
  * .js/.css 引用都必须带 ?v=，且数值与这里的版本一致。升版本后重跑
  * `node tools/add-cache-buster.js` 即可；version-check.js 第 5 条会断言齐备。
  * ============================================================ */
-window.APP_VERSION = 'v3.11.5';
+window.APP_VERSION = 'v3.11.6';
