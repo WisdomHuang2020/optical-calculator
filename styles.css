@@ -143,14 +143,12 @@ a:hover { text-decoration: underline; }
 
 .brand { display: flex; align-items: center; gap: 11px; flex: 0 0 auto; }
 .brand .logo {
-  width: 34px; height: 34px; border-radius: 9px;
-  background: linear-gradient(140deg, var(--primary-2), var(--primary-deep));
-  color: #06201d; display: grid; place-items: center;
-  font-size: 17px; box-shadow: 0 4px 14px -5px rgba(20, 184, 166, .8);
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
 }
-/* 品牌图标：由字符 ◐ 改为 Lightbulb 内联 SVG，与站群真源图标一致。
-   深色描边承在 teal 渐变底上，与原先「◐」的对比关系保持不变。 */
-.brand .logo svg { width: 19px; height: 19px; }
+/* 品牌图标：2026-09-29 起与本站 favicon.svg 同源（深底 + teal 灯泡）。
+   图形自带深底圆角方，故容器不再另加渐变底与投影。 */
+.brand .logo svg { width: 34px; height: 34px; display: block; }
 .brand h1 { font-size: 15px; line-height: 1.2; color: var(--text); }
 .brand p {
   margin: 0; font-size: 11.5px; line-height: 1.3; letter-spacing: .06em;

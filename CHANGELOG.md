@@ -11,6 +11,26 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v3.11.8] - 2026-09-29
+
+### 变更：favicon 与页头品牌图标统一为「灯泡」
+
+**背景**：v3.11.7 的 favicon 画的是「平行光经凸透镜汇聚于焦点」，而页头 `.brand .logo`
+一直用的是 lucide `lightbulb`（灯泡）—— 二者并非同一物。用户要求「favicon 与首页标题主图标
+一致」，故本次统一。
+
+**修复**：
+- `favicon.svg` 改为灯泡造型（`lightbulb` 的加粗填实版），与页头内联 SVG 使用同一套 path，
+  并由 `public/` 同级根目录提供（本站为纯静态站，无构建步骤）。
+- `.brand .logo` 容器去掉 teal 渐变底与投影 —— 原先「teal 底 + 深色图标」与 favicon 的
+  「深底 + teal 图标」配色正好相反，统一后图形自带深底圆角方（`#0a0a0a`），两者逐字节同源。
+- `styles.css` 中 `.brand .logo svg` 由 19px 调整为 34px，撑满原容器尺寸。
+
+### 缓存戳
+
+`index.html` 中本地资源引用的版本戳由 3.11.7 更新为 3.11.8
+（由 `tools/add-cache-buster.js` 依 `js/version.js` 自动写入）。
+
 ## [v3.11.7] - 2026-09-29
 
 ### 新增：补齐 favicon（本站此前一直缺失）

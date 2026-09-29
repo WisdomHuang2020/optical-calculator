@@ -1,34 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <!--
     光学概念和光学设计 —— favicon
-    语义取自本站真源图标 Lightbulb（与主入口站 sites.json 的 icon 一致），
-    造型落到"光学设计"最经典的图上：平行光经凸透镜汇聚于焦点。
-    选它而非"棱镜折射"的原因（2026-09-29 实测）：
-      三角棱镜 + 一条贯穿光束，在 16px 下退化为"三角形被斜杠划掉"，
-      形似禁止标志; 且三角轮廓与 ipfc 的造型语言过近, 两站标签页会撞。
-      透镜+汇聚光线的笔画是"三横一束", 与所有姊妹站都不同。
-    配色遵循站群统一规范: 深底 #0a0a0a / teal #14b8a6 主线 / amber #f59e0b 仅标关键点。
-    amber 不参与形体勾勒, 只落在聚焦点上(代表光线汇聚的结果)。
-
-    注: 本文件长期缺失 —— index.html 中此前既无 <link rel="icon">，
-    public/ 下也没有该文件，线上图标一直是浏览器默认。2026-09-29 补齐。
+    造型：灯泡（本站首页主图标 Lightbulb 的加粗填实版），与页头 .brand .logo 内联 SVG 同源。
+    语义取自本站真源图标 Lightbulb（与主入口站 sites.json 的 icon 一致）。
+    配色遵循站群统一规范：深底 #0a0a0a / 主形 teal #14b8a6 / amber #f59e0b 仅标关键点。
+    2026-09-29 二次修订：初版画的是「凸透镜汇聚平行光」，与页头长期使用的灯泡并非同一物，
+    且透镜笔画在 16px 下偏碎；现统一为同一套灯泡 path。
   -->
-  <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
-  <!-- 凸透镜：左右两条对称弧线，两端在 (11.5,5.5)/(11.5,26.5) 闭合 -->
-  <path d="M11.5 5.5 C 16.2 12, 16.2 20, 11.5 26.5 C 6.8 20, 6.8 12, 11.5 5.5 Z"
-        fill="none" stroke="#14b8a6" stroke-width="2.2"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- 三条入射平行光（自左侧水平射向透镜） -->
-  <g stroke="#14b8a6" stroke-width="1.9" stroke-linecap="round">
-    <line x1="2.5" y1="9"  x2="9.6" y2="9"/>
-    <line x1="2.5" y1="16" x2="9.6" y2="16"/>
-    <line x1="2.5" y1="23" x2="9.6" y2="23"/>
-  </g>
-  <!-- 折射后汇聚：三条线收拢交于右侧焦点 -->
-  <g stroke="#14b8a6" stroke-width="1.9" stroke-linecap="round">
-    <line x1="13.6" y1="9"  x2="23.5" y2="15.3"/>
-    <line x1="13.6" y1="16" x2="23.5" y2="15.7"/>
-    <line x1="13.6" y1="23" x2="23.5" y2="16.1"/>
-  </g>
-  <circle cx="24.2" cy="15.7" r="2" fill="#f59e0b"/>
+  <rect width="32" height="32" rx="7" fill="#0a0a0a"/>
+  <path d="M16 4 a8 8 0 0 1 4.6 14.5 c-.9.6-1.3 1.4-1.4 2.3 h-6.4 c-.1-.9-.5-1.7-1.4-2.3 A8 8 0 0 1 16 4 Z"
+        fill="#14b8a6"/>
+  <rect x="12.6" y="21.6" width="6.8" height="2.2" rx="1.1" fill="#f59e0b"/>
+  <rect x="13.4" y="25.2" width="5.2" height="2.2" rx="1.1" fill="#14b8a6"/>
 </svg>
