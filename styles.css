@@ -524,9 +524,19 @@ ul.tight li { margin-bottom: 5px; }
 .footer .fset { display: none; }
 .footer .fset.active { display: block; }
 /* ICP 备案号：位于 .fset 之外，任何 tab 下恒显示 */
-.footer .beian { margin-top: 10px; }
+/* 备案区：ICP 备案号在前、公安图标居中、公安备案号在后，同一行居中排列 */
+.footer .beian {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 .footer .beian a { color: var(--text-3); }
 .footer .beian a:hover { color: var(--text-2); }
+.footer .beian .gongan { display: inline-flex; align-items: center; gap: 4px; }
+.footer .beian .gongan img { height: 16px; width: auto; }
 /* 免责声明：同样位于 .fset 之外，恒显示；置于备案号之下 */
 .footer .disclaimer { margin-top: 12px; }
 .footer .disclaimer p { margin: 0 0 6px; }

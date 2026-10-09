@@ -11,6 +11,22 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v3.11.9] - 2026-10-09
+
+### 变更：页脚增加公安联网备案号与图标
+
+**背景**：页脚已有工信部 ICP 备案号。按《计算机信息网络国际联网安全保护管理办法》，
+网站还须在底部展示**公安联网备案号**并链接至公安部备案查询系统。
+
+**改动**：
+
+- `index.html`：`.beian` 区块在 ICP 备案号之后新增公安备案链接
+  （图标 + 「苏公网安备32021402005238号」）—— ICP 在前、图标居中、公安备案号在后。
+- `styles.css`：`.beian` 改为 flex 横向居中布局；新增 `.gongan` 与图标尺寸约束。
+- **新增 `beian.png`（备案图标，36×40 RGBA）**，并**同步写入 `deploy-lighthouse.yml`
+  与 `pages.yml` 两个工作流的组装白名单与断言清单** —— ⚠️ 本项目 CI 是手写 `cp` 清单，
+  新文件不写进清单会**永不发布，且 CI 全程 success、零报错**。
+
 ## [v3.11.8] - 2026-09-29
 
 ### 变更：favicon 与页头品牌图标统一为「灯泡」
