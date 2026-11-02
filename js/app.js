@@ -549,7 +549,7 @@
 
   /* 页签名单：既是深链合法性判据，也是从 pathname 里剥 tab 段时的识别标志。
      顺序无关紧要，但必须与 index.html 的 data-tab 一一对应。 */
-  var TAB_NAMES = ['calc', 'solid', 'theory', 'prism', 'opt', 'know', 'mats'];
+  var TAB_NAMES = ['calc', 'solid', 'theory', 'prism', 'opt', 'know', 'mats', 'fb'];
 
   /** 站点根路径（含尾斜杠）。
    *  自有域名下是 '/'，GitHub Pages 子路径下是 '/optical-calculator/'。

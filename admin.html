@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后台 · 光学概念和光学设计</title>
+<!-- 后台不进搜索引擎：noindex 是礼貌性约定，真正的边界在服务端会话校验。 -->
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=3.12.0">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="index.html" style="text-decoration:none;color:inherit">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32">
+        <rect width="32" height="32" rx="7" fill="#0a0a0a"/>
+        <path d="M16 4 a8 8 0 0 1 4.6 14.5 c-.9.6-1.3 1.4-1.4 2.3 h-6.4 c-.1-.9-.5-1.7-1.4-2.3 A8 8 0 0 1 16 4 Z" fill="#14b8a6"/>
+        <rect x="12.6" y="21.6" width="6.8" height="2.2" rx="1.1" fill="#f59e0b"/>
+        <rect x="13.4" y="25.2" width="5.2" height="2.2" rx="1.1" fill="#14b8a6"/>
+      </svg>
+    </span>
+    <div>
+      <h1>后台 · 读者留言</h1>
+      <p>仅作者本人可访问</p>
+    </div>
+  </a>
+  <a class="fb-back" href="index.html" style="margin-left:auto">← 返回站内</a>
+  <span class="ver app-version">v—</span>
+</header>
+
+<div class="fb-page" id="fb-admin">
+
+  <div class="fb-alert" id="fb-alert" hidden></div>
+
+  <!-- ── 登录 ── -->
+  <div class="fb-card" id="fb-login-card" hidden>
+    <h2>登录</h2>
+    <p class="fb-sub">
+      只有作者能查看读者留言。首次使用或忘记密码，请到服务器上运行
+      <code style="font-family:var(--font-mono,monospace)">init-site.mjs --site optical</code>
+      取得一次性令牌。
+    </p>
+    <form id="fb-login-form">
+      <div class="fb-field">
+        <label for="fb-user">用户名</label>
+        <input id="fb-user" type="text" value="power-admin" autocomplete="username" required>
+      </div>
+      <div class="fb-field">
+        <label for="fb-pass">密码</label>
+        <input id="fb-pass" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="fb-actions">
+        <a href="#" id="fb-to-setup" style="font-size:12px;color:var(--text-3)">首次使用，或忘记密码？</a>
+        <button type="submit" class="btn solid" id="fb-login-btn">登录</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── 首次设定 / 重置密码 ── -->
+  <div class="fb-card" id="fb-setup-card" hidden>
+    <h2>设定后台密码</h2>
+    <p class="fb-sub">
+      凭服务器上生成的一次性令牌设定密码。令牌 60 分钟内有效，用一次即失效；
+      密码不经任何中间环节，直接在这里设定。
+    </p>
+    <form id="fb-setup-form">
+      <div class="fb-field">
+        <label for="fb-setup-token">一次性令牌 <span class="req">*</span></label>
+        <input id="fb-setup-token" type="text" autocomplete="off" spellcheck="false"
+               style="font-family:var(--font-mono,monospace);font-size:12px" required>
+      </div>
+      <div class="fb-field">
+        <label for="fb-setup-user">用户名</label>
+        <input id="fb-setup-user" type="text" value="power-admin" autocomplete="username" required>
+      </div>
+      <div class="fb-field">
+        <label for="fb-setup-pass">新密码 <span class="opt">（至少 10 位）</span></label>
+        <input id="fb-setup-pass" type="password" autocomplete="new-password" minlength="10" required>
+      </div>
+      <div class="fb-field">
+        <label for="fb-setup-pass2">确认新密码</label>
+        <input id="fb-setup-pass2" type="password" autocomplete="new-password" minlength="10" required>
+      </div>
+      <div class="fb-actions">
+        <a href="#" id="fb-to-login" style="font-size:12px;color:var(--text-3)">← 返回登录</a>
+        <button type="submit" class="btn solid" id="fb-setup-btn">设定密码</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── 已登录 ── -->
+  <div id="fb-panel" hidden>
+    <div class="fb-toolbar">
+      <div>
+        <h1 style="font-size:19px;font-weight:700">读者留言</h1>
+        <p class="fb-user" id="fb-who"></p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn" id="fb-refresh">刷新</button>
+        <button type="button" class="btn" id="fb-logout">退出</button>
+      </div>
+    </div>
+
+    <div class="fb-filters" id="fb-filters" style="margin-bottom:16px">
+      <button type="button" class="fb-filter active" data-status="all">全部<span class="n">0</span></button>
+      <button type="button" class="fb-filter" data-status="new">未读<span class="n">0</span></button>
+      <button type="button" class="fb-filter" data-status="read">已读<span class="n">0</span></button>
+      <button type="button" class="fb-filter" data-status="archived">已归档<span class="n">0</span></button>
+    </div>
+
+    <div id="fb-list"></div>
+
+    <div class="fb-card" style="margin-top:22px">
+      <h2>修改密码</h2>
+      <p class="fb-sub">修改后其它设备上的登录立即失效，仅当前浏览器保持登录。</p>
+      <form id="fb-pw-form">
+        <div class="fb-field">
+          <label for="fb-pw-cur">当前密码</label>
+          <input id="fb-pw-cur" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="fb-field">
+          <label for="fb-pw-new">新密码 <span class="opt">（至少 10 位）</span></label>
+          <input id="fb-pw-new" type="password" autocomplete="new-password" minlength="10" required>
+        </div>
+        <div class="fb-field">
+          <label for="fb-pw-new2">确认新密码</label>
+          <input id="fb-pw-new2" type="password" autocomplete="new-password" minlength="10" required>
+        </div>
+        <div class="fb-actions">
+          <span></span>
+          <button type="submit" class="btn solid" id="fb-pw-btn">更新密码</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/version.js?v=3.12.0"></script>
+<script>
+  /* 版本号注入：本站后台页不加载 app.js（那是全站交互逻辑），
+     只需把 .app-version 填上单一来源里的值，避免出现「v—」占位。 */
+  (function () {
+    var v = window.APP_VERSION || '';
+    if (!v) return;
+    document.querySelectorAll('.app-version').forEach(function (el) { el.textContent = v; });
+  })();
+</script>
+<script src="js/feedback.js?v=3.12.0"></script>
+</body>
+</html>

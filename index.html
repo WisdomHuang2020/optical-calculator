@@ -14,11 +14,11 @@
   会用全局正则剥掉一切该形式的片段再重加，注释里的会被一并吃掉、连累相邻标签被截断
   （2026-09-29 实测踩过：注释被截成半句、下面那行 link 标签整行消失）。
 -->
-<link rel="icon" type="image/svg+xml" href="favicon.svg?v=3.11.9">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=3.12.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3.11.9">
+<link rel="stylesheet" href="styles.css?v=3.12.0">
 </head>
 <body>
 
@@ -48,6 +48,7 @@
     <button class="tab" data-tab="opt">最优设计方法</button>
     <button class="tab" data-tab="know">棱镜原理</button>
     <button class="tab" data-tab="mats">材料与参考</button>
+    <button class="tab" data-tab="fb">留言</button>
   </nav>
   <span class="ver app-version">v—</span>
 </header>
@@ -1593,6 +1594,7 @@
       </div>
     </div>
   </section>
+
 </div>
 
 <!-- ===== 第 7 个页面 · 材料与参考（设计要点与材料 + 参考资料）===== -->
@@ -1701,7 +1703,83 @@
     </div>
   </section>
   </div>
+
 </div>
+
+
+
+  <!-- ============================================================
+       视图 8 —— 读者留言（2026-11-02）
+       ------------------------------------------------------------
+       为什么与 view-mats 一样放在 .wrap 之外：本站 7 个视图里，前 4 个
+       （calc/solid/theory/prism）在 .wrap 内，后 3 个（opt/know/mats）在
+       body 层、各自靠内部 <div class="wrap"> 提供左右留白。这是原站既有
+       结构，不动它；新视图跟随多数派中的"后置视图"做法，自己带一层 wrap，
+       既与相邻视图齐平，也不依赖外层容器。
+       ID 约定：#fb-form / #fb-content / #fb-submit 等被 js/feedback.js 引用。
+  ============================================================ -->
+  <div class="view" id="view-fb">
+    <div class="wrap">
+      <div class="fb-box">
+        <p class="fb-lead">
+          本站的推导与计算都是工程近似，公式、边界条件与单位换算可能仍有疏漏。
+          如果结果与手算、数据手册或实测不符，请在这里指出——
+          <b>具体到哪里不对，比「好像有问题」有用得多。</b>
+        </p>
+
+        <div class="note info" style="margin:14px 0 18px">
+          留言<b>不会公开展示</b>，也不会出现在任何页面上，只有作者能在后台查看。
+          若留了联系方式，仅用于回复你的问题。
+        </div>
+
+        <div class="card">
+          <h2><span class="num">1</span>填写反馈</h2>
+
+          <form id="fb-form" novalidate>
+            <div class="fb-field">
+              <label for="fb-page">涉及页面</label>
+              <select id="fb-page">
+                <option>照度计算</option>
+                <option>立体角可视化</option>
+                <option>公式与推导</option>
+                <option>棱镜板设计</option>
+                <option>最优设计方法</option>
+                <option>棱镜原理</option>
+                <option>材料与参考</option>
+                <option>其它 / 未指明</option>
+              </select>
+            </div>
+
+            <div class="fb-field">
+              <div class="fb-meta">
+                <label for="fb-content">问题描述 <span class="req">*</span></label>
+                <span class="count" id="fb-count">0 / 4000</span>
+              </div>
+              <textarea id="fb-content" rows="9" placeholder="建议写清四点：&#10;1. 输入了什么（如 Φ = 9000 lm、2θ½ = 38°、H = 6 m）&#10;2. 页面给出的结果&#10;3. 你认为正确的值，以及依据（手算过程 / 数据手册页码 / 实测）&#10;4. 若涉及公式，指出哪一步推导有问题"></textarea>
+            </div>
+
+            <div class="fb-field">
+              <label for="fb-contact">联系方式 <span class="opt">（可选，便于回复你）</span></label>
+              <input id="fb-contact" type="text" maxlength="200" placeholder="邮箱 / 微信号，留空也可以" autocomplete="off">
+            </div>
+
+            <!-- 蜜罐：对真人不可见，机器人会填。填了则服务端静默丢弃。 -->
+            <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+              <label for="fb-website">Website</label>
+              <input id="fb-website" type="text" tabindex="-1" autocomplete="off">
+            </div>
+
+            <div class="fb-alert" id="fb-alert" hidden></div>
+
+            <div class="fb-actions">
+              <p class="hint">提交即为同意作者在改进本站时参考该反馈。</p>
+              <button type="submit" class="btn solid" id="fb-submit" disabled>提交</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <div class="footer" id="app-footer">
   <div class="fset active" data-for="calc solid theory">
@@ -1826,20 +1904,21 @@
   </div>
 </div>
 
-<script src="js/version.js?v=3.11.9"></script>
-<script src="js/optics.js?v=3.11.9"></script>
-<script src="js/charts.js?v=3.11.9"></script>
-<script src="js/solidangle.js?v=3.11.9"></script>
-<script src="js/planar.js?v=3.11.9"></script>
-<script src="js/vendor-three.min.js?v=3.11.9"></script>
-<script src="js/vendor-orbitcontrols.js?v=3.11.9"></script>
-<script src="js/prism-shapes.js?v=3.11.9"></script>
-<script src="js/prism-shapes1d.js?v=3.11.9"></script>
-<script src="js/prism.js?v=3.11.9"></script>
-<script src="js/prism-perf.js?v=3.11.9"></script>
-<script src="js/optimal-design.js?v=3.11.9"></script>
-<script src="js/optimal-design-ui.js?v=3.11.9"></script>
-<script src="js/prism-knowledge.js?v=3.11.9"></script>
-<script src="js/app.js?v=3.11.9"></script>
+<script src="js/version.js?v=3.12.0"></script>
+<script src="js/optics.js?v=3.12.0"></script>
+<script src="js/charts.js?v=3.12.0"></script>
+<script src="js/solidangle.js?v=3.12.0"></script>
+<script src="js/planar.js?v=3.12.0"></script>
+<script src="js/vendor-three.min.js?v=3.12.0"></script>
+<script src="js/vendor-orbitcontrols.js?v=3.12.0"></script>
+<script src="js/prism-shapes.js?v=3.12.0"></script>
+<script src="js/prism-shapes1d.js?v=3.12.0"></script>
+<script src="js/prism.js?v=3.12.0"></script>
+<script src="js/prism-perf.js?v=3.12.0"></script>
+<script src="js/optimal-design.js?v=3.12.0"></script>
+<script src="js/optimal-design-ui.js?v=3.12.0"></script>
+<script src="js/prism-knowledge.js?v=3.12.0"></script>
+<script src="js/app.js?v=3.12.0"></script>
+<script src="js/feedback.js?v=3.12.0"></script>
 </body>
 </html>

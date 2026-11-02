@@ -75,7 +75,7 @@ jobs:
           set -e
           rm -rf _site
           mkdir -p _site
-          cp -r index.html styles.css js preview favicon.svg beian.png _site/
+          cp -r index.html admin.html styles.css js preview favicon.svg beian.png _site/
           # 页签深链由 hash 改为真实路径（v3.11.5）后，直接访问 /prism 这类地址
           # 会真的向服务器请求该路径。自有域名侧由 nginx 的 try_files fallback 兜住；
           # 这里一并产出 404.html，是为了让自有域名与 Pages 两个通道的产物保持一致。
@@ -159,7 +159,7 @@ jobs:
           $SSH_CMD "chown -R $WEB_OWNER:$WEB_OWNER '$LH_ROOT'" || true
 
           # ---------- 清理后断言：关键运行时文件必须已在位 ----------
-          for f in index.html styles.css js/app.js js/version.js; do
+          for f in index.html admin.html styles.css js/app.js js/version.js js/feedback.js; do
             $SSH_CMD "test -f '$LH_ROOT/$f'" || { echo "::error title=部署后校验失败::缺少 $f"; exit 1; }
           done
           echo "✔ 关键运行时文件已落位"

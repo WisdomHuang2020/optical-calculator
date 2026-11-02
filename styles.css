@@ -1166,3 +1166,146 @@ ul.tight li { margin-bottom: 5px; }
   #view-opt .opt-fieldwrap { flex-wrap: wrap; }
 }
 
+/* ============================================================
+   读者留言 / 后台（2026-11-02 新增）
+   ------------------------------------------------------------
+   为什么自成一节、类名一律 `fb-` 前缀：
+     本站样式表是"照度 / 立体角 / 棱镜 / 最优设计"多套视图共用的一张长表，
+     改公共选择器（.field input 之类）会牵动已有七个标签页。留言板只占一个
+     标签页 + 一个独立后台页，独立命名空间最不容易踩到别处。
+     色调仍取自同一套变量（--primary / --amber / --surface-*），不另立色板。
+   ============================================================ */
+
+.fb-lead { font-size: 13px; line-height: 1.85; color: var(--text-2); max-width: 780px; }
+.fb-lead b { color: var(--text); font-weight: 700; }
+
+.fb-box { max-width: 780px; }
+
+.fb-field { margin-bottom: 16px; }
+.fb-field:last-child { margin-bottom: 0; }
+.fb-field > label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-2); margin-bottom: 7px;
+}
+.fb-field > label .opt { color: var(--text-3); font-weight: 400; }
+.fb-field > label .req { color: var(--amber-ink); }
+
+.fb-field input[type=text],
+.fb-field input[type=password],
+.fb-field select,
+.fb-field textarea {
+  width: 100%; box-sizing: border-box;
+  font: inherit; font-size: 13px; line-height: 1.7;
+  color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 9px 12px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.fb-field textarea { min-height: 200px; resize: vertical; }
+.fb-field input:focus,
+.fb-field select:focus,
+.fb-field textarea:focus {
+  outline: none; border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+.fb-field input::placeholder,
+.fb-field textarea::placeholder { color: var(--text-3); }
+
+.fb-meta {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; margin-bottom: 7px;
+}
+.fb-meta label { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.fb-meta .count { font-size: 11px; color: var(--text-3); font-family: var(--font-mono, monospace); }
+
+.fb-actions {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 14px; margin-top: 18px;
+}
+.fb-actions .hint { font-size: 11.5px; color: var(--text-3); line-height: 1.7; }
+
+.fb-alert {
+  border-radius: 6px; padding: 10px 13px; font-size: 12.5px; line-height: 1.75;
+  margin-top: 14px; border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-2);
+}
+.fb-alert.err { background: var(--amber-soft); border-color: rgba(245,158,11,.45); color: var(--amber-ink); }
+.fb-alert.ok  { background: var(--primary-soft); border-color: rgba(20,184,166,.45); color: var(--primary-ink); }
+
+/* ── 后台列表 ── */
+.fb-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 12px; margin-bottom: 16px;
+}
+.fb-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-filter {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 6px 11px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
+  transition: all .15s;
+}
+.fb-filter:hover { border-color: var(--border-2); color: var(--text); }
+.fb-filter.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-ink); }
+.fb-filter .n { opacity: .65; margin-left: 5px; font-family: var(--font-mono, monospace); }
+
+.fb-item {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); padding: 14px 16px; margin-bottom: 12px;
+}
+.fb-item.is-new { border-left: 3px solid var(--primary); }
+.fb-item-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: 10px; font-size: 11px;
+}
+.fb-tag {
+  border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;
+  border: 1px solid var(--border); color: var(--text-2); background: var(--surface-2);
+}
+.fb-tag.page { border-color: rgba(20,184,166,.4); color: var(--primary-ink); background: var(--primary-soft); }
+.fb-tag.unread { border-color: rgba(245,158,11,.45); color: var(--amber-ink); background: var(--amber-soft); }
+.fb-item-head .stamp { margin-left: auto; color: var(--text-3); font-family: var(--font-mono, monospace); }
+.fb-item-body {
+  font-size: 13px; line-height: 1.8; color: var(--text);
+  white-space: pre-wrap; word-break: break-word;
+}
+.fb-item-contact {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-2);
+}
+.fb-item-contact code { font-family: var(--font-mono, monospace); color: var(--text); word-break: break-all; }
+.fb-item-ops { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.fb-item-ops .del { margin-left: auto; }
+
+.fb-empty {
+  border: 1px dashed var(--border-2); border-radius: 8px;
+  padding: 44px 20px; text-align: center; color: var(--text-3); font-size: 13px;
+}
+
+.fb-user { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+.fb-user code { color: var(--text-2); font-family: var(--font-mono, monospace); }
+
+.fb-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--text-2); text-decoration: none;
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px;
+  background: var(--surface-2); transition: all .15s;
+}
+.fb-back:hover { border-color: var(--primary); color: var(--primary-ink); }
+
+/* 后台独立页：没有 tabs，页头只留品牌与返回 */
+.fb-page { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
+.fb-page h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.fb-card {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); padding: 20px 22px;
+}
+.fb-card + .fb-card { margin-top: 16px; }
+.fb-card h2 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+.fb-sub { font-size: 12.5px; color: var(--text-3); margin-bottom: 16px; line-height: 1.75; }
+
+@media (max-width: 640px) {
+  .fb-page { padding: 20px 16px 48px; }
+  .fb-actions { flex-direction: column; align-items: stretch; }
+  .fb-actions .btn { width: 100%; }
+  .fb-item-ops .del { margin-left: 0; }
+}
