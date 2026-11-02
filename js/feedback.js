@@ -329,6 +329,22 @@
     }
     function clearAlert() { if (alertBox) alertBox.hidden = true; }
 
+    /* 登录错误用**独立**容器，不能复用页面顶部的 #fb-alert。
+       原因：登录失败的 catch 里要先提示、再 view('login') 切回登录页，
+       而 view() 内部会调 clearAlert() —— 刚显示的错误会被立刻抹掉，
+       用户看到的现象就是"输错密码毫无反应"（2026-11-02 实测确认：
+       alertText 有内容但 alertHidden=true）。 */
+    var loginErrBox = $('#fb-login-err');
+    function showLoginErr(text) {
+      if (!loginErrBox) return;
+      loginErrBox.className = 'fb-alert err';
+      loginErrBox.textContent = text;
+      loginErrBox.hidden = false;
+    }
+    function clearLoginErr() {
+      if (loginErrBox) loginErrBox.hidden = true;
+    }
+
     function view(mode) {
       state.mode = mode;
       if (loginCard) loginCard.hidden = mode !== 'login';
@@ -343,6 +359,7 @@
       loginForm.addEventListener('submit', function (e) {
         e.preventDefault();
         clearAlert();
+        clearLoginErr();
         var btn = $('#fb-login-btn');
         btn.disabled = true;
         btn.textContent = '登录中…';
@@ -357,7 +374,7 @@
           $('#fb-pass').value = '';
           enterPanel();
         }).catch(function (err) {
-          show('err', err.message || '登录失败。');
+          showLoginErr(err.message || '登录失败。');
           view('login');
         }).then(function () {
           btn.disabled = false;
@@ -521,6 +538,7 @@
     if (loginLink) {
       loginLink.addEventListener('click', function (e) {
         e.preventDefault();
+        clearLoginErr();
         view('setup');
       });
     }
@@ -538,6 +556,7 @@
         api('/api/admin/logout', { method: 'POST' }).catch(function () {}).then(function () {
           state.user = '';
           if (typeof closeSettings === 'function') closeSettings();
+          clearLoginErr();
           view('login');
         });
       });

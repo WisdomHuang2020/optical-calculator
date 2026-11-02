@@ -11,6 +11,29 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v4.3.2] - 2026-11-02
+
+### 修正：登录密码错误时没有任何提示
+
+现象：输错密码点登录，页面毫无反应——不报错、不跳动，看不出是密码错了还是没点上。
+
+根因是顺序问题，不是"没写提示"：
+
+```js
+.catch(function (err) {
+  show('err', ...)   // 先显示提示
+  view('login')      // view() 内部调 clearAlert()，立刻把提示抹掉
+})
+```
+
+实测依据：`#fb-alert` 的 `textContent` 已经是「用户名或密码错误。」，
+但 `hidden` 是 `true`——文字写进去了，随后被自己清掉。
+
+修复：登录错误改用**独立容器** `#fb-login-err`，与页面级 `#fb-alert` 分开，
+不再受 `view()` 清理影响；输入时、切换「首次使用」、退出登录时清空。
+
+线上用同一份 `js/feedback.js` 的 web-training 站同样受影响，一并修复。
+
 ## [v4.3.1] - 2026-11-02
 
 ### 修正：眼睛图标太小、太暗
