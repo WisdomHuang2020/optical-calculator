@@ -150,23 +150,40 @@ jobs:
           # 上传前备份
           $SSH_CMD "tar czf ~/webroot-backup-optical-\$(date +%F-%H%M%S).tar.gz -C '$LH_ROOT' . 2>/dev/null || true"
 
-          # ---------- 镜像式替换 ----------
-          # 本站资源名不带内容哈希，必须先清运行时条目再解包，否则旧同名文件残留。
-          # 保留 web 根目录本身与 .deployed-version（稍后重写）。
-          $SSH_CMD "find '$LH_ROOT' -mindepth 1 -maxdepth 1 ! -name '.deployed-version' -exec rm -rf {} +"
+          # ---------- 镜像式替换（原子化） ----------
+          # 本站资源名不带内容哈希，必须整体替换，否则旧同名文件残留。
+          #
+          # ⚠️ 2026-11-02 修正：原实现是「先 find -exec rm -rf 删光线上目录，再从 tar 解包」，
+          #    删除与写入之间存在**分钟级空窗**：传输稍慢或中断，站点就停在残缺状态。
+          #    当晚实测撞上过——线上 index.html / styles.css 都不在，全站 403，
+          #    而 CI 还在继续跑。中断时更不会有任何回滚。
+          #    现改为：解包到同级 staging 目录 → 断言关键文件齐备 → 两次 rename 原子切换。
+          #    任何一步失败都只影响 staging，线上目录一个字节都不动。
+          STAGE="$LH_ROOT.staging-$(date +%s)"
+          OLD="$LH_ROOT.old-$(date +%s)"
 
-          tar czf - -C _site . | $SSH_CMD "tar xzf - --no-same-owner -C '$LH_ROOT'"
-          $SSH_CMD "chown -R $WEB_OWNER:$WEB_OWNER '$LH_ROOT'" || true
+          $SSH_CMD "rm -rf '$STAGE'; mkdir -p '$STAGE'"
+          tar czf - -C _site . | $SSH_CMD "tar xzf - --no-same-owner -C '$STAGE'"
 
-          # ---------- 清理后断言：关键运行时文件必须已在位 ----------
-          for f in index.html admin.html styles.css js/app.js js/version.js js/feedback.js; do
-            $SSH_CMD "test -f '$LH_ROOT/$f'" || { echo "::error title=部署后校验失败::缺少 $f"; exit 1; }
+          # 暂存区先断言：缺任意一项就清掉 staging 并失败，绝不进切换阶段
+          for f in index.html styles.css js/app.js js/version.js js/feedback.js admin.html; do
+            $SSH_CMD "test -f '$STAGE/$f'" || {
+              echo "::error title=暂存区校验失败::缺少 $f，已放弃本次部署（线上未改动）"
+              $SSH_CMD "rm -rf '$STAGE'"
+              exit 1
+            }
           done
-          echo "✔ 关键运行时文件已落位"
 
-          # 上传成功后写入版本哨兵
-          $SSH_CMD "printf '%s\n' '$ART_VER' > '$LH_ROOT/.deployed-version'"
-          echo "已写入版本哨兵：$LH_ROOT/.deployed-version = $ART_VER"
+          $SSH_CMD "printf '%s\n' '$ART_VER' > '$STAGE/.deployed-version' && \
+                    chown -R $WEB_OWNER:$WEB_OWNER '$STAGE' && \
+                    chmod -R u=rwX,go=rX '$STAGE' && \
+                    chmod 644 '$STAGE/.deployed-version'"
+
+          # 原子切换：rename 同一父目录下的两个目录，不存在"目录不存在"的中间态
+          # （两次 rename 之间的间隔是微秒级，与原来分钟级的空窗不是一个量级）
+          $SSH_CMD "mv '$LH_ROOT' '$OLD' && mv '$STAGE' '$LH_ROOT' && rm -rf '$OLD'"
+
+          echo "✔ 原子切换完成：$LH_ROOT（哨兵 $ART_VER）"
 
       # ⚠️ 自检步骤：只做体检，绝不当门禁（境外 TLS 可能被中间设备中断，而部署本身已成功）。
       - name: Verify live site (self-check, never blocks)
