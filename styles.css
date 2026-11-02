@@ -537,6 +537,21 @@ ul.tight li { margin-bottom: 5px; }
 .footer .beian a:hover { color: var(--text-2); }
 .footer .beian .gongan { display: inline-flex; align-items: center; gap: 4px; }
 .footer .beian .gongan img { height: 16px; width: auto; }
+/* 站群导航（2026-11-02 新增）：恒显示，位于备案号之下、免责声明之上。
+   形态沿用站群口径：边框 + 深底 + 灰字，hover 提亮；颜色全部取本站已有变量。 */
+.site-nav {
+  margin-top: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+}
+.site-nav .nav-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-3); color: var(--text-3);
+  font-size: 12px; line-height: 1;
+  transition: color .18s, border-color .18s;
+}
+.site-nav .nav-btn:hover { color: var(--text-2); border-color: var(--border-2); }
+.site-nav .nav-i { width: 14px; height: 14px; display: block; flex: 0 0 auto; }
 /* 免责声明：同样位于 .fset 之外，恒显示；置于备案号之下 */
 .footer .disclaimer { margin-top: 12px; }
 .footer .disclaimer p { margin: 0 0 6px; }

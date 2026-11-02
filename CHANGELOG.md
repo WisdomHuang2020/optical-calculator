@@ -11,6 +11,20 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v4.0.1] - 2026-11-02
+
+### 页脚新增「本站首页」与「返回站群入口」
+
+本站是 power-knowledge.tech 站群的子站，此前回总入口只能靠浏览器后退或手改地址。
+
+- 在页脚备案号与免责声明之间新增 `.site-nav`，含两个按钮（恒显示，不属于任何 `.fset`，任何 tab 下都在）
+  - 「本站首页」→ `./`（本页 tab 会写进地址，回 `./` 即重置到首屏）
+  - 「返回站群入口」→ <https://power-knowledge.tech/>
+- 形态与站群其余 5 站一致：边框 + 深底 + 灰字，hover 提亮；颜色全取本站已有变量
+- 图标：本站首页 House；返回入口 LayoutGrid（九宫格＝站群）—— 避免两个按钮出现两个相同房子图标
+
+无功能逻辑变更，纯页脚导航。版本号与 `?v=` 缓存戳同步更新。
+
 ## [v4.0.0] - 2026-11-02
 
 ### 架构升级：从纯静态站变为「静态页 + 统一留言服务」
