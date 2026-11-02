@@ -1411,7 +1411,7 @@ ul.tight li { margin-bottom: 5px; }
   width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; border-radius: 5px; border: 1px solid transparent;
-  background: transparent; color: var(--text-3); transition: all .15s;
+  background: transparent; color: var(--text-2); transition: all .15s;
 }
 .pw-eye:hover { color: var(--text); border-color: var(--border); }
 .pw-eye.on { color: var(--primary); }
