@@ -487,6 +487,7 @@
       logoutBtn.addEventListener('click', function () {
         api('/api/admin/logout', { method: 'POST' }).catch(function () {}).then(function () {
           state.user = '';
+          if (typeof closeSettings === 'function') closeSettings();
           view('login');
         });
       });
@@ -495,14 +496,63 @@
     var refreshBtn = $('#fb-refresh');
     if (refreshBtn) refreshBtn.addEventListener('click', load);
 
+    /* ---- 设置弹层（改密码收进来，与其余五站的 Admin 页一致）---- */
+    var settings = $('#fb-settings');
+    var pwAlert = $('#fb-pw-alert');
+
+    function openSettings() {
+      if (!settings) return;
+      settings.hidden = false;
+      document.body.style.overflow = 'hidden';
+      if (pwAlert) pwAlert.hidden = true;
+      var nameEl = document.querySelectorAll('.fb-who-name');
+      for (var i = 0; i < nameEl.length; i++) nameEl[i].textContent = state.user || '';
+    }
+
+    function closeSettings() {
+      if (!settings) return;
+      settings.hidden = true;
+      document.body.style.overflow = '';
+      /* 关掉就清空：密码框不该在下次打开时还留着上一次的输入，
+         尤其是在共用电脑上。 */
+      ['#fb-pw-cur', '#fb-pw-new', '#fb-pw-new2'].forEach(function (sel) {
+        var el = $(sel);
+        if (el) el.value = '';
+      });
+      if (pwAlert) pwAlert.hidden = true;
+    }
+
+    var settingsOpenBtn = $('#fb-settings-open');
+    if (settingsOpenBtn) settingsOpenBtn.addEventListener('click', openSettings);
+
+    var settingsCloseBtn = $('#fb-settings-close');
+    if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', closeSettings);
+
+    if (settings) {
+      settings.addEventListener('click', function (e) {
+        if (e.target.getAttribute && e.target.getAttribute('data-close')) closeSettings();
+      });
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && settings && !settings.hidden) closeSettings();
+    });
+
+    function showPw(kind, text) {
+      if (!pwAlert) return;
+      pwAlert.className = 'fb-alert ' + kind;
+      pwAlert.textContent = text;
+      pwAlert.hidden = false;
+    }
+
     var pwForm = $('#fb-pw-form');
     if (pwForm) {
       pwForm.addEventListener('submit', function (e) {
         e.preventDefault();
-        clearAlert();
+        if (pwAlert) pwAlert.hidden = true;
         var np = $('#fb-pw-new').value;
         var np2 = $('#fb-pw-new2').value;
-        if (np !== np2) { show('err', '两次输入的新密码不一致。'); return; }
+        if (np !== np2) { showPw('err', '两次输入的新密码不一致。'); return; }
         var btn = $('#fb-pw-btn');
         btn.disabled = true;
         btn.textContent = '提交中…';
@@ -511,9 +561,9 @@
           body: { currentPassword: $('#fb-pw-cur').value, newPassword: np }
         }).then(function () {
           pwForm.reset();
-          show('ok', '密码已更新。其它设备的登录已全部失效。');
+          showPw('ok', '密码已更新。其它设备的登录已全部失效。');
         }).catch(function (err) {
-          show('err', err.message || '修改失败。');
+          showPw('err', err.message || '修改失败。');
         }).then(function () {
           btn.disabled = false;
           btn.textContent = '更新密码';

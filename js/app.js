@@ -557,6 +557,11 @@
   function siteBase() {
     var segs = String(location.pathname || '/').split('/').filter(Boolean);
     if (segs.length && TAB_NAMES.indexOf(segs[segs.length - 1]) >= 0) segs.pop();
+    /* 末尾若是 index.html 也要剥掉。2026-11-02 用户实测：从 /index.html 进入后，
+       每次切页都变成 /index.html/calc、/index.html/prism —— 地址栏脏，
+       而且刷新时 /index.html/calc 会在服务器上 404（没有这条 path）。
+       站内链接已改为 ./ ，这里再兜一层，覆盖外部书签/搜索引擎收录的旧地址。 */
+    if (segs.length && segs[segs.length - 1] === 'index.html') segs.pop();
     return '/' + (segs.length ? segs.join('/') + '/' : '');
   }
 

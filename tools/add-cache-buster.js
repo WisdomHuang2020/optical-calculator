@@ -25,7 +25,7 @@ const ROOT = path.resolve(__dirname, '..');
 /* 2026-11-02：加入 admin.html。后台页引用同一份 js/feedback.js，
    只给 index.html 换戳会让后台继续吃旧缓存 —— 表现是"首页有附件上传、
    后台却打不开附件"，且 Ctrl+F5 也不一定生效（缓存键是 URL）。 */
-const HTML_FILES = ['index.html', 'admin.html'].map(f => path.join(ROOT, f));
+const HTML_FILES = ['index.html', 'admin/index.html'].map(f => path.join(ROOT, f));
 const CHECK_ONLY = process.argv.includes('--check');
 
 const vjs = fs.readFileSync(path.join(ROOT, 'js', 'version.js'), 'utf8');
@@ -35,12 +35,14 @@ const stamp = m[1].replace(/^v/, '');
 
 /* 每个文件的最小引用数：index.html 覆盖全站 18 处本地资源，admin.html 只有
    version.js + feedback.js 两处。阈值分开写，避免"后台页只有 2 处"被当成异常。 */
-const MIN_REFS = { 'index.html': 17, 'admin.html': 2 };
+/* 键用**相对路径**而不是 basename：后台改成目录式后，两个文件名都叫
+   index.html，用 basename 做键会撞在一起（阈值互相覆盖，且谁先谁后不确定）。 */
+const MIN_REFS = { 'index.html': 17, 'admin/index.html': 4 };
 
 let changedFiles = 0;
 
 for (const htmlPath of HTML_FILES) {
-  const name = path.basename(htmlPath);
+  const name = path.relative(ROOT, htmlPath).split(path.sep).join('/');
   const before = fs.readFileSync(htmlPath, 'utf8');
 
   /* 先剥掉"属性值内"已有的缓存戳再重新加，保证幂等（重复跑不会叠加）。

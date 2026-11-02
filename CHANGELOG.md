@@ -11,6 +11,32 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v4.2.0] - 2026-11-02
+
+### 后台改为目录式 `/admin`，改密码收进「设置」弹层，修掉 URL 里的 index.html
+
+三处不一致，都是「站群内应当统一、而本站独自跑偏」：
+
+**1. 后台入口 `/admin.html` → `/admin`**
+其余五站都是 `/admin`（SPA 路由或目录式），只有本站带 `.html` 后缀。
+现改为目录式 `admin/index.html`，地址栏与其他站一致；nginx 不再需要 301 补丁。
+
+**2. 改密码从平铺改为「设置」弹层**
+原实现把修改密码表单直接摊在留言列表下方，与其余五站的交互不一致
+（那边是工具栏「设置」按钮 + 弹层）。现改为同样的形态，并支持 Esc / 点遮罩关闭；
+关闭时清空密码框，避免共用电脑上残留。
+
+**3. 修掉 `/index.html/calc` 这类脏地址**
+`siteBase()` 只剥离页签名，没处理 `index.html`。用户从 `/index.html` 进入后，
+每次切页都拼成 `/index.html/calc`、`/index.html/prism`——地址栏难看，
+而且刷新时该地址在服务器上不存在（会回落首页，看起来像"跳走了"）。
+现在 `siteBase()` 一并剥离 `index.html`，站内链接也统一改为 `./`；
+nginx 另加 `/index.html` → 301 `/` 的规范化，兜住旧书签与搜索引擎收录。
+
+- `tools/add-cache-buster.js` 的文件清单同步改为 `admin/index.html`；
+  阈值表的键由 basename 改为相对路径——后台目录化后两个文件同名，
+  用 basename 做键会互相覆盖。
+
 ## [v4.1.0] - 2026-11-02
 
 ### 新增：留言支持附件（截图 / PDF / 日志），并修正后台短地址

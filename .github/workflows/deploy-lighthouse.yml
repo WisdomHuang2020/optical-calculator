@@ -75,7 +75,7 @@ jobs:
           set -e
           rm -rf _site
           mkdir -p _site
-          cp -r index.html admin.html styles.css js preview favicon.svg beian.png _site/
+          cp -r index.html admin styles.css js preview favicon.svg beian.png _site/
           # 页签深链由 hash 改为真实路径（v3.11.5）后，直接访问 /prism 这类地址
           # 会真的向服务器请求该路径。自有域名侧由 nginx 的 try_files fallback 兜住；
           # 这里一并产出 404.html，是为了让自有域名与 Pages 两个通道的产物保持一致。
@@ -166,7 +166,7 @@ jobs:
           tar czf - -C _site . | $SSH_CMD "tar xzf - --no-same-owner -C '$STAGE'"
 
           # 暂存区先断言：缺任意一项就清掉 staging 并失败，绝不进切换阶段
-          for f in index.html styles.css js/app.js js/version.js js/feedback.js admin.html; do
+          for f in index.html styles.css js/app.js js/version.js js/feedback.js admin/index.html; do
             $SSH_CMD "test -f '$STAGE/$f'" || {
               echo "::error title=暂存区校验失败::缺少 $f，已放弃本次部署（线上未改动）"
               $SSH_CMD "rm -rf '$STAGE'"
