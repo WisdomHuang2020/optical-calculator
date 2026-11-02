@@ -90,6 +90,56 @@
   }
 
   /* ============================================================
+   * 密码框的「显示」开关（2026-11-02）
+   * ------------------------------------------------------------
+   * 为什么用 JS 动态包裹而不是在 HTML 里逐个写按钮：
+   *   本站后台页有 6 个密码框（登录 1、首次设定 2、设置弹层 3），
+   *   web-training 用同一份脚本、HTML 却是生成器产出的。逐个手写容易漏、
+   *   且两站要各改一遍；这里一次性处理所有 input[type=password]，
+   *   以后新增密码框自动获得同样的行为。
+   *
+   * 按钮必须 type="button"：放在 form 里时，默认 type=submit 会让
+   * 点眼睛等于提交表单。
+   * ============================================================ */
+  var EYE_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
+
+  function enhancePasswordFields(root) {
+    var inputs = (root || document).querySelectorAll('input[type="password"]');
+    for (var i = 0; i < inputs.length; i++) enhanceOne(inputs[i]);
+  }
+
+  function enhanceOne(inp) {
+    if (!inp || inp.getAttribute('data-pw-ready')) return;
+    inp.setAttribute('data-pw-ready', '1');
+
+    var wrap = document.createElement('div');
+    wrap.className = 'pw-wrap';
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-eye';
+    btn.setAttribute('aria-label', '显示密码');
+    btn.setAttribute('title', '显示密码');
+    btn.innerHTML = EYE_SVG;
+
+    btn.addEventListener('click', function () {
+      var toText = inp.type === 'password';
+      inp.type = toText ? 'text' : 'password';
+      btn.innerHTML = toText ? EYE_OFF_SVG : EYE_SVG;
+      btn.setAttribute('aria-label', toText ? '隐藏密码' : '显示密码');
+      btn.setAttribute('title', toText ? '隐藏密码' : '显示密码');
+      if (toText) btn.classList.add('on'); else btn.classList.remove('on');
+      /* 切回明文后把光标放回原处，否则焦点留在按钮上，用户接着打字会打空 */
+      try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+    });
+
+    wrap.appendChild(btn);
+  }
+
+  /* ============================================================
    * 一、读者提交（#view-fb）
    * ============================================================ */
   function initFeedbackForm() {
@@ -581,13 +631,17 @@
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      initFeedbackForm();
-      initAdmin();
-    });
-  } else {
+  function boot() {
     initFeedbackForm();
     initAdmin();
+    /* 给所有密码框加「显示」开关。放在两个 init 之后：它们可能刚把某个卡片
+       从 hidden 切到可见，节点此时一定已在 DOM 里。 */
+    enhancePasswordFields(document);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
   }
 })();

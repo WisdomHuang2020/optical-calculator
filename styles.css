@@ -1399,3 +1399,19 @@ ul.tight li { margin-bottom: 5px; }
 .fb-modal-body { border-top: 1px solid var(--border); padding-top: 16px; }
 .fb-modal-body h3 { font-size: 13px; font-weight: 700; margin-bottom: 14px; color: var(--text); }
 
+/* ── 密码框的「显示」开关（2026-11-02）────────────────────────────
+   由 js/feedback.js 的 enhancePasswordFields() 动态包裹生成：
+   给每个 input[type=password] 套一层 .pw-wrap 并插入 .pw-eye 按钮。
+   这样 HTML 不用逐处改，web-training 用同一份脚本也自动获得。 */
+.pw-wrap { position: relative; }
+/* 特异性要压过 .fb-field input[type=password] 的 padding（同层、后定义生效） */
+.fb-field .pw-wrap input { padding-right: 38px; }
+.pw-eye {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; border-radius: 5px; border: 1px solid transparent;
+  background: transparent; color: var(--text-3); transition: all .15s;
+}
+.pw-eye:hover { color: var(--text); border-color: var(--border); }
+.pw-eye.on { color: var(--primary); }

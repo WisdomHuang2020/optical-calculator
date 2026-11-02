@@ -11,6 +11,21 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v4.3.0] - 2026-11-02
+
+### 后台密码框加「显示」开关
+
+密码通常在手机上、或对着密码管理器粘贴时输入。看不见字符时很难判断是
+"多打了一位"还是"输入法把字母吃掉了"，只能反复重输——加个眼睛按钮让人当场核对。
+
+- `js/feedback.js` 新增 `enhancePasswordFields()`：扫描所有
+  `input[type=password]`，动态套一层 `.pw-wrap` 并插入切换按钮。
+  **不逐处改 HTML** —— 后台有 6 个密码框（登录 1、首次设定 2、设置弹层 3），
+  web-training 用的是同一份脚本、HTML 却由生成器产出，逐处手写会漏且要改两遍。
+- 按钮 `type="button"`：放在 form 里时默认是 submit，点眼睛会提交表单。
+- 切换后把焦点还给输入框，否则用户接着打字会打空。
+- `styles.css` 新增 `.pw-wrap` / `.pw-eye`；输入框右侧留 38px 给按钮。
+
 ## [v4.2.0] - 2026-11-02
 
 ### 后台改为目录式 `/admin`，改密码收进「设置」弹层，修掉 URL 里的 index.html
