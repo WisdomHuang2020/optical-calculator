@@ -1324,3 +1324,50 @@ ul.tight li { margin-bottom: 5px; }
   .fb-actions .btn { width: 100%; }
   .fb-item-ops .del { margin-left: 0; }
 }
+
+/* ── 附件（2026-11-02）──────────────────────────────────────────── */
+.fb-file-input {
+  width: 100%; box-sizing: border-box;
+  font: inherit; font-size: 12px; color: var(--text-2);
+  background: var(--surface-2); border: 1px dashed var(--border-2);
+  border-radius: 6px; padding: 9px 12px; cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.fb-file-input:hover { border-color: var(--primary); color: var(--text); }
+.fb-file-input::file-selector-button {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  margin-right: 10px; padding: 4px 10px; border-radius: 5px;
+  border: 1px solid var(--border-2); background: var(--surface-3); color: var(--text-2);
+}
+.fb-file-input::file-selector-button:hover { border-color: var(--primary); color: var(--primary-ink); }
+
+.fb-hint { font-size: 11.5px; line-height: 1.7; color: var(--text-3); margin: 6px 0 0; }
+.fb-hint-err { color: var(--amber-ink); }
+.fb-hint-err:empty { display: none; }
+
+.fb-pick-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.fb-pick-list li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px; color: var(--text-2); padding: 3px 0;
+}
+.fb-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-pick-size { flex: none; color: var(--text-3); font-family: var(--font-mono, monospace); }
+.fb-pick-list button {
+  margin-left: auto; flex: none; cursor: pointer;
+  width: 18px; height: 18px; line-height: 1; border-radius: 4px;
+  border: 1px solid var(--border); background: transparent; color: var(--text-3);
+  font-size: 13px; transition: all .15s;
+}
+.fb-pick-list button:hover { border-color: var(--amber); color: var(--amber-ink); }
+
+.fb-item-att { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.fb-att-label { font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
+.fb-att {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  font-size: 12px; color: var(--text-2); text-decoration: none; padding: 2px 0;
+  transition: color .15s;
+}
+.fb-att:hover { color: var(--primary-ink); }
+.fb-att-name { word-break: break-all; }
+.fb-att-size { flex: none; color: var(--text-3); font-family: var(--font-mono, monospace); }
+

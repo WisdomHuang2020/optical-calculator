@@ -11,6 +11,28 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v4.1.0] - 2026-11-02
+
+### 新增：留言支持附件（截图 / PDF / 日志），并修正后台短地址
+
+**附件**：读者可以附图说明问题——"哪里不对"用一张波形或截图讲，比十行文字准。
+
+- 附件落盘在服务端 `/var/lib/feedback-api/uploads/<站>/`，数据库只存元数据。
+- 走 base64 随 JSON 提交，不用 multipart：Node 内置模块没有 multipart 解析器，
+  手写边界解析是高风险低收益代码，代价只是流量膨胀 33%。
+- 安全四道闸：类型白名单（**禁 SVG**，它可携带脚本）、魔数复核（防改后缀）、
+  单文件 2MB / 最多 3 个、下载必须带管理员会话且强制 `attachment` 落盘。
+- 删除留言时一并删文件，否则磁盘只增不减。
+
+**后台短地址**：此前只有 `/admin.html`，访问 `/admin` 会被 `try_files` 回落成首页，
+表现就是「后台进不去」。nginx 已补精确匹配跳转：`/admin` → `/admin.html`、
+`/feedback` → `/fb`。
+
+**缓存戳**：`tools/add-cache-buster.js` 改为同时处理 `index.html` 与 `admin.html`。
+只给首页换戳会让后台继续吃旧缓存，表现为"首页有附件上传、后台打不开附件"。
+
+- nginx 各站 `client_max_body_size` 由 32k 提到 12m。
+
 ## [v4.0.1] - 2026-11-02
 
 ### 页脚新增「本站首页」与「返回站群入口」
@@ -24,6 +46,7 @@ annotated tag，并在本文件记录变更。
 - 图标：本站首页 House；返回入口 LayoutGrid（九宫格＝站群）—— 避免两个按钮出现两个相同房子图标
 
 无功能逻辑变更，纯页脚导航。版本号与 `?v=` 缓存戳同步更新。
+
 
 ## [v4.0.0] - 2026-11-02
 

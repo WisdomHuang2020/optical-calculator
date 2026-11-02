@@ -22,7 +22,10 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const HTML = path.join(ROOT, 'index.html');
+/* 2026-11-02：加入 admin.html。后台页引用同一份 js/feedback.js，
+   只给 index.html 换戳会让后台继续吃旧缓存 —— 表现是"首页有附件上传、
+   后台却打不开附件"，且 Ctrl+F5 也不一定生效（缓存键是 URL）。 */
+const HTML_FILES = ['index.html', 'admin.html'].map(f => path.join(ROOT, f));
 const CHECK_ONLY = process.argv.includes('--check');
 
 const vjs = fs.readFileSync(path.join(ROOT, 'js', 'version.js'), 'utf8');
@@ -30,47 +33,60 @@ const m = vjs.match(/APP_VERSION\s*=\s*['"](v[^'"]+)['"]/);
 if (!m) { console.error('无法从 js/version.js 读取 APP_VERSION'); process.exit(1); }
 const stamp = m[1].replace(/^v/, '');
 
-const before = fs.readFileSync(HTML, 'utf8');
-/* 先剥掉"属性值内"已有的缓存戳再重新加，保证幂等（重复跑不会叠加）。
-   2026-09-29 修复：原实现是「全文正则会剥掉所有 问号v等号 片段」，
-   会连 HTML 注释里的同形式写法和注释末尾一起吃掉，连累下一行标签被截断
-   （实测：注释被截成半句 + 紧随的 link rel=icon 整行消失，页面结构损坏）。
-   现收窄为只在 src= / href= 的属性值内剥 —— 注释、正文、脚本字符串都不再受影响。 */
-const stripped = before.replace(
-  /((?:src|href)="[^"]*?)\?v=[^"'&]*/g,
-  '$1'
-);
+/* 每个文件的最小引用数：index.html 覆盖全站 18 处本地资源，admin.html 只有
+   version.js + feedback.js 两处。阈值分开写，避免"后台页只有 2 处"被当成异常。 */
+const MIN_REFS = { 'index.html': 17, 'admin.html': 2 };
 
-/* 处理 .js / .css / .svg。
-   .svg 于 2026-09-29 纳入：favicon.svg 此前无戳，换了图标浏览器不更新。
-   注意匹配 .svg 只应命中 favicon 这类本地图标；站内其它 svg 若作为内容引用
-   （data: 或内联）不受影响，因为本正则已排除 data:/https:/# 开头的引用。 */
-const localRef = /((?:src|href)=")((?!https?:|data:|#)[^"]+\.(?:js|css|svg))(")/g;
-const files = [];
-const after = stripped.replace(localRef, (all, p1, file, p3) => {
-  files.push(file);
-  return p1 + file + '?v=' + stamp + p3;
-});
+let changedFiles = 0;
 
-/* 匹配数兜底：标签写法若被改动（比如加了 integrity 属性），
-   静默漏加会让"看不到更新"以最难排查的形式回归，故宁可硬失败。
-   阈值随本地资源数增长而抬高 —— 2026-09-29 新增 favicon.svg 后由 16 调至 17。 */
-if (files.length < 17) {
-  console.error(`只匹配到 ${files.length} 处本地资源引用（应 >= 17），拒绝写入`);
-  console.error('请检查 index.html 中 <script src=...> / <link href=...> 的写法');
-  process.exit(1);
+for (const htmlPath of HTML_FILES) {
+  const name = path.basename(htmlPath);
+  const before = fs.readFileSync(htmlPath, 'utf8');
+
+  /* 先剥掉"属性值内"已有的缓存戳再重新加，保证幂等（重复跑不会叠加）。
+     2026-09-29 修复：原实现是「全文正则会剥掉所有 问号v等号 片段」，
+     会连 HTML 注释里的同形式写法和注释末尾一起吃掉，连累下一行标签被截断
+     （实测：注释被截成半句 + 紧随的 link rel=icon 整行消失，页面结构损坏）。
+     现收窄为只在 src= / href= 的属性值内剥 —— 注释、正文、脚本字符串都不再受影响。 */
+  const stripped = before.replace(
+    /((?:src|href)="[^"]*?)\?v=[^"'&]*/g,
+    '$1'
+  );
+
+  /* 处理 .js / .css / .svg。
+     .svg 于 2026-09-29 纳入：favicon.svg 此前无戳，换了图标浏览器不更新。
+     注意匹配 .svg 只应命中 favicon 这类本地图标；站内其它 svg 若作为内容引用
+     （data: 或内联）不受影响，因为本正则已排除 data:/https:/# 开头的引用。 */
+  const localRef = /((?:src|href)=")((?!https?:|data:|#)[^"]+\.(?:js|css|svg))(")/g;
+  const files = [];
+  const after = stripped.replace(localRef, (all, p1, file, p3) => {
+    files.push(file);
+    return p1 + file + '?v=' + stamp + p3;
+  });
+
+  /* 匹配数兜底：标签写法若被改动（比如加了 integrity 属性），
+     静默漏加会让"看不到更新"以最难排查的形式回归，故宁可硬失败。 */
+  const min = MIN_REFS[name] || 1;
+  if (files.length < min) {
+    console.error(`${name}：只匹配到 ${files.length} 处本地资源引用（应 >= ${min}），拒绝写入`);
+    console.error('请检查该文件中 <script src=...> / <link href=...> 的写法');
+    process.exit(1);
+  }
+
+  if (after === before) {
+    console.log(`已是最新：${name}，${files.length} 处引用均带 ?v=${stamp}`);
+    continue;
+  }
+
+  if (CHECK_ONLY) {
+    console.error(`${name}：缓存戳未对齐，应为 ?v=${stamp}（共 ${files.length} 处引用）`);
+    process.exit(1);
+  }
+
+  fs.writeFileSync(htmlPath, after);
+  changedFiles++;
+  console.log(`已为 ${name} 的 ${files.length} 处本地资源引用加缓存戳 ?v=${stamp}`);
+  files.forEach((f) => console.log('   ' + f));
 }
 
-if (after === before) {
-  console.log(`已是最新：${files.length} 处本地资源引用均带 ?v=${stamp}`);
-  process.exit(0);
-}
-
-if (CHECK_ONLY) {
-  console.error(`缓存戳未对齐：应为 ?v=${stamp}（共 ${files.length} 处引用）`);
-  process.exit(1);
-}
-
-fs.writeFileSync(HTML, after);
-console.log(`已为 ${files.length} 处本地资源引用加缓存戳 ?v=${stamp}`);
-files.forEach((f) => console.log('   ' + f));
+if (changedFiles === 0) console.log('（无需改动）');

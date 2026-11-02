@@ -35,6 +35,12 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  function fmtSize(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+    return (n / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
   function fmtDate(iso) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return iso || '';
@@ -98,6 +104,86 @@
     var pageSel = $('#fb-page');
     var honeypot = $('#fb-website');
 
+    /* 附件（2026-11-02）：限制与后端 UPLOAD_DIR 那一段保持一致。
+       前端拦一道不是"防坏人"（那由服务端负责），而是让读者在选文件时就知道超限，
+       而不是写完整篇问题描述、点了提交才被打回。 */
+    var MAX_FILES = 3;
+    var MAX_FILE_MB = 2;
+    var fileInput = $('#fb-files');
+    var fileListEl = $('#fb-file-list');
+    var fileErrEl = $('#fb-file-err');
+    var picked = [];
+
+    function renderFiles() {
+      if (!fileListEl) return;
+      if (!picked.length) {
+        fileListEl.innerHTML = '';
+        fileListEl.hidden = true;
+        return;
+      }
+      fileListEl.hidden = false;
+      fileListEl.innerHTML = picked.map(function (f, i) {
+        return '<li><span class="fb-pick-name">' + escapeHtml(f.name) + '</span>' +
+          '<span class="fb-pick-size">' + Math.max(1, Math.round(f.size / 1024)) + ' KB</span>' +
+          '<button type="button" data-idx="' + i + '" aria-label="移除 ' + escapeHtml(f.name) + '">×</button></li>';
+      }).join('');
+    }
+
+    function setFileErr(msg) {
+      if (fileErrEl) fileErrEl.textContent = msg || '';
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', function () {
+        setFileErr('');
+        var add = Array.prototype.slice.call(fileInput.files || []);
+        var merged = picked.concat(add);
+        if (merged.length > MAX_FILES) {
+          setFileErr('最多 ' + MAX_FILES + ' 个附件。');
+          fileInput.value = '';
+          return;
+        }
+        var big = merged.filter(function (f) { return f.size > MAX_FILE_MB * 1024 * 1024; })[0];
+        if (big) {
+          setFileErr('「' + big.name + '」超过 ' + MAX_FILE_MB + ' MB，请先压缩或只截取相关部分。');
+          fileInput.value = '';
+          return;
+        }
+        picked = merged;
+        renderFiles();
+        /* 清空 value：否则同一个文件连续选两次不会触发 change，
+           而用户往往正是在"选错了再选一次"的时候遇到这个问题。 */
+        fileInput.value = '';
+      });
+    }
+
+    if (fileListEl) {
+      fileListEl.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('button[data-idx]') : null;
+        if (!b) return;
+        picked.splice(Number(b.getAttribute('data-idx')), 1);
+        setFileErr('');
+        renderFiles();
+      });
+    }
+
+    function readOne(f) {
+      return new Promise(function (resolve, reject) {
+        var r = new FileReader();
+        r.onload = function () {
+          var url = String(r.result || '');
+          var i = url.indexOf(',');
+          resolve({
+            name: f.name,
+            mime: f.type || 'application/octet-stream',
+            data: i >= 0 ? url.slice(i + 1) : ''
+          });
+        };
+        r.onerror = function () { reject(new Error('读取文件失败')); };
+        r.readAsDataURL(f);
+      });
+    }
+
     function remaining() {
       var n = content.value.length;
       if (counter) counter.textContent = n + ' / ' + MAX_LEN;
@@ -138,16 +224,24 @@
       submit.disabled = true;
       submit.textContent = '提交中…';
 
-      api('/api/feedback', {
-        method: 'POST',
-        body: {
-          page: pageSel ? pageSel.value : '未指定',
-          content: text,
-          contact: (contact && contact.value.trim()) || undefined,
-          website: (honeypot && honeypot.value) || ''
-        }
+      // 先把附件读成 base64 再发：一个请求同时提交正文与附件，
+      // 避免"正文已存、图没到"的中间态
+      Promise.all(picked.map(readOne)).then(function (files) {
+        return api('/api/feedback', {
+          method: 'POST',
+          body: {
+            page: pageSel ? pageSel.value : '未指定',
+            content: text,
+            contact: (contact && contact.value.trim()) || undefined,
+            website: (honeypot && honeypot.value) || '',
+            files: files.length ? files : undefined
+          }
+        });
       }).then(function () {
         form.reset();
+        picked = [];
+        renderFiles();
+        setFileErr('');
         if (counter) counter.textContent = '0 / ' + MAX_LEN;
         submit.textContent = '提交';
         submit.disabled = true;
@@ -312,10 +406,23 @@
         }
         ops += '<button class="btn del" data-op="delete" data-id="' + m.id + '">删除</button>';
 
+        var att = '';
+        if (m.attachments && m.attachments.length) {
+          att = '<div class="fb-item-att">' +
+            '<div class="fb-att-label">附件 ' + m.attachments.length + ' 个</div>' +
+            m.attachments.map(function (a) {
+              // 下载走同源 /api/，靠会话 Cookie 鉴权；服务端一律以 attachment 下发
+              return '<a class="fb-att" href="/api/admin/attachments/' + a.id + '">' +
+                '<span class="fb-att-name">' + escapeHtml(a.name) + '</span>' +
+                '<span class="fb-att-size">(' + fmtSize(a.size) + ')</span></a>';
+            }).join('') + '</div>';
+        }
+
         return '<article class="fb-item' + (m.status === 'new' ? ' is-new' : '') + '">' +
           '<div class="fb-item-head">' + tags +
           '<span class="stamp">#' + m.id + ' · ' + escapeHtml(fmtDate(m.created_at)) + '</span></div>' +
           '<div class="fb-item-body">' + escapeHtml(m.content) + '</div>' +
+          att +
           (m.contact ? '<div class="fb-item-contact">联系方式：<code>' + escapeHtml(m.contact) + '</code></div>' : '') +
           '<div class="fb-item-ops">' + ops + '</div></article>';
       }).join('');
