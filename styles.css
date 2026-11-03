@@ -1425,3 +1425,16 @@ ul.tight li { margin-bottom: 5px; }
 }
 .pw-eye:hover { color: var(--text); border-color: var(--border); }
 .pw-eye.on { color: var(--primary); }
+
+/* ── 「确认密码不接受粘贴」的提示（2026-11-03）────────────────────
+   由 js/feedback.js 的 blockPaste() 插入到 .pw-wrap 之后。
+   常驻占位、只切 opacity，提示出现时不会把下面的按钮顶下去。 */
+.pw-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--amber-ink, #fbbf24);
+  opacity: 0;
+  transition: opacity .2s;
+}
+.pw-hint.on { opacity: 1; }

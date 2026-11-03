@@ -104,6 +104,30 @@
   var EYE_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
 
+  /* ── 确认新密码：不接受粘贴/拖入（2026-11-03）────────────────────
+     只放行手输。拦不住“先粘到记事本再抄一遍”，目的就是强制过一遍手。
+     逻辑放在 id 白名单上：html 里另有一堆密码框（登录、当前密码、新密码），
+     那些必须允许粘贴，否则密码管理器就成了摆设。 */
+  var NO_PASTE_IDS = { 'fb-setup-pass2': 1, 'fb-pw-new2': 1 };
+
+  function blockPaste(inp, wrap) {
+    var hint = document.createElement('div');
+    hint.className = 'pw-hint';
+    hint.textContent = '确认密码请手动输入，不支持粘贴';
+    wrap.parentNode.insertBefore(hint, wrap.nextSibling);
+
+    var timer = null;
+    function reject(e) {
+      e.preventDefault();
+      hint.classList.add('on');
+      /* 连续粘两次时把计时器重置，别让提示提前熄掉 */
+      clearTimeout(timer);
+      timer = setTimeout(function () { hint.classList.remove('on'); }, 2600);
+    }
+    inp.addEventListener('paste', reject);
+    inp.addEventListener('drop', reject);
+  }
+
   function enhancePasswordFields(root) {
     var inputs = (root || document).querySelectorAll('input[type="password"]');
     for (var i = 0; i < inputs.length; i++) enhanceOne(inputs[i]);
@@ -137,6 +161,8 @@
     });
 
     wrap.appendChild(btn);
+
+    if (NO_PASTE_IDS[inp.id]) blockPaste(inp, wrap);
   }
 
   /* ============================================================
