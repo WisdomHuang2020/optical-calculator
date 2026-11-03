@@ -11,6 +11,23 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v4.3.3] - 2026-11-02
+
+### 确认新密码框允许粘贴
+
+现象：在设置里改密码时，「确认新密码」框粘不进去，只能手动再敲一遍。
+
+代码里没有任何 `onPaste` 拦截——问题出在 `autocomplete="new-password"`：
+Chrome 会把连续两个 new-password 字段识别成「新密码 + 确认密码」，
+并对后者施加密码管理器侧的粘贴限制。
+
+修复：确认框改用 `autocomplete="off"`。它只是用来核对，不该被密码管理器
+当成一个独立密码字段去管理；「新密码」框仍保留 new-password，
+这样浏览器仍能提供强密码生成。
+
+补充：即便浏览器继续拦，点输入框右侧的眼睛切成明文后可以自由复制粘贴——
+这也是当初加眼睛的附带好处。
+
 ## [v4.3.2] - 2026-11-02
 
 ### 修正：登录密码错误时没有任何提示
