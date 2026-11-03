@@ -14,11 +14,11 @@
   会用全局正则剥掉一切该形式的片段再重加，注释里的会被一并吃掉、连累相邻标签被截断
   （2026-09-29 实测踩过：注释被截成半句、下面那行 link 标签整行消失）。
 -->
-<link rel="icon" type="image/svg+xml" href="favicon.svg?v=4.3.3">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=4.3.4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=4.3.3">
+<link rel="stylesheet" href="styles.css?v=4.3.4">
 </head>
 <body>
 
@@ -1897,6 +1897,24 @@
     <a class="gongan" href="https://beian.mps.gov.cn/#/query/webSearch?code=32021402005238" target="_blank" rel="noreferrer"><img src="beian.png" alt="">苏公网安备32021402005238号</a>
   </div>
 
+  <!-- 站群导航（2026-11-02 新增）：恒显示，不属于任何 .fset，不参与按 tab 切换。
+       本站是 power-knowledge.tech 站群的子站，此前回总入口只能靠浏览器后退或手改地址。
+       · 「本站首页」回默认视图（本页 tab 会写进地址，回 ./ 即重置到首屏）
+       · 「返回站群入口」回总入口
+       图标：本站首页用 House；返回入口用 LayoutGrid（九宫格＝站群）。
+       站群其余 5 站只有「返回站群入口」一项、用的是 House —— 这里为了两个按钮不出现
+       两个一样的房子图标，才把返回入口换成九宫格，形态（边框+深底+灰字）保持一致。 -->
+  <div class="site-nav">
+    <a class="nav-btn" href="./">
+      <svg class="nav-i" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      本站首页
+    </a>
+    <a class="nav-btn" href="https://power-knowledge.tech/" target="_blank" rel="noopener noreferrer">
+      <svg class="nav-i" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      返回站群入口
+    </a>
+  </div>
+
   <!-- 免责声明：恒显示，不属于 .fset，不参与按 tab 切换。与站群其余站点保持同一文本。 -->
   <div class="disclaimer">
     <p>
@@ -1913,21 +1931,21 @@
   </div>
 </div>
 
-<script src="js/version.js?v=4.3.3"></script>
-<script src="js/optics.js?v=4.3.3"></script>
-<script src="js/charts.js?v=4.3.3"></script>
-<script src="js/solidangle.js?v=4.3.3"></script>
-<script src="js/planar.js?v=4.3.3"></script>
-<script src="js/vendor-three.min.js?v=4.3.3"></script>
-<script src="js/vendor-orbitcontrols.js?v=4.3.3"></script>
-<script src="js/prism-shapes.js?v=4.3.3"></script>
-<script src="js/prism-shapes1d.js?v=4.3.3"></script>
-<script src="js/prism.js?v=4.3.3"></script>
-<script src="js/prism-perf.js?v=4.3.3"></script>
-<script src="js/optimal-design.js?v=4.3.3"></script>
-<script src="js/optimal-design-ui.js?v=4.3.3"></script>
-<script src="js/prism-knowledge.js?v=4.3.3"></script>
-<script src="js/app.js?v=4.3.3"></script>
-<script src="js/feedback.js?v=4.3.3"></script>
+<script src="js/version.js?v=4.3.4"></script>
+<script src="js/optics.js?v=4.3.4"></script>
+<script src="js/charts.js?v=4.3.4"></script>
+<script src="js/solidangle.js?v=4.3.4"></script>
+<script src="js/planar.js?v=4.3.4"></script>
+<script src="js/vendor-three.min.js?v=4.3.4"></script>
+<script src="js/vendor-orbitcontrols.js?v=4.3.4"></script>
+<script src="js/prism-shapes.js?v=4.3.4"></script>
+<script src="js/prism-shapes1d.js?v=4.3.4"></script>
+<script src="js/prism.js?v=4.3.4"></script>
+<script src="js/prism-perf.js?v=4.3.4"></script>
+<script src="js/optimal-design.js?v=4.3.4"></script>
+<script src="js/optimal-design-ui.js?v=4.3.4"></script>
+<script src="js/prism-knowledge.js?v=4.3.4"></script>
+<script src="js/app.js?v=4.3.4"></script>
+<script src="js/feedback.js?v=4.3.4"></script>
 </body>
 </html>

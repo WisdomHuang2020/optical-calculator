@@ -11,6 +11,20 @@ annotated tag，并在本文件记录变更。
 - 自有域名（主站，v3.11.0 起）：<https://optical.power-knowledge.tech/>
 - GitHub Pages：<https://wisdomhuang2020.github.io/optical-calculator/>
 
+## [v4.3.4] - 2026-11-02
+
+### 修复：页脚「返回站群入口」按钮丢失
+
+v4.0.1 曾给页脚加过 `.site-nav`（「本站首页」+「返回站群入口」两个按钮）。
+我在 v4.1.0 做附件功能时 rebase 到远程，冲突处理用了 `checkout --theirs` 取自己那版
+`index.html`，把整块 `.site-nav` 覆盖掉了；而 `styles.css` 当时是自动合并的，
+CSS 还在、HTML 没了——所以这一周页脚是空的，样式却一直躺在样式表里。
+
+本次从 v4.0.1 的提交里原样取回那段 HTML（含注释），插回备案号之后、免责声明之前。
+
+教训：**rebase 冲突时用 --theirs/--ours 整文件覆盖，会静默丢掉对方在同一文件里的改动**，
+而 grep 一个关键词"确认还在"是不够的——当时我确实 grep 到了「本站首页」，
+那只是 nav 里的 tab 名，不是页脚按钮。
 ## [v4.3.3] - 2026-11-02
 
 ### 确认新密码框允许粘贴
