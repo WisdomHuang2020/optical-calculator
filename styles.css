@@ -539,8 +539,18 @@ ul.tight li { margin-bottom: 5px; }
 .footer .beian .gongan img { height: 16px; width: auto; }
 /* 站群导航（2026-11-02 新增）：恒显示，位于备案号之下、免责声明之上。
    形态沿用站群口径：边框 + 深底 + 灰字，hover 提亮；颜色全部取本站已有变量。 */
+/* 备案号 + 站群入口同一排（2026-11-03）：
+   原来备案号一行、按钮一行、免责声明一行，页脚三行显得空。
+   现在备案号居中、按钮跟在其右，窄屏自动换行回两行。 */
+.footer .beian-row {
+  margin-top: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 8px 18px;
+}
+.footer .beian-row .beian { margin-top: 0; }
+.footer .beian-row .site-nav { margin-top: 0; }
+
 .site-nav {
-  margin-top: 12px;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
 }
 .site-nav .nav-btn {
